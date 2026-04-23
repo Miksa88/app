@@ -664,3 +664,136 @@ Potvrđeni invarijanti iz QA brief-a:
 uz Co-Authored-By trailer per workflow. Ne dodavati `--no-verify`. Posle commit-a, IT-6 UI `DailyCheckInSheet` preuzima consumer-side integraciju kroz `useDailyCheckIn().mutate()`.
 
 ---
+
+---
+
+## IT-6 — 2026-04-24 01:30 (Europe/Belgrade)
+
+**Scope:** DailyCheckInSheet UI — BottomSheet forma + CTA u Home + 23+ i18n keys + jsdom polyfill-i (ResizeObserver + PointerEvent) + prvi .test.tsx u repo-u. Zatvara FAZU A.
+**Spec refs:** 02_NUTRITION_FLOW_MASTER §13 (Daily logging), 03_INTEGRATION_LAYER §3.1 (DailyCheckIn flow).
+**Files touched:**
+- `src/components/checkin/DailyCheckInSheet.tsx` (new, 481 lines)
+- `src/components/checkin/DailyCheckInSheet.test.tsx` (new, 155 lines — prvi `.test.tsx`)
+- `src/pages/Home.tsx` (modified — CTA block L212–227 + sheet integracija L367–376 + `cycleTrackingEnabled` derive L77–80 + `hasCheckInToday` heuristika L67–72)
+- `src/contexts/LanguageContext.tsx` (modified — 27 novih `checkin.*` i `a11y.*` keys, L1566–1592)
+- `src/test/setup.ts` (modified — ResizeObserver klasa + PointerEvent stub-ovi: hasPointerCapture/setPointerCapture/releasePointerCapture/scrollIntoView)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 263 → **265 passing** (+2 iz nove `DailyCheckInSheet.test.tsx`), 0 failed, 0 unexpected skipped — green
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green (warning-i u drugim files-ovima: WorkoutEditor, GradientButton, BottomNav, MonitoringCarousel itd. — pre-existing, NIJE IT-6 uvedeno)
+- `npm run lint`: n/a (po dogovoru)
+
+### DailyCheckInSheet.tsx review (L1–481)
+
+**Komponenta oblik (specifikacijom zahtevan shape):**
+- Props signature `{ open, onOpenChange, clientId, cycleTrackingEnabled?, initialCycleDay? }` — match (L61–74). OK
+- Koristi `<BottomSheet>` (repo preset, wrappuje shadcn Sheet + Radix) sa `maxHeight="90vh"` (L165–171). OK
+- Weight: `<Input type="text" inputMode="decimal">` sa `replace(',', '.')` — accept-uje srpski decimal sa zarezom. WEIGHT_KG_MIN=20, MAX=300 match sa EF validation iz IT-1 migracije (L53–55, L103–107). OK
+- Stres: custom segmented `<button role="radio" aria-checked>` unutar `role="radiogroup" aria-label="Stress level"` (L381–414). Tap target `min-h-11` eksplicitno (L397). OK
+- Energy: Slider 1–10 sa `step={1}` i `aria-label=t("checkin.fields.energy")` (L237–245). OK
+- Water: `+/-` stepper sa `size="icon-round"` (44×44 iz button.tsx L). `Math.max(0,…)` i `Math.min(20,…)` bounds (L443, L461). OK — step 250 ml per glass (ML_PER_GLASS=250, L47).
+- Cycle day: visible samo ako `cycleTrackingEnabled` (L263–280), range check 1–45 match sa IT-1 CHECK constraint. OK
+- Submit disabled dok weight nije valid (`canSubmit = isWeightValid && isCycleDayValid && !mutation.isPending`, L116, L287). OK
+- `aria-busy={mutation.isPending}` i "Saving…" label tokom mutation-a (L288–293). OK
+
+**Submit flow (L127–161):**
+- Konstruiše `DailyCheckIn` objekt sa `date: new Date()`, `waterIntakeMl: waterGlasses * 250`. OK
+- `cycleDay` spread-uje se samo ako `cycleTrackingEnabled && cycleDayNum !== null` (L138–141) — ne zagađuje payload praznim cycleDay-em. OK
+- Zove `mutation.mutate(checkIn, { onSuccess })` — onSuccess: `setShowConfetti(true)` → `toast.success(t("checkin.successToast"))` → `onOpenChange(false)` → `resetForm()` → `setTimeout(setShowConfetti(false), 3500)` (L144–157). OK
+- onError je handled inside hook (toast.error) — sheet ne dira formu (retry bez re-unosa). OK — match sa useDailyCheckIn L239–245.
+
+**Datum handling:** Sheet prosleđuje `date: new Date()` (JS Date instance); hook `toIsoDate` (useDailyCheckIn L201–209) konvertuje u YYYY-MM-DD u lokalnoj TZ. Usklađeno sa IT-5 odlukom. OK
+
+**Confetti (L299–306):**
+- Wrappovan u `z-50` Tailwind preset (ne `z-[N]`) — per handoff note. OK
+- `<ConfettiCelebration>` ignoriše reduce-motion interno (vraća null ako `shouldReduceMotion()`, verified L27–29 u ConfettiCelebration.tsx). OK
+- Overlay `pointer-events-none` + `aria-hidden="true"` — ne blokira interakciju nakon close-a. OK
+
+**Design-system compliance:**
+- grep `#[0-9a-fA-F]{3,6}` u DailyCheckInSheet.tsx — **0 match-ova**. OK
+- grep `text-\[.*px\]` — **0 match-ova**. OK
+- grep `duration-\d+(?!ms)` — 0 match-ova. OK
+- grep `w-\[.*px\]` — 0 match-ova. OK
+- grep `z-\[\d+\]` — 0 match-ova (koristi `z-50` preset). OK
+- Tap targets: weight/cycle Input koristi shadcn Input sa `min-h-11`, stres buttons eksplicit `min-h-11`, water +/- su `icon-round` (44×44), Submit je `size="xl"` (56px). Svi interactive ≥ 44×44pt. OK
+- Dark mode: svi tokeni (`bg-primary`, `bg-muted/60`, `bg-card`, `text-foreground`, `text-primary-foreground`, `text-destructive`, `text-muted-foreground`, `text-info`, `text-warning`, `text-success`). NEMA `dark:bg-…` hardcoded override-a. OK — semantika CSS vars obezbeđuje dark theme.
+- Motion: Sheet enter/exit preko Radix Dialog defaults (OK po QA brief-u); confetti koristi internal `shouldReduceMotion` guard.
+
+**Copy discipline (zero-guilt):**
+- grep `propušteno|propusteno|kasniš|kasnis|nisi uradila|zakasnila|missed|moraš|moras|MUST|cortisol|mTOR|MEV|MAV|MRV` u DailyCheckInSheet.tsx — samo 2 hit-a: (a) komentar L17 (`"propušteno/kasniš/moraš"` je upravo ZABRANJENA lista u docstrings-u), (b) reč `obavezno` u komentaru L90 o weight validaciji (interno za dev, ne user-visible). **Nema user-visible forbidden copy.** OK
+- grep `obavezno`/`moraš` u **LanguageContext.tsx** L1566–1592 za IT-6 keyove — 0 match-ova. OK
+- Stres labels: "Relaxed/Calm/OK/Tense/Intense" i "Opušteno/Mirno/OK/Napeto/Intenzivno" — bez stigmatizacije (nije "Krizno", "Panika", "Stress overload"). Match sa spec §2.3 ELI5 ton-om. OK
+- Success copy: `"Check-in saved"` / `"Check-in je zabeležen"` + `"Your plan will adapt today"` / `"Plan se prilagođava danas"` — celebratory, bez pritiska na "morate svaki dan". OK
+- Nijedan srpski/engleski string literal u JSX — sve kroz `t()`. OK
+
+### Home.tsx integracija review
+
+- CTA block L212–227 render-uje se kroz `{clientId && !hasCheckInToday && (…)}` — guardovano i po auth state-u i po današnjem check-in presence-u. OK
+- `haptic("light")` pre `setCheckinOpen(true)` — UX refinement. OK
+- `aria-label={t("a11y.openCheckin")}` na CTA — a11y OK.
+- Sheet mount guarded sa `{clientId && (<DailyCheckInSheet … />)}` (L368–376). `initialCycleDay={status?.bio.cycleDay ?? null}` — pre-fill kad user već ima cycle tracker. OK
+- `hasCheckInToday` heuristika (L67–72): `status.lastUpdatedAt >= startOfToday`. Koristi `new Date()` local timezone (setHours(0,0,0,0)) — isto pravilo kao `toIsoDate` u hook-u. Usklađeno.
+- `cycleTrackingEnabled` derive (L77–80): true ako `status?.bio.cycleDay !== null && !== undefined` **ILI** `status?.bio.cyclePhase !== null && !== undefined`. Prosleđeno kao prop u sheet. OK
+
+### LanguageContext.tsx review (L1566–1592)
+
+- **27 novih keys** (dev handoff kaže 23; over-count je bolji nego under-count, nije bug): checkin.cta, checkin.ctaSubtitle, checkin.title, checkin.subtitle, checkin.fields.weight, checkin.fields.weightUnit, checkin.fields.weightPlaceholder, checkin.fields.sleep, checkin.fields.sleepUnit, checkin.fields.stress, checkin.fields.energy, checkin.fields.water, checkin.fields.waterUnit, checkin.fields.cycleDay, checkin.fields.cycleDayPlaceholder, checkin.stress.{1..5}, checkin.submit, checkin.submitting, checkin.successToast, checkin.successDesc, a11y.openCheckin, a11y.waterAdd, a11y.waterRemove.
+- Svaki key ima `{ en, sr }` pair — match sa postojećim LanguageContext format-om. OK
+- Svi t()-pozivi u DailyCheckInSheet.tsx i Home.tsx CTA imaju odgovarajuće key-eve u catalog-u. OK — **i18n coverage 100% za IT-6**.
+
+### setup.ts polyfill review (L17–51)
+
+- **ResizeObserver klasa** sa praznim observe/unobserve/disconnect — standardan jsdom polyfill pattern. Postavlja se i na `window` i na `globalThis` — pokriva oba načina reference-a u Radix-u. OK
+- **PointerEvent stubovi** na `Element.prototype`: `hasPointerCapture` (vraća false), `setPointerCapture` (no-op), `releasePointerCapture` (no-op), `scrollIntoView` (no-op). Svaki čuvaran sa `if (proto && !proto.xxx)` guardom da ne overwrite-uje postojeće browser impl kad se suite pokrene u headless browser-u. OK
+- Polyfill-i su **conditionalni** (`typeof window !== "undefined"`) — ne rušе Node-only vitest scenarije. OK
+- **Regression check:** svih 263 prethodnih testova i dalje prolazi (265 ukupno, +2 nova) — polyfill-i su aditivni. OK
+
+### Test review (DailyCheckInSheet.test.tsx)
+
+- **Case 1 ("renders all fields and disables submit until weight is valid"):** verifikuje sheet title rendering, prisutnost 5 polja (weight, sleep, stress group, energy, water add button), odsustvo cycle day polja kad `cycleTrackingEnabled=false`, i `toBeDisabled()` na submit dugmetu — sve tačno. Default `LanguageProvider` renderuje English labels (očekivano iz default `localStorage` miss scenarija). OK
+- **Case 2 ("calls mutate with correct DailyCheckIn payload on submit"):** unosi `62.4` u weight, klikne `Add glass` → 250ml, klikne submit → verifikuje `mutate` poziv sa clientId="client-a", weightKg≈62.4, sleepHours=7.5 default, stressLevel=3 default, energyLevel=7 default, waterIntakeMl=250, cycleDay undefined (tracker off), `date instanceof Date`, `options.onSuccess` is function. Payload assertions match `DailyCheckIn` tip iz `src/types/nutrition.ts` L275–285. OK
+- `vi.mock("@/hooks/mutations/useDailyCheckIn")` izoluje hook; `vi.mock("sonner")` izoluje toast — ni jedan test ne okida realan Edge Function poziv. OK
+- `beforeEach(() => mockMutate.mockReset())` — čist state između case-ova. OK
+- Wrappuje u `<LanguageProvider>` (real provider, bez dodatnog mock-a) — jer je LanguageProvider pure React state. OK
+- **Nije testiran onSuccess callback execution** (confetti show + toast + close + reset) — Low note, ne blocker; test drugog nivoa proverava da je callback prosleđen kao funkcija.
+
+### No-touch zone verify
+
+- `src/utils/sync/syncEngine.ts` mtime: **Apr 20 00:25:27 2026** (IT-3 baseline, nije diran u IT-6). OK
+- `t()` core implementacija u LanguageContext.tsx — dev je dodao keys u `translations` mapu (L1566–1592), ne dira `useLanguage()` hook ni `t()` implementaciju. OK
+- `src/logic/`, `src/engine/` — ne postoje u repo-u. OK
+
+### Biology invariants (sanity cross-check, nije direktno u scope-u IT-6)
+
+- Sheet `onSuccess` ne mutira UserStatus direktno — sve ide kroz `useDailyCheckIn` → `runDailyCheckIn` → `applyDailyCheckIn` (pure transformer) + `calcRecoveryMultiplier` + save EF. Respektuje Princip: UserStatus mutacija isključivo preko Sync Engine pure funkcija. OK
+- Weight range 20–300 kg — match sa IT-1 CHECK constraint. Nema mogućnosti da klient pošalje outlier direct-to-DB kroz ovu formu. OK
+- Sheet ne zove `recalcCalorieTarget` niti direktno dira calorie floor — relevant invarianta nije aplikabilna za UI-only sheet. OK
+- Cycle day opt-in — ako `cycleTrackingEnabled=false`, cycleDay se ne upisuje uopšte (izostaje iz payload-a, L138–141). Poštuje princip da svaka klijentkinja koja ne prati ciklus ne dobija fantom cycle data. OK
+
+### Findings
+
+**Blocker (must fix before approval):**
+- Nijedan.
+
+**High (should fix):**
+- Nijedan.
+
+**Low (nice-to-have, non-blocking):**
+- [DailyCheckInSheet.test.tsx:154] `expect(options?.onSuccess).toBeTypeOf("function")` proverava prisustvo callback-a, ali ne izvršava ga. Follow-up iteracija (IT-17 wireup ili namenska UX test-suite) bi mogla da doda case "submit success → confetti shown → sheet closes → form reset". Nije blocker — current 2 case-a pokrivaju render i payload discipline što je MVP suite.
+- [Home.tsx:67–72] `hasCheckInToday` heuristika oslanja se na `status.lastUpdatedAt >= startOfToday`. U FAZI A ovo je OK (dnevni check-in je jedini flow koji pomera `lastUpdatedAt`), ali IT-B iteracije (workout completion, meal log) će takođe update-ovati `lastUpdatedAt` što će false-hide-ovati CTA. Handoff eksplicit flaguje ovo kao privremeno. Sledeća iteracija treba dedicated read hook (`useHasCheckInToday(clientId)` koji čita `daily_check_ins.date = today`). Nije blocker za IT-6.
+- [DailyCheckInSheet.tsx:385] `role="radiogroup" aria-label="Stress level"` — hardcoded engleski string u `aria-label` (ne `t("checkin.fields.stress")`). Screen reader user na srpskom mobile-u bi čuo "Stress level" umesto "Stres". Sitno; svi ostali a11y label-i prolaze kroz `t()`. Može se fix-ovati u next pass.
+- [DailyCheckInSheet.tsx:287] Submit dugme nema `variant="cta"` explicit vs `variant="cta"` pisano na L285 — OK, samo flag da je xl button preset ima `min-h-[56px]` kao arbitrary px unutar button.tsx source-a — ali to je pre-existing preset, ne IT-6 introduction.
+
+### Commit readiness
+
+- Commit message: **`feat(IT-6): DailyCheckInSheet UI`** (opcionalno dodati "Faza A završena (6/22)" u telo commit-a).
+- Co-Authored-By trailer obavezno (po global conventions).
+- Bez `--no-verify` i `--no-gpg-sign`.
+- Nijedna secret/.env fajl u untracked list-i — safe za `git add` po imenu.
+
+### Round trips on this iteration: 1/3
+
+**Verdict (summary):** IT-6 approved.

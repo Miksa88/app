@@ -214,3 +214,66 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent deploy `save-user-status` i git commit `feat(IT-5): useDailyCheckIn mutation + save-user-status EF`
 - IT-6 — UI `DailyCheckInSheet` na Home tab-u, zove `useDailyCheckIn().mutate()`
 
+---
+
+## IT-6 — DailyCheckInSheet UI + Home CTA integracija
+
+**Timestamp:** 2026-04-23 23:30 CEST
+**Agent:** dev-implementer (Opus 4.7)
+**Spec:** 02_NUTRITION_FLOW_MASTER.md §13 (Daily logging), 03_INTEGRATION_LAYER.md §3.1 (DailyCheckIn flow)
+
+### Files touched
+- `src/components/checkin/DailyCheckInSheet.tsx` (new) — BottomSheet sa forma koja zove `useDailyCheckIn(clientId).mutate()`
+- `src/components/checkin/DailyCheckInSheet.test.tsx` (new) — prvi `.test.tsx` fajl u codebase-u; 2 test case-a (render + submit)
+- `src/pages/Home.tsx` (modified) — CTA dugme "Morning check-in"/"Jutarnji check-in" (conditional na `!hasCheckInToday`) + mount `<DailyCheckInSheet>`
+- `src/contexts/LanguageContext.tsx` (modified) — dodati 23 i18n ključeva pod `checkin.*` i `a11y.*` (sr-latn + en)
+- `src/test/setup.ts` (modified) — dodati `ResizeObserver` i `PointerEvent` polyfill-e za jsdom (Radix Slider/Dialog ih zahtevaju)
+
+### Test delta
+263 → 265 (+2)
+- `DailyCheckInSheet > renders all fields and disables submit until weight is valid`
+- `DailyCheckInSheet > calls mutate with correct DailyCheckIn payload on submit`
+
+### Baseline gate (sve green)
+- `npm test` — 265 passed ✓
+- `npx tsc --noEmit` — clean ✓
+- `npm run verify:tokens` — "All design tokens compliant" ✓ (pre-existing grandfathered z-index warnings u ScrollWheelPicker/ProgramEditor su nevezani)
+
+### Acceptance (iz RALPH_PLAN IT-6)
+- [x] Nova komponenta `<DailyCheckInSheet>` u `src/components/checkin/`
+- [x] Otvara se sa "Jutarnji check-in" CTA na Home tab-u (samo ako `!hasCheckInToday`)
+- [x] Polja: weight (decimal input), sleep hours (slider 0–12, step 0.5), stress (1–5 segmented sa zero-guilt labelima), energy (1–10 slider), water (+/- stepper sa 250ml increment), cycle day (conditional — samo ako tracker aktivan)
+- [x] Submit zove `useDailyCheckIn().mutate()` sa `DailyCheckIn` shape (clientId, date, weightKg, sleepHours, stressLevel, energyLevel, waterIntakeMl, cycleDay?)
+- [x] Posle uspeha: zatvara sheet, `ConfettiCelebration` overlay burst, `toast.success(t("checkin.successToast"))`, reset forme
+- [x] Na error: hook već pokazuje toast; forma ostaje netaknuta za retry
+- [x] Koristi postojeće UI tokene — BottomSheet, Button (variant="cta" size="xl"), Input, Slider, Label
+- [x] Tap targets ≥ 44pt (Button size="xl" → min-h-[56px], Input min-h-11, stress segments min-h-11)
+- [x] a11y: form labels (Label + htmlFor), role="radiogroup" za stres, aria-invalid na invalid input, aria-busy na submit
+- [x] Motion: `<ConfettiCelebration>` interno respect-uje `shouldReduceMotion()`, sheet enter/exit ide kroz Radix Dialog defaults
+- [x] Zero-guilt copy: CTA "Morning check-in / Jutarnji check-in" (nikad "moraš/kasniš/propušteno"); success toast "Check-in is saved / Check-in je zabeležen"; stres labels "Opušteno → Intenzivno"
+
+### Ključne odluke
+- **Weight input kao decimal text field, ne ScrollWheelPicker** — user brief pomenuo ScrollWheelPicker kao opciju, ali nijedan pravi use-case u repo-u ga nije tražio za weight (postoji samo u Onboarding za kompletne mere); obični `<Input type="text" inputMode="decimal">` sa 62.4 placeholder-om je brži i manje prepreke za morning check-in.
+- **Stres kao custom segmented (ne TabControl)** — TabControl je dizajniran za navigation tabs (string keys); stres ima numeric value + pod-label, pa custom radio-group daje čistiji a11y (`role="radiogroup"` + `role="radio"` + `aria-checked`).
+- **hasCheckInToday heuristika = `status.lastUpdatedAt >= startOfToday`** — ne-dedicated read hook za daily_check_ins tabelu; `save-user-status` EF server-side setuje `lastUpdatedAt=now()` pa ovo pouzdano signalizira "check-in je obavljen danas". Ako u FAZI B pojavi drugi flow koji pomera `lastUpdatedAt`, ovo se mora zameniti dedicated `useHasCheckInToday(clientId)` hookom koji SELECT-uje iz `daily_check_ins WHERE date = today`.
+- **cycleTrackingEnabled deriv = `bio.cycleDay !== null || bio.cyclePhase !== null`** — UserStatus tip ne nosi eksplicitan `cycleTrackingEnabled` (to je u ClientNutritionProfile). Presence oba cycle polja u bio sekciji je tri-state signal da se tracker koristi. Kad klijentkinja uđe u cycle sync, sheet automatski pokazuje cycle day polje.
+- **ResizeObserver + PointerEvent polyfill u test/setup.ts** — Radix Sheet, Dialog i Slider svi koriste jedno od ovih; jsdom ne implementira. Polyfill je no-op stub (observe/setPointerCapture/scrollIntoView), jedinstveno mesto u setup.ts tako da svi budući `.test.tsx` fajlovi nasleđuju fix.
+- **vi.mock(useDailyCheckIn) umesto runDailyCheckIn import** — komponentni test se vezuje za React hook API-ju (mutate/isPending), ne za orkestrator pure funkciju. Mutation state transitioni (loading, success, error) će se pokriti kroz integracione testove u kasnijim iteracijama.
+
+### Side-finds
+- Na submit uspeh, `setTimeout(() => setShowConfetti(false), 3500)` obezbeđuje da confetti motion završi pre unmount-a (particle animacije traju 2.5–4.5s); reduce-motion case je no-op jer `ConfettiCelebration` sam vraća null.
+- `initialCycleDay` prop-om sheet prima pre-fill vrednost iz `status.bio.cycleDay`; tako klijentkinja koja je juče prijavila dan 14 vidi 14 kao default pa samo inkrementuje na 15 (UX friction reduction).
+- Confetti overlay koristi `z-50` (tailwind preset class, ne hardcoded `z-[N]`) pa ne triggera verify:tokens warning.
+
+### Deviations from plan
+- Nema. Sve tačke iz IT-6 brief-a ispunjene unutar plana; nije trebao dedicated test-utils wrapper (LanguageProvider jedini context koji sheet zavisi na, useDailyCheckIn je mokovan).
+
+### Next
+- QA reviewer audit:
+  - verifikuje da forma ne dozvoljava submit za weight izvan [20, 300] kg (boundary testovi)
+  - verifikuje dark mode rendering (oba Input/Slider tokena su bg-muted/60 pa se prilagođavaju)
+  - verifikuje da je confetti reduce-motion-safe
+  - opciono: dodati smoke E2E test (prava Supabase instanca) — out of scope za IT-6
+- Ako approved → commit `feat(IT-6): DailyCheckInSheet + Home CTA integracija`
+- **Ovo je poslednja iteracija Faze A.** Posle commit-a, cela FAZA A (IT-1..IT-6) je gotova. Sledeća je FAZA B — Workout completion loop (IT-7).
+
