@@ -38,3 +38,44 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - QA reviewer audit (paralelno čita migration fajl + verifikuje baseline + spot-check biology invariants)
 - Ako approved → git commit `feat(IT-1): weight_logs + daily_check_ins migration`
 - Zatim IT-2 (`weekly_check_ins + pause_events + water_logs`)
+
+---
+
+## IT-2 — weekly_check_ins + pause_events + water_logs migracija
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** db-migrator (Sonnet) → main (apply) → pending QA
+**Spec:** 02_NUTRITION §10 (weekly + identity score), 01_TRAINING §4.8 (Pauza), 02_NUTRITION §8.1 + 03 §6.5 (water logs)
+
+### Files touched
+- `supabase/migrations/20260424120000_create_weekly_pause_water_tables.sql` (new)
+- `src/integrations/supabase/types.ts` (regenerated + jedna ručna korekcija: prvi auto-generisani fajl je imao duplicate Insert u profiles blok zbog moje greške pri kopiranju; fiksovano Edit-om)
+
+### DB delta
+- Tables: 8 → 11 (+weekly_check_ins, +pause_events, +water_logs)
+- Enums: +`pause_type` ('illness'|'travel')
+- Sve 3 tabele `rls_enabled: true`
+- 9 RLS policies ukupno:
+  - weekly_check_ins: 2 (klijentkinja CRUD + trener SELECT)
+  - pause_events: 2 (klijentkinja CRUD + trener SELECT)
+  - water_logs: 4 (klijentkinja INSERT/SELECT/DELETE — append-only; trener SELECT)
+- 2 BEFORE UPDATE triggers (weekly + pause; water_logs nema updated_at)
+- 4 indexes (2 standard user+date, 1 pause composite, 1 parcijalni UNIQUE za aktivnu pauzu)
+- 1 UNIQUE constraint: `weekly_check_ins (user_id, week_start_date)`
+
+### Acceptance
+- [x] `list_tables` → 11 tabela, sve 3 nove `rls_enabled: true`
+- [x] `get_advisors(security)` → 0 novih lints (pre-existing auth leaked password protection ostaje)
+- [x] `generate_typescript_types` → nove tabele + pause_type enum u `src/integrations/supabase/types.ts`
+- [x] `npx tsc --noEmit` exit 0
+- [x] Baseline testovi: 255 (bez promene — pure DDL)
+
+### Decisions
+- `pause_events` ima parcijalni UNIQUE INDEX `(user_id) WHERE is_active = TRUE` — DB-enforces "samo jedna aktivna pauza po korisniku" (spec 01 §4.8)
+- `water_logs` namerno bez UPDATE policy — append-only, greška se ispravlja DELETE + novi INSERT
+- `weekly_check_ins.week_start_date` bez DB CHECK-a da je ponedeljak; aplikacioni sloj enforce (fleksibilnost za buduće `firstDayOfWeek` preference)
+
+### Next
+- QA reviewer audit
+- Ako approved → git commit `feat(IT-2): weekly_check_ins + pause_events + water_logs migration`
+- Zatim IT-3 (`exercise_progress + food_items seed` — najveća iteracija Faze A, uključuje seed iz `src/data/foodDatabase.ts`)
