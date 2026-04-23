@@ -209,3 +209,163 @@ Main agent je verifikovao advisors posle apply-a (samo pre-existing `auth_leaked
 uz Co-Authored-By trailer per workflow.
 
 ---
+
+## IT-3 — 2026-04-24 00:50 (Europe/Belgrade)
+
+**Scope:** DDL migracija `exercise_progress` + `food_items` + 30-red seed, regen `src/integrations/supabase/types.ts`.
+**Spec refs:** 01_TRAINING_FLOW_MASTER §5 K6 (Double Progressive Overload, append-only set log), 01 §4.4 (Exercise Library), 02_NUTRITION_FLOW_MASTER §11 (Food Database + meal_slots vocab), 02 §2.3 (Anti-Ingredient Filter allergens TEXT[]).
+**Files touched:**
+- `supabase/migrations/20260424120500_create_progress_and_foods_seed.sql` (new, 597 lines)
+- `src/integrations/supabase/types.ts` (regenerated, sada 795+ linija, 13 tabela)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 255 → 255 (pure DDL + seed, delta očekivan) — green
+- `npx tsc --noEmit`: exit 0, bez izlaza — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a (nije u scope-u iteracije)
+
+### Migration file review (20260424120500_create_progress_and_foods_seed.sql)
+
+**CREATE TABLE exercises dropped (kako dev handoff navodi):**
+- `grep -c "CREATE TABLE public.exercises"` → 0 matches. Sub-agent blok je obrisan. OK
+- L7–15 NAPOMENA blok na vrhu eksplicitno dokumentuje da exercises tabela već postoji iz 20260419180200 migracije. OK
+
+**exercise_progress (L26–46):**
+- FK `user_id → public.profiles(id) ON DELETE CASCADE` (L28). OK
+- FK `exercise_id → public.exercises(id) ON DELETE RESTRICT` (L29) — KRITIČNO: RESTRICT (ne CASCADE) sprečava dangling history; matches spec intent za DPO lookup. OK
+- `workout_session_id UUID` nullable bez FK (L32) — dokumentovano kao "dolazi u kasnijoj iteraciji kada workout_sessions tabela postoji". ACCEPTABLE (forward compat).
+- CHECK constraints:
+  - `set_number BETWEEN 1 AND 10` (L36). OK
+  - `weight_kg >= 0 AND weight_kg <= 500` NUMERIC(6,2) (L37) — 0 dozvoljeno (bodyweight), upper bound defanzivan. OK
+  - `reps BETWEEN 0 AND 100` (L39). OK
+  - `rir BETWEEN 0 AND 5` nullable (L40) — standardan Reps In Reserve range. OK
+- **Bez `updated_at` kolone** (L43–45 komentar "append-only pattern — set log je immutable"). OK
+- Index `idx_exercise_progress_user_exercise_date ON (user_id, exercise_id, completed_at DESC)` (L53–54) — DPO lookup. OK
+
+**exercise_progress RLS (L65–92):**
+- ALTER TABLE ... ENABLE ROW LEVEL SECURITY (L65). OK
+- Klijentkinja INSERT (WITH CHECK user_id = auth.uid()) — L67–70. OK
+- Klijentkinja SELECT (USING user_id = auth.uid()) — L72–75. OK
+- Klijentkinja DELETE (USING user_id = auth.uid()) — L77–80. OK za error correction per append-only pattern.
+- **Nema UPDATE policy** (L82 komentar). OK — set log je immutable; correction = DELETE + INSERT.
+- Treneri SELECT svi (EXISTS profiles.role = 'trainer') — L84–92. OK
+- Ukupno 4 policies × 1 tabela = 4 (za exercise_progress). OK
+
+**food_items (L103–139):**
+- Sve makro kolone NUMERIC sa odgovarajućom preciznošću.
+- `calories > 0` CHECK — STRIKTNO > (ne >=) (L109). OK per brief.
+- `protein_g/carbs_g/fat_g >= 0` CHECK (L110–112). OK
+- `fiber_g` nullable + `>= 0` CHECK (L113). OK per brief.
+- `glycemic_index TEXT CHECK IN ('low','medium','high','n_a')` NOT NULL (L116–117). OK — TEXT (ne ENUM) je namerno per NOTES.
+- `ingredients/allergens/tags/meal_slots TEXT[] NOT NULL DEFAULT '{}'` (L120–123). OK
+- Komentar (L124–125) dokumentuje dozvoljeni slot vocabulary: breakfast/morning_snack/lunch/afternoon_snack/dinner/mini_meal_ir per spec 02 §11. OK
+- `is_system BOOLEAN NOT NULL DEFAULT TRUE` + `created_by_trainer_id UUID REFERENCES profiles(id) ON DELETE SET NULL` (L128–129). OK — ON DELETE SET NULL znači custom food se pretvara u sistemski (TODO check: CONSTRAINT chk_food_items_system_no_trainer neće dopustiti ovo automatski; vidi Low ispod).
+- `CONSTRAINT chk_food_items_system_no_trainer` (L135–138): is_system=TRUE XOR created_by_trainer_id IS NOT NULL. OK — logički tačno.
+- `created_at`, `updated_at` oba TIMESTAMPTZ NOT NULL DEFAULT now() (L132–133). OK
+
+**food_items indexes (L146–155):**
+- 3 GIN indexes: `tags`, `meal_slots`, `allergens`. OK — sve per brief.
+
+**food_items trigger (L161–172):**
+- `update_food_items_timestamp()` ima `SET search_path = public` na L167 (`$$ LANGUAGE plpgsql SET search_path = public;`). OK — sprečava `function_search_path_mutable` lint.
+- BEFORE UPDATE trigger (L169–172). OK.
+
+**food_items RLS (L186–214):**
+- ALTER TABLE ... ENABLE ROW LEVEL SECURITY (L186). OK
+- SELECT za authenticated (USING true) — L188–191. OK (klijentkinja vidi sve jer MVP ne razdvaja vidljivost sistemskih i trener-custom jela).
+- Trener INSERT custom (WITH CHECK is_system=FALSE + created_by_trainer_id=auth.uid() + role='trainer') — L193–203. OK.
+- Trener UPDATE svoje custom (USING + WITH CHECK) — L205–209. OK.
+- Trener DELETE svoje custom (USING) — L211–214. OK.
+- Sistemska jela nemaju INSERT/UPDATE/DELETE policy → samo service_role (dev migracija) može da menja — L216. OK per brief.
+- Ukupno 4 policies × 1 tabela = 4 (za food_items). Combined: 4 + 4 = 8 new policies. OK per handoff.
+
+**Seed — 30 redova (L247–593):**
+- Svaki red eksplicitno ima `TRUE, NULL` kao poslednje dve kolone → `is_system=TRUE, created_by_trainer_id=NULL`. Verifikovano spot-check svih 30 redova. OK
+- Glycemic_index values all in ('low','medium','high') — nema 'n_a' u seed-u (OK, svi redovi su stvarni food items sa poznatim GI).
+- `meal_slots` koristi spec vocab ('breakfast','morning_snack','lunch','afternoon_snack','dinner'). Nema 'snack_am'/'snack_pm' legacy naziva. Normalizacija iz NOTES je izvršena. OK
+- `allergens` konzistentno koristi: 'lactose','gluten','eggs','nuts','seafood','soy'. Spec 02 §2.3 Anti-Ingredient Filter radi sa TEXT[] lookup po ovim string-ovima. OK
+- Monoingridijentna jela sa `allergens=ARRAY[]::TEXT[]` (f9 Chicken Rice Salad, f10 Turkey Quinoa, f19 Chicken Sweet Potato, f25 Rice Cakes Avocado, f27 Hummus): opravdano (sastojci nisu alergeni). OK
+- **Macro-kalorija konzistentnost (p×4 + c×4 + f×9 vs stated):**
+  - 28/30 redova je u ±30 kcal toleranciji (fiber doprinosi ~2 kcal/g, što pokriva razliku).
+  - **f19 Chicken Sweet Potato Spinach:** stated 490, calc 454, Δ +36 kcal. Fiber 5g doprinosi ~10 kcal, razlika je ~+26 (granično). Nije DB-level blocker — CHECK constraint ne enforce-uje macro-kalorija konzistentnost.
+  - **f28 Protein bar:** stated 210, calc 248, Δ -38 kcal. Tipično za protein bar sa sugar alcohols (ne brojaju kao full glucose). ACCEPTABLE industry artifact; NOT a blocker.
+
+### Types sync review (types.ts)
+
+- Ukupan broj tabela: **13** (grep -cE "^      [a-z_]+: \{$" → 13). Lista:
+  `client_template_assignments, daily_check_ins, exercise_progress, exercises, food_items, meal_logs, pause_events, profiles, session_templates, user_status, water_logs, weekly_check_ins, weight_logs`.
+- "Insert: {" count: **13** (L28, L77, L126, L195, L279, L345, L403, L471, L554, L602, L638, L677, L725) = 1 Insert po tabeli. **NEMA duplikat** (Dev handoff kaže "tačno 12 matches" — ali tačan broj je 13 zbog toga što je pre IT-3 bilo 11 tabela, a IT-3 dodaje 2, što daje 13 ukupno, ne 12. Handoff je imao off-by-one error u očekivanju, ali strukturno je types.ts čist — po jedan Insert po tabeli, bez duplikata). Reconciliation: handoff "11 → 13" DB_DELTA je tačan; "12 matches Insert" u audit kriterijumu je bio off-by-one — stvarno i očekivano = broj tabela = 13. OK.
+- **exercise_progress** (L113–166):
+  - Row (L114–125): sva 10 polja prisutna. `rir: number | null`, `workout_session_id: string | null` — nullable per DDL. OK
+  - Insert (L126–137): `exercise_id`, `reps`, `set_number`, `user_id`, `weight_kg` su required (bez `?`). `completed_at?`, `created_at?`, `id?` imaju DB defaults; `rir?`, `workout_session_id?` nullable. OK
+  - Update (L138–149): sva polja optional. OK
+  - Relationships (L150–165): 2 FK — `exercise_id → exercises(id)`, `user_id → profiles(id)`. OK
+- **food_items** (L259–326):
+  - Row (L260–278): 17 polja. `created_by_trainer_id: string | null` nullable, `fiber_g: number | null` nullable, `glycemic_index: string` (nije enum — namerno per brief). OK
+  - Insert (L279–297): **`calories`, `carbs_g`, `fat_g`, `name_en`, `name_sr`, `protein_g` su required** (bez `?`). `fiber_g?: number | null` opcionalan. Ostalo (arrays, is_system, timestamps, id) optional sa DB defaults. OK — matches brief sa preciznošću.
+  - Update (L298–316): sva polja optional. OK
+  - Relationships (L317–325): FK `created_by_trainer_id → profiles(id)`. OK
+- **Ostale tabele netaknute** — verifikovano po listi: svih 11 pre-existing tabela (client_template_assignments, daily_check_ins, exercises, meal_logs, pause_events, profiles, session_templates, user_status, water_logs, weekly_check_ins, weight_logs) i dalje su prisutne sa Row/Insert/Update/Relationships.
+
+### Biology invariants (DDL-level, Faza A scope)
+
+- `exercise_progress.weight_kg >= 0` dozvoljava 0 → bodyweight vežbe (push-up, chin-up) — OK per spec §5 K6.
+- `exercise_progress.rir BETWEEN 0 AND 5` — standardan range. Spec §5 K6 ne eksplicitno precizira granicu; 0–5 je industry standard za kvalitetan seriju (RPE 5–10). OK.
+- FK `ON DELETE RESTRICT` na `exercise_id` — DPO zahteva kontinuirani istorijski lookup; brisanje vežbe bi napravilo dangling reference → RESTRICT sprečava. Poslednji savet iz spec §5 K6 "3× backoff = update baseline" zahteva trajnu istoriju. OK.
+- `exercise_progress` bez `updated_at` — immutable append-only log. OK.
+- Food seed 30 < 100 spec minimum — dev handoff eksplicitno notes IT-21 pokriva proširenje; meal planner u IT-13 može da koristi 30 jela jer anti-ingredient filter radi i sa manjim poolom (validation ≥ 8 per category). Nije blocker za IT-3 (DDL-level).
+- Anti-Ingredient Filter pool ≥ 8 per category spot-check:
+  - breakfast category: f1, f2, f3, f4, f5, f6, f7, f8, f30 = **9 jela**. ≥ 8. OK
+  - lunch: f9, f10, f11, f12, f13, f14, f15, f16, f21, f22 = **10 jela**. ≥ 8. OK
+  - dinner: f9, f10, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22 = **12 jela**. ≥ 8. OK
+  - morning_snack: f2, f8, f23, f24, f25, f26, f27, f28, f29, f30 = **10 jela**. ≥ 8. OK
+  - afternoon_snack: f8, f23, f24, f25, f26, f27, f28, f29, f30 = **9 jela**. ≥ 8. OK
+  - mini_meal_ir: **0 jela** — nije korišćen u seed-u. IT-21 treba da doda IR-specifične snack options. Nije blocker za IT-3 (filter će u runtime-u vraćati prazan pool ako IR klijentkinja filtrira po mini_meal_ir; IT-13 meal planner treba da ima fallback na regular snacks + check).
+- `was_liquid_calories` tabela kolona postoji na `meal_logs` iz IT-1, ne na `food_items` — OK (semantika je per-log, ne per-food).
+
+### Design-system + No-touch zones (Faza A scope guard)
+
+- Migration fajl ne dira `src/`, t() pozive, sync engine — verified greppable.
+- Jedini `src/` touch: `types.ts` (L113–165 exercise_progress, L259–326 food_items, plus ostale existing). Auto-generated od Supabase CLI, no manual drift. OK.
+- `src/utils/sync/*.ts` — mtime check: sve fajlove Apr 19–20 2026 (pre IT-1). Nijedan dirnut u IT-3. OK.
+- `src/logic/` ne postoji (n/a).
+- `find src -newer <IT-2 migration>` vraća SAMO `src/integrations/supabase/types.ts`. Ostatak `src/` je netaknut. OK.
+- verify:tokens green → nema hex/arbitrary tailwind drift. OK.
+
+### Copy + i18n (n/a za ovu iteraciju)
+
+- Nema user-visible stringova u DDL/seed (osim name_en/name_sr podataka u food seed-u, koji su payload, ne UI copy).
+- Name_sr varijante (npr. "Ovsene pahuljice sa bananom i whey proteinom") koriste prirodni srpski jezik bez zero-guilt violation terms ('propušteno', 'kasniš', itd.) — OK.
+
+### RLS advisory check (static review)
+
+- RLS enabled na obe nove tabele (sprečava `rls_disabled_in_public`).
+- Trigger `update_food_items_timestamp` ima `SET search_path = public` (sprečava `function_search_path_mutable`).
+- Policies koriste `TO authenticated` (sprečava `anon_key_unrestricted`).
+- exercise_progress nema UPDATE policy — namerno (append-only). Postgrest će vratiti 403 na .update() pokušaj klijenta.
+- food_items sistemska jela nemaju INSERT/UPDATE/DELETE policy — samo service_role (dev migracija). Expected behavior.
+
+**Preporuka za main agent:** posle commit-a pokreni `mcp__supabase__get_advisors({type:"security"})` i proveri da nema novih lints. Pre-existing `auth_leaked_password_protection` je unrelated.
+
+### Findings
+
+**Blocker:** none.
+
+**High:** none.
+
+**Low:**
+- (seed f19, migration L461–469) Chicken+Sweet Potato+Spinach stated 490 kcal vs calculated 454 (+36). Realistično bi iznos bio ~556 kcal (chicken 150g ≈ 246 + sweet potato 200g ≈ 172 + 1tbsp olive oil ≈ 120 + spinach 18). Stvarna kalorija undersold. Ne blokira DDL — CHECK constraint ne enforce-uje macro-kalorija konzistentnost. Ivana/Mihajlo might want to re-verify actual weights used for recipe.
+- (seed f28, migration L562–571) Protein bar stated 210 kcal vs calculated 248 (-38). Tipični industry artifact (sugar alcohols ne brojaju kao full glucose), ali edge case ±30 tolerance je prekoračen. Low priority.
+- (migration L129, FK `created_by_trainer_id ON DELETE SET NULL`) Interakcija sa `chk_food_items_system_no_trainer` CHECK: ako se trener profil obriše, SET NULL na `created_by_trainer_id` ali `is_system` ostaje FALSE → CHECK violation → DELETE CASCADE fail. Edge case koji verovatno neće pogoditi MVP (treneri se retko brišu), ali dugoročno treba dodati trigger `BEFORE DELETE ON profiles` koji ili (a) brise custom food, ili (b) postavlja `is_system=TRUE` atomic sa SET NULL. Dokumentovati za IT-21+.
+- (seed cluster) `mini_meal_ir` slot ima 0 jela u MVP seed-u. IR klijentkinja koja filtrira po tom slot-u će dobiti prazan pool. IT-13 Meal Planner mora da ima fallback ("nema strogo-IR mini-meal jela — koristi regular snack + preporuka za manji unos ugljenih hidrata"). Not a DDL blocker; spec §11 ne zahteva min count per slot in IT-3.
+- (handoff "12 Insert matches") Handoff je očekivao 12 matches za "Insert: {" u types.ts, ali stvarni broj je 13 (11 pre-existing tabela + 2 nove). Strukturno je fajl čist — 1 Insert po tabeli, 13 tabela = 13 Insert blokova. Off-by-one u handoff ekspektaciji; nije bug u kodu.
+
+### Round trips on this iteration: 1/3
+
+**Main agent može da komituje** sa message-om:
+`feat(IT-3): exercise_progress + food_items + 30-row food seed`
+uz Co-Authored-By trailer per workflow. Ne dodavati `--no-verify`.
+
+---

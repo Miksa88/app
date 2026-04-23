@@ -79,3 +79,43 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - QA reviewer audit
 - Ako approved → git commit `feat(IT-2): weekly_check_ins + pause_events + water_logs migration`
 - Zatim IT-3 (`exercise_progress + food_items seed` — najveća iteracija Faze A, uključuje seed iz `src/data/foodDatabase.ts`)
+
+---
+
+## IT-3 — exercise_progress + food_items + seed
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** db-migrator (Sonnet) → main (apply + edit) → pending QA
+**Spec:** 01_TRAINING §5 K6 (DPO), 01_TRAINING §4.4 (Exercise Library), 02_NUTRITION §11 (Food DB)
+
+### Files touched
+- `supabase/migrations/20260424120500_create_progress_and_foods_seed.sql` (new; ručno uklonjen duplikat `CREATE TABLE exercises` blok koji je sub-agent greškom uključio — tabela već postoji iz lovable dev migracije)
+- `src/integrations/supabase/types.ts` (regenerated)
+
+### DB delta
+- Tables: 11 → 13 (+exercise_progress, +food_items). `exercises` već postojala (32 rows sistemskih vežbi).
+- food_items seed: 30 redova iz `src/data/foodDatabase.ts` (f1..f30). Spec traži ≥100 — IT-21 (Faza E) proširuje.
+- RLS policies: +8 (exercise_progress 4 + food_items 4). Sve `rls_enabled: true`.
+- Indexes: +4 (1 B-tree na exercise_progress, 3 GIN na food_items `tags/meal_slots/allergens`).
+- 1 trigger (`food_items` updated_at). exercise_progress bez trigger-a — append-only.
+- 0 novih enum-a (glycemic_index je TEXT CHECK: `'low'|'medium'|'high'|'n_a'`).
+
+### Decisions
+- `exercise_progress.exercise_id` FK sa `ON DELETE RESTRICT` — brisanje vežbe zabranjeno dok ima istorije (spec intent, štiti DPO lookup od dangling reference)
+- `exercise_progress.workout_session_id` UUID bez FK za sad (workout_sessions tabela dolazi u Fazi B); ALTER TABLE ADD CONSTRAINT kasnije
+- `exercise_progress` bez UPDATE policy (append-only, kao water_logs)
+- `food_items` koristi GIN indexes na TEXT[] kolonama za brzi tag/slot/allergen lookup (spec 02 §11 + anti-ingredient filter iz IT-13)
+- Seed normalizuje `snack_am/snack_pm` → `morning_snack/afternoon_snack` (spec 02 §11 naziv)
+- Sub-agent je pogrešno uključio `CREATE TABLE exercises` u migraciju iako tabela već postoji u DB. Main agent je Edit-om obrisao taj blok pre `apply_migration`. Razlog sub-agent greške: `src/utils/db/exerciseLibrary.ts` referencira exercises + nijedna tracked lokalna migracija ne kreira exercises → sub-agent zaključio da nedostaje. Zapravo je dev migracija (Lovable-side) kreirala tabelu pre repo init-a.
+
+### Acceptance
+- [x] `list_tables` → 13 tabela, obe nove `rls_enabled: true`, food_items 30 rows, exercises 32 rows (nedirnutih)
+- [x] `get_advisors(security)` → 0 novih lints
+- [x] `generate_typescript_types` → `exercise_progress` i `food_items` Row/Insert/Update u types.ts
+- [x] `npx tsc --noEmit` exit 0
+- [x] Baseline testovi: 255 (pure DDL, nema novih testova)
+
+### Next
+- QA reviewer audit
+- Ako approved → git commit `feat(IT-3): exercise_progress + food_items seed`
+- IT-4 — **prva non-DDL iteracija**: `process-daily-check-in` Edge Function + MA5 calculator pure helper + testovi. Deploy kroz `mcp__supabase__deploy_edge_function`.
