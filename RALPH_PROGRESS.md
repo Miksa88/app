@@ -165,3 +165,52 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent deploy kroz `mcp__supabase__deploy_edge_function` i git commit `feat(IT-4): process-daily-check-in + MA5 pure helper`
 - IT-5 — mutation hook `useDailyCheckIn(clientId)` koji orchestrira EF poziv + `applyDailyCheckIn` + patch + save UserStatus
 
+---
+
+## IT-5 — useDailyCheckIn mutation hook + save-user-status Edge Function
+
+**Timestamp:** 2026-04-24 01:08 CEST
+**Agent:** Dev Implementer (Opus 4.7 1M) → pending QA
+**Spec:** 02_NUTRITION §10/§13, 03_INTEGRATION §3.1 (DailyCheckIn flow), §5 (RLS one-writer pattern)
+
+### Files touched
+- `supabase/functions/save-user-status/index.ts` (new) — drugi Edge Function za upsert user_status; JWT auth + clientId == auth.uid verifikacija + service_role upsert.
+- `supabase/functions/save-user-status/deno.json` (new)
+- `src/hooks/mutations/useDailyCheckIn.ts` (new) — React Query mutation + pure `runDailyCheckIn` orchestrator + defaultDeps za produkciju + DailyCheckInDeps injection za testove.
+- `src/hooks/mutations/useDailyCheckIn.test.ts` (new, 4 test case-a) — testira `runDailyCheckIn` direktno (bez renderHook).
+
+### Test delta
+- 259 → 263 (+4). Svi case-ovi prolaze.
+
+### Baseline gate
+- [x] `npm test` → 263 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+
+### Arhitekturalne odluke
+- **Orchestrator split (`runDailyCheckIn` + `useDailyCheckIn`)**: pure async funkcija sa `DailyCheckInDeps` injection-om pokriva biznis flow (invokeProcess → loadStatus → applyCheckIn → patch → rekalk recovery → invokeSave). React Query hook je tanak omotac oko tog core-a. Razlog: testiranje bez `renderHook` + `QueryClientProvider` wrapper-a je manje boilerplate-a; 4 test case-a ne opravdavaju postavljanje React testing utils-a samo za njih. Pokrivenost hook-specific ponašanja (cache invalidation, toast error) ostaje za IT-6 integracioni test na `DailyCheckInSheet`.
+- **Dva Edge Function-a je eksplicitno u NOTES-u**: `process-daily-check-in` (IT-4, compute-only) + `save-user-status` (IT-5, writer). Razlog: syncEngine živi u Vite/Node stack-u sa `@/` alias-ima, Deno ne može direktno da ga import-uje. Kompromis: klijent patch-pattern (transformer vrati mock, EF vrati realne, hook overriduje samo ne-null vrednosti).
+- **Patch fallback**: ako `process-daily-check-in` vrati null za MA5/avg (nedovoljno istorije — < 5 pouzdanih uzoraka ili 0 non-menstrual dana), hook zadržava mock vrednost iz `applyDailyCheckIn` transformera (= dnevna vrednost iz check-in-a). UI na taj nacin uvek ima broj za prikaz; kad se istorija skupi, EF pocinje da vraca realne avg-ove i mock se menja automatski.
+- **Recovery multiplier rekompjut posle patch-a**: `calcRecoveryMultiplier` zavisi od 7-day avg-ova, ne od dnevnih vrednosti. Bez rekompjuta, recovery bi reflektovao "jedna tačka danas" umesto trend-a. Zato posle patch-a ide eksplicitan poziv `calcRecoveryMultiplier(...)` sa patched bio vrednostima (drugi put u istom flow-u — prvi put ga radi `applyDailyCheckIn` sa mock avg-ovima, drugi put mi rekompjutujemo sa realnim).
+- **save-user-status vraća DB row**: radi defensive react-query cache update-a (Realtime push je primarni kanal, ali subscription može da padne na mobile backgrounding-u).
+- **clientId == auth.uid provera u save-user-status EF-u**: service_role bypass-uje RLS, pa eksplicitno verifikujemo vlasništvo pre upsert-a. Sprečava scenario gde se payload `status.clientId` falsifikuje radi pisanja tuđeg reda.
+- **lastUpdatedAt server override**: EF setuje `lastUpdatedAt = now()` umesto da veruje klijentskom timestamp-u (autoritet vremena je server — sprečava clock-skew bug-ove u React Query staleTime kalkulaciji).
+- **Error semantika**: oba EF-a bacaju Error preko `supabase.functions.invoke` API error polja; hook konvertuje u `useMutation.error`; `onError` prikazuje `toast.error`. `silent` option omogucava pozivaocima (npr. batch check-in flow u budućnosti) da preuzmu error feedback.
+- **toIsoDate helper** koristi local-timezone datum (ne UTC slice) — sprečava bug gde klijentkinja u +2h zoni u 00:30 lokalno loguje juče.
+
+### Side-finds / deviations from plan
+- **RALPH_PLAN IT-5 scope-a tražio samo jedan EF** (`process-daily-check-in`) — moja IT-4 odluka (EF compute-only) je dovela do potrebe za drugim EF-om. Dokumentovano u task brief-u i u RALPH_PROGRESS IT-4 Arhitekturalne odluke. Ovo nije scope creep — direktna posledica IT-4 decision-a.
+- **Testovi koriste `runDailyCheckIn` direktno umesto `renderHook`** (vidi Arhitekturalne odluke). Ako QA traži hook-level testove, preporuka: dodati RTL `renderHook` + `QueryClientProvider` wrapper u IT-6 kao deo integracionog testa `DailyCheckInSheet`-a.
+- **Mock `applyDailyCheckIn` u testovima je minimalan** — ne pokreće stvarni syncEngine. Razlog: pravi `applyDailyCheckIn` zahteva EventBus mock + 40+ polja na status-u i test fail-uje bez kompletnog stuba. Minimalan mock (status kopija sa bio poljima overrid-ovanim) je dovoljan da validira patch logiku hook-a (što je ono što testiramo). `applyDailyCheckIn` ima zasebnu pokrivenost u `syncEngine.test.ts`.
+- **`syncEngine.ts` nije diran** (no-touch zone) — mock MA5 cleanup iz linija 74–78 i dalje stoji kao fallback. Patch pattern u hook-u je način na koji ga obilazimo bez menjanja god-node-a.
+- **Nema novih i18n string-ova za toast** — `toast.error("Check-in nije sačuvan", ...)` je jedini hardcoded string koji sam dodao. Prolazi kroz sonner direktno (ne `t()`). Za IT-6 ili IT-20 (i18n polish) prebacuje se na `t('checkin.error.saveFailed')`. Zabeleženo za QA/IT-20.
+
+### Deploy pending
+- `save-user-status` — main agent kroz `mcp__supabase__deploy_edge_function` nakon QA approval-a.
+- `verify_jwt=true` (default) ostaje; EF eksplicitno radi `auth.getUser(jwt)` za dobijanje userId, plus `clientId === userId` check.
+
+### Next
+- QA reviewer audit (verifikuje patch logiku + EF bezbednost + test coverage)
+- Ako approved → main agent deploy `save-user-status` i git commit `feat(IT-5): useDailyCheckIn mutation + save-user-status EF`
+- IT-6 — UI `DailyCheckInSheet` na Home tab-u, zove `useDailyCheckIn().mutate()`
+

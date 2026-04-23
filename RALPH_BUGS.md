@@ -514,3 +514,153 @@ Verified invariants from QA brief:
 uz Co-Authored-By trailer. Ne dodavati `--no-verify`. Posle deploy-a, IT-5 mutation hook preuzima odgovornost za wire-up kroz real klijent.
 
 ---
+
+## IT-5 — 2026-04-24 01:18 (Europe/Belgrade)
+
+**Scope:** `useDailyCheckIn` mutation hook (React Query + pure `runDailyCheckIn` orchestrator sa `DailyCheckInDeps` injection) + `save-user-status` Edge Function (JWT auth + clientId vlasništvo guard + service_role upsert) + 4 vitest case-a.
+**Spec refs:** 02_NUTRITION_FLOW_MASTER §10 (Daily logging), §13 (MA5 UI integration); 03_INTEGRATION_LAYER §3.1 (DailyCheckIn flow), §5 (RLS jedan-writer pattern).
+**Files touched:**
+- `supabase/functions/save-user-status/index.ts` (new, 199 lines)
+- `supabase/functions/save-user-status/deno.json` (new, 10 lines)
+- `src/hooks/mutations/useDailyCheckIn.ts` (new, 248 lines)
+- `src/hooks/mutations/useDailyCheckIn.test.ts` (new, 277 lines, 4 cases)
+- `RALPH_PROGRESS.md` (appended IT-5 entry)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 259 → 263 (+4, svi `useDailyCheckIn.test.ts` case-ovi prolaze; 24 test files; 0 failures; 0 skipped) — green
+- `npx tsc --noEmit`: exit 0, bez izlaza — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a (nije u scope-u iteracije)
+
+### Edge Function review (`save-user-status/index.ts`)
+
+Potvrđeni invarijanti iz QA brief-a:
+- **CORS headers** (L42–47) + OPTIONS preflight (L98–100) → 204 sa CORS headers. OK
+- **Method guard** (L102–104): non-POST → 405. OK
+- **Env validation** (L106–112): sva 3 env-a obavezna; missing → 500 "Server misconfigured" (sanitizovana poruka). OK
+- **JWT auth** (L115–129):
+  - Authorization Bearer token required → 401 ako missing/malformed (L115–118). OK
+  - Anon client sa JWT header-om za `getUser()` (L121–123) — **ne** service_role (isti pattern kao `process-daily-check-in`, security-correct). OK
+  - Invalid JWT → 401 "Invalid JWT" (L126–128). OK
+- **Payload validacija** (`validatePayload`, L77–91):
+  - Zahteva `body.status` da bude objekat (L81–83). OK
+  - Zahteva `status.clientId` non-empty string (L86–88). OK
+  - Invalid → 400 sa string opisom (L136–138). OK
+  - Ostala polja status-a tretiraju se kao opaque JSON (tipovi su enforce-ovani na src/ strani kroz UserStatus interface) — acceptable trade-off jer bi pune validacije replicated ovde bile drift risk.
+- **CRITICAL security guard** (L146–151): `if (payload.status.clientId !== userId) return 403 "Forbidden"`. Eksplicitno sprečava scenario gde user falsifikuje payload za pisanje tuđeg statusa — service_role ispod bypass-uje RLS, pa je ovaj check jedini barrier. Tačno mesto (pre admin client-a), tačna semantika. OK
+- **Service-role client** (L156): samo za upsert — minimalan scope. OK
+- **`lastUpdatedAt` server override** (L161–167): `nowIso = new Date().toISOString()` zapisan U OBE lokacije (`status_json.lastUpdatedAt` i top-level `last_updated_at` kolona) za konzistentnost. Klijent-ski timestamp se ignoriše (autoritet vremena = server). Ispravno po spec-u 03 §5 jedan-writer. OK
+- **Upsert** (L169–180): `.from("user_status").upsert({client_id, status_json, last_updated_at}, {onConflict: "client_id"}).select("...").single()`. onConflict izabran na PK (client_id) — matches user_status shema (1 red po klijentu). OK
+- **Response** (L191–198): vraća `{ok: true, row: {client_id, status_json, last_updated_at}}`. Defensive fresh-row za React Query cache (i pored Realtime push-a). OK
+- **Error handling** (L182–187): upsert error → 500 sa `upsertErr.message`. Kao u IT-4 — Supabase message je relativno sanitizovan (ime tabele/constraint-a), ne leak-uje connection string-ove. Minor note, ne blocker.
+
+### `deno.json` review
+
+- Import map identična IT-4 pattern-u (jsr resolvers za `functions-js/edge-runtime.d.ts` i `supabase-js@2`). OK
+- `tasks.dev`: `deno run --allow-net --allow-env --watch index.ts` — minimalne permission grants. OK
+
+### Hook review (`useDailyCheckIn.ts`)
+
+- **`runDailyCheckIn(clientId, checkIn, deps)`** pure async orchestrator (L95–150):
+  - Sekvencijalno: invokeProcess → loadStatus → applyCheckIn → patch → rekomputira recovery → invokeSave. Matches spec 03 §3.1 flow. OK
+  - Throws Error ako `loadUserStatus` vrati null (L105–110) — ranije je hook zvao bi `initUserStatus` first; jasna poruka. OK
+  - **Patch logic** (L120–133):
+    - `currentWeightMA5 = computed.ma5 ?? transformed.bio.currentWeightMA5` — nullish fallback na mock (= checkIn.weightKg) kad je EF vratio null (insufficient history). OK
+    - Isti pattern za sleep/stress/hydration avg-ove (L125–131). OK
+    - Pattern ne dira `runSyncRules` (koji je već pokrenut unutar applyDailyCheckIn) — samo 4 bio polja + recovery. Nema duplicate sync work. OK
+  - **Recovery rekompjut** (L139–144): `calcRecoveryMultiplier({sleepHoursAvg: patched..., stressLevel: patched..., age, metabolicConditions})` sa patched (ne mock) avg-ovima. Tip fields su `number` ne `number | null` u UserStatus shemi (verified u `src/types/userStatus.ts` L57–59), pa nema null propagacije — even kad je EF vratio null, fallback iz applyDailyCheckIn mock-a je number. **Biology invariant očuvan:** `calcRecoveryMultiplier` interno radi `clamp(base, 0.7, 1.1)` + `assertRecoveryMultiplierInRange` invariant check (recoveryCalibration.ts L56–61). Čak i sa extreme ulazima (mock + patched), rezultat je garantovano u [0.7, 1.1]. OK
+  - Vraća patched status za `onSuccess` consumera. OK
+- **`defaultDeps()`** production implementation (L156–199):
+  - `invokeProcess` poziva `supabase.functions.invoke("process-daily-check-in", {body: {...}})` sa `date: toIsoDate(checkIn.date)` + ostalim poljima. Error handling: throw Error sa message prefix-om ako EF vrati error, throw ako response nije `ok: true`. OK
+  - `invokeSave` poziva `supabase.functions.invoke("save-user-status", {body: {status}})`. Error propagation idemntično. OK
+  - `loadStatus: loadUserStatus` — direktna reference, ne wrapper. OK
+  - `applyCheckIn: applyDailyCheckIn` — direktna reference. OK
+- **`toIsoDate` helper** (L201–209): local timezone YYYY-MM-DD ekstrakcija kroz `d.getFullYear()/getMonth()/getDate()` umesto `.toISOString().slice(0,10)` (UTC). Sprečava off-by-one bug gde klijentkinja u +2h zoni u 00:30 lokalno loguje juče. **Semantic match** sa EF `process-daily-check-in` fixed-noon logic (IT-4 L246): local date iz hook-a → EF server tretira kao kalendarski dan, korelacija funkcioniše. OK
+- **`useDailyCheckIn(clientId, options)` React Query wrapper** (L225–247):
+  - `useMutation<UserStatus, Error, DailyCheckIn>` tipovan. OK
+  - `mutationFn: (checkIn) => runDailyCheckIn(clientId, checkIn, deps)` — tanak wrapper. OK
+  - `onSuccess` invalidate `["userStatus", clientId]` cache za defensive refresh (L234–238). Realtime push je primarni kanal; invalidation je backup ako subscription padne (mobile backgrounding). OK
+  - `onError` prikazuje `toast.error("Check-in nije sačuvan", {description: err.message})` — hardcoded srpski string. **Low finding:** i18n pending IT-20. `silent` flag opcionalan za pozivaoce koji ručno handle-uju error. OK
+  - `deps` dependency injection kroz options (L230) — default production deps, override-able za test. OK
+
+### Test review (`useDailyCheckIn.test.ts`)
+
+- **Test 1 — happy path** (L168–206):
+  - Mock EF vraća `sleepLast7DaysAvg=8.0, stressLast7DaysAvg=1` (različito od dnevnih 7.5/3 iz check-in-a).
+  - Verifikuje: `currentWeightMA5=60.2`, `sleepLast7DaysAvg=8.0`, `stressLast7DaysAvg=1`, `hydrationLast7DaysAvgMl=2200`.
+  - **CRITICAL biology check:** `recoveryMultiplier.toBeCloseTo(1.1, 2)`. Manual verifikacija: sleep=8 → +0.05, stress=1 → +0.05, age=30 → 0 penalty, metabolic=[] → 0 penalty. Base 1.0 + 0.05 + 0.05 = 1.10 (clamped to ceil). Test tačno matches implementaciju `calcRecoveryMultiplier` u `recoveryCalibration.ts` L29–62. OK
+  - Verifikuje invokeSave dobija patched status sa 60.2 MA5 (ne mock 60.5). OK
+- **Test 2 — null MA5 fallback** (L208–237):
+  - Mock EF vraća `ma5: null, sleep/stress/hydration avg: null` (insufficient history).
+  - Verifikuje: patched status zadržava mock vrednosti iz applyDailyCheckIn-ovog transformer-a (= checkIn.weightKg=60.5, checkIn.sleepHours=7.5, itd.).
+  - Verifikuje invokeSave pozvan 1x — null nije error, samo "nedovoljno istorije". OK
+- **Test 3 — process-daily-check-in error** (L239–254):
+  - Mock invokeProcess throws Error.
+  - Verifikuje `rejects.toThrow(/Invalid .weightKg/)`.
+  - **Fail-fast check:** verifikuje `loadStatus/applyCheckIn/invokeSave` **niko nije pozvan**. Save-user-status nije trigerovan kad je compute failed. OK — matches spec: ako DB writes fail-uju, nema sense patch-ovati state.
+- **Test 4 — save-user-status error** (L256–275):
+  - Mock invokeProcess uspe, invokeSave throws.
+  - Verifikuje `rejects.toThrow(/save-user-status failed/)`.
+  - **Append-only invariant check:** verifikuje `invokeProcess/loadStatus/applyCheckIn/invokeSave` svi pozvani 1x. Dokumentuje da daily_check_ins/weight_logs writes nisu rollback-ovani — Sync Engine je idempotentan, retry pattern. OK
+- Svi testovi koriste `runDailyCheckIn` direktno (ne `renderHook`) — skraćeno boilerplate bez QueryClientProvider-a. Hook-specific behavior (cache invalidation + toast) ostavljeno za IT-6 RTL integracioni test. ACCEPTABLE trade-off za 4 case-a; coverage-wise biznis flow je pokriven.
+
+### Biology invariants
+
+- **Recovery multiplier clamp [0.7, 1.1]:** `calcRecoveryMultiplier` interno radi `clamp(...)` + `assertRecoveryMultiplierInRange` invariant check. Hook prosleđuje `number` (ne null) jer UserStatus shema type-uje avg polja kao `number`, a `applyDailyCheckIn` uvek postavlja mock fallback. Nijedan novi path ne može proizvesti 0.68 ili 1.12. OK
+- **Calorie floor 1400 kcal:** Hook patch **ne dira** `currentCalorieTarget`. `applyDailyCheckIn` → `runSyncRules` → `recalcCalorieTarget` je već rekompjutirao target sa mock avg-ovima; posle patch-a ga ne rekompjutujemo (bi bio double work + inkonzistentnost). **Trade-off check:** calorie target je reagovao na mock sleep/stress, ne na patched real 7-day avg. U edge case-u (npr. mock sleep=5h od jedne tačke iz check-in-a, real 7-day avg=7.5h) calorie target bi mogao da odražava lošiji recovery nego što stvarno jeste. **Low note** — ali to je prihvatljivo za MVP jer: (1) fatigueSync trigger-i se baziraju na 2+ consecutive days, ne na jednoj dnevnoj vrednosti, (2) sledeći check-in sutra će rekompjutirati sa dve tačke podataka, (3) calorie floor 1400 je DB-level backstop u `recalcCalorieTarget`. Ne blokira IT-5.
+- **MA5 menstrual skip:** Logika u EF-u (spec Rule 8 dan 1–5). Hook ne dira. OK
+- **Cycle phase:** `applyDailyCheckIn` postavlja cycle_day/cycle_phase iz checkIn.cycleDay. Hook patch ne dira te fields. OK
+- **Liquid calories, Anti-Ingredient Filter, Return from Break, queue pointer:** N/A za IT-5 (check-in scope).
+
+### No-touch zones
+
+- `src/utils/sync/syncEngine.ts` — `git diff HEAD` ne pokazuje promenu. OK
+- `src/utils/sync/*` ostalo — netaknuto. OK
+- `src/logic/`, `src/engine/` — ne postoje. OK
+- Jedini tracked diff je `RALPH_PROGRESS.md` (IT-5 entry). Svi ostali fajlovi u IT-5 su novi (untracked). OK
+
+### Design-system compliance
+
+- Hardcoded hex u novim fajlovima: 0 matches (grep `#[0-9a-fA-F]{3,6}` u hook-u i EF-u). OK
+- Arbitrary Tailwind / touch targets / motion / dark mode: N/A (IT-5 je backend + hook, bez JSX komponenti). OK
+- `npm run verify:tokens` green (bez novih warnings). OK
+
+### Copy + i18n
+
+- **Zero-guilt scan:** "propušteno", "kasniš", "nisi uradila", "zakasnila" — 0 matches u novim fajlovima. OK
+- **ELI5 tone:** `toast.error("Check-in nije sačuvan", {description: err.message})` — plain-language srpski, bez kliničkog jargon-a (mTOR/cortisol/MEV). `err.message` može da uključi EF string poput "Invalid weightKg (20–300)" — englesko-tehnički, ali je error path koji korisnik retko vidi (ako uopšte). Acceptable za MVP; IT-20 mapiranje na `t('errors.checkin.*')` korektno adresira.
+- Zero-guilt + ELI5 check-i prolaze. OK
+
+### i18n key coverage
+
+- Hardcoded `"Check-in nije sačuvan"` string — Low finding (i18n pending IT-20 per handoff NOTES i per QA brief). Nije Blocker jer IT-20 je planska iteracija i18n polish-a, i brief eksplicitno to dozvoljava. Nema novih `t()` poziva u IT-5 (hook direktno zove sonner). OK
+
+### Commit discipline
+
+- QA audit pre commit-a; main agent će commit-ovati sa `feat(IT-5): useDailyCheckIn mutation + save-user-status EF`.
+- Co-Authored-By trailer expected per workflow.
+- Nema `--no-verify` signal u handoff-u. OK
+- Deploy pending: `save-user-status` EF kroz `mcp__supabase__deploy_edge_function` pre commit-a (ista konvencija kao IT-4).
+
+### Findings
+
+**Blocker:** none.
+
+**High:** none.
+
+**Low:**
+- (src/hooks/mutations/useDailyCheckIn.ts L241) Hardcoded srpski string `"Check-in nije sačuvan"` u `toast.error`. i18n pending IT-20 (per handoff i QA brief). Nice-to-have sada, planski pokriveno kasnije.
+- (src/hooks/mutations/useDailyCheckIn.ts L139–144) Recovery multiplier rekompjutira se sa patched avg-ovima, ali `currentCalorieTarget` je već izračunat iz mock avg-ova unutar `applyDailyCheckIn` i NE rekompjutira se posle patch-a. U retkom edge case-u gde se mock i real 7-day avg drastično razlikuju (npr. mock sleep=5 vs real=7.5), calorie target može biti suboptimalan za jedan dan. Ne blokira — calorie floor 1400 je DB-level backstop, i sutrašnji check-in će ga rekompjutirati sa dve tačke podataka. Dokumentovati u spec-u da je "calorie target sensitivity to 7-day avg-ovi je reactive sa jednim danom delay-a" acceptable trade-off.
+- (supabase/functions/save-user-status/index.ts L182–187) Error message `user_status upsert failed: ${upsertErr.message}` uključuje raw Supabase message — isti potencijalni leak kao u IT-4. Sanitizacija (generic "DB write failed" + server-side log) bi bila paranoidan higijena. Minor, ne blocker.
+- (src/hooks/mutations/useDailyCheckIn.test.ts L145–154) Test mock `applyCheckIn` simulira samo bio field overrides iz check-in-a, ne pokreće real syncEngine. Razlog dokumentovan u test file komentaru (L131–154) — realni applyDailyCheckIn traži EventBus + 40+ status field mock; minimalan stub je dovoljan za validaciju patch-after-transformer logike. Real applyDailyCheckIn pokriven je u `syncEngine.test.ts`. Acceptable za IT-5. Preporuka: IT-6 RTL integracioni test može da koristi realni transformer kroz `DailyCheckInSheet` render path.
+- (src/hooks/mutations/useDailyCheckIn.ts general) Nema hook-level testova (`renderHook` + `QueryClientProvider`) — cache invalidation i toast trigger na error su unverifikovani unit-test-wise. Planirano za IT-6 integracioni test na `DailyCheckInSheet`. Acceptable trade-off za 4-case scope.
+
+### Round trips on this iteration: 1/3
+
+**Main agent može da deploy-uje `save-user-status` EF kroz `mcp__supabase__deploy_edge_function`** i zatim komituje sa:
+`feat(IT-5): useDailyCheckIn mutation + save-user-status EF`
+uz Co-Authored-By trailer per workflow. Ne dodavati `--no-verify`. Posle commit-a, IT-6 UI `DailyCheckInSheet` preuzima consumer-side integraciju kroz `useDailyCheckIn().mutate()`.
+
+---
