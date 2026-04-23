@@ -369,3 +369,148 @@ uz Co-Authored-By trailer per workflow.
 uz Co-Authored-By trailer per workflow. Ne dodavati `--no-verify`.
 
 ---
+
+## IT-4 — 2026-04-24 01:02 (Europe/Belgrade)
+
+**Scope:** process-daily-check-in Edge Function (compute-only, opcija A'') + `calcMA5` pure helper + Deno port shared helper + 4 vitest case-a.
+**Spec refs:** 02_NUTRITION_FLOW_MASTER §10 (MA5 trendline), 03_INTEGRATION_LAYER §3.1 (DailyCheckIn flow), 03 §3.2 Rule 8 (weightDataReliable — menstrual skip).
+**Files touched:**
+- `src/utils/db/movingAverage.ts` (new, 89 lines)
+- `src/utils/db/movingAverage.test.ts` (new, 88 lines, 4 cases)
+- `supabase/functions/process-daily-check-in/index.ts` (new, 340 lines)
+- `supabase/functions/process-daily-check-in/deno.json` (new, 10 lines)
+- `supabase/functions/_shared/movingAverage.ts` (new, 61 lines — Deno port)
+- `RALPH_PROGRESS.md` (updated — IT-4 entry appended)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 255 → 259 (+4, all new `movingAverage.test.ts` cases pass; 23 test files; 0 failures; 0 skipped) — green
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a (script not invoked per iteration scope)
+
+### Pure helper review (`src/utils/db/movingAverage.ts`)
+
+Verified invariants from QA brief:
+- Signature `calcMA5(samples: WeightSample[]): MA5Result` returns `{ ma5, reliableSampleCount }` (L40–43, L58). OK
+- Menstrual skip guard: `cycleDayAtTime != null && >=1 && <=5 → continue` (L64–71). Exact match spec Rule 8 days 1–5 (NOT 1–7 — rok je uži, hormonalni edem ne prolazi van prve faze). OK
+- Ordering dependency: helper iterira ulazni niz redom i uzima prvih 5 non-menstrual. Dokumentovano u JSDoc L52–56: "očekuje se da su sortirani descending po logged_at". EF L270 (`order("logged_at", { ascending: false })`) to garantuje — par je koherentan. OK
+- Minimum 5: ako `reliable.length < 5` → `{ ma5: null, reliableSampleCount: <0–4> }` (L76–78). OK
+- Computation: `sum/5` sa `Math.round(avg * 10) / 10` zaokruživanjem na 1 decimalu (L80–85). Precisnost na 100g je biološki dovoljna za trend; ne gubi signifikantnu tačnost. OK
+- Koristi `Math.round` na finalnom proseku (ne na pojedinačnim sample-ovima) → kumulativna preciznost očuvana. OK
+
+### Test cases review (`movingAverage.test.ts`)
+
+- **Test 1 (insufficient):** 3 non-menstrual → `{ ma5: null, count: 3 }` (L20–33). OK, matches spec.
+- **Test 2 (normal):** 60+61+60+60+59 = 300, /5 = **60.0** → `expect(ma5).toBe(60.0)` (L35–49). Math verified manually. OK
+- **Test 3 (with skip):** prva dva sample-a cycleDay=1 i cycleDay=3 (menstrual — skip); preostalih 5 imaju cycleDay 8,9,10,11,12 (luteal/folikularna — non-menstrual). Sum = 60+61+60+60+60 = **301**, /5 = **60.2** → `expect(ma5).toBe(60.2)` (L51–68). OK
+  - **CRITICAL biology check passed:** sample-ovi koji se SKIP-uju imaju `cycleDayAtTime` polje postavljeno na 1 i 3 respektivno (L55–56) — test verifikuje da je skip na `cycleDayAtTime` per-sample (vreme kad je weight zabeležen), ne trenutna cycle phase. Ispravna semantika spec Rule 8.
+- **Test 4 (all skip):** svih 5 sample-ova u cycle day 1–5 → posle filtera 0 reliable → `{ ma5: null, count: 0 }` (L70–86). OK
+- Svi testovi pozivaju samo `calcMA5` pure — nema DB mockova, nema side-effect-a. OK
+
+### Edge Function review (`process-daily-check-in/index.ts`)
+
+- **OPTIONS preflight** (L169–171): vraća 204 sa CORS headers. OK
+- **Method guard** (L173–175): non-POST → 405. OK
+- **Env validation** (L177–183): sva 3 env-a obavezna; missing → 500 "Server misconfigured" (sanitizovana poruka, ne leak-uje imena). OK
+- **JWT auth flow** (L188–202):
+  - Zahteva `Authorization: Bearer <jwt>` — missing/malformed → 401 (L189–191). OK
+  - Koristi **anon client sa JWT headerom** za `getUser()` (L194–196) — **ne** service_role. Ispravan pattern per Supabase security guidelines; service_role bi bypass-ovao signature verification. OK
+  - Na invalid JWT → 401 "Invalid JWT" (L199–201). OK
+- **Payload parse** (L205–215): `await req.json()` u try/catch; parse error → 400 "Invalid JSON". OK
+- **Payload validator** (`validatePayload`, L109–147): sva 7 polja mirror-uju DB CHECK iz IT-1:
+  - `date` regex `^\d{4}-\d{2}-\d{2}$` (L113–115). OK
+  - `weightKg` 20–300 (L116–118). Match DB CHECK.
+  - `sleepHours` 0–14 (L119–121). Match.
+  - `stressLevel` 1–5 (L122–124). Match.
+  - `energyLevel` 1–10 (L125–127). Match.
+  - `waterIntakeMl` >= 0 (L128–130). Match.
+  - `cycleDay` 1–45 nullable (L131–136). Match.
+  - Nevalidna polja → 400 sa string opisom polja (L210). OK
+- **Service-role client** (L220) — koristi se samo za DB writes/reads, per "jedan writer" princip. OK
+- **Upsert daily_check_ins** (L223–236) sa `onConflict: "user_id,date"` — spec traži 1 po danu; upsert na existing updates row bez fail-a. DB UNIQUE constraint (iz IT-1 migracije) je backstop. OK
+- **Insert weight_logs** (L247–254) sa `source="manual"`. Pokriva ručni unos; `"auto"/"wearable"` su za buduće integracije. OK. **Note:** `logged_at = {date}T12:00:00Z` (L246) — fixed na podne UTC da bi `.slice(0,10)` date-key uvek vratio isti date key u cycle-by-date korelaciji (izbegava off-by-one sa timezone-om pri kasnijem slice-u na L310). Deliberate, dokumentovano logički. OK
+- **Fetch 14 weight_logs** (L266–271): `order("logged_at", desc).limit(14)`. Buffer pokriva worst-case (7 menstrual dana u 14 → još 5 non-menstrual za MA5). OK
+- **Fetch 7 daily_check_ins** (L281–289): `gte("date", sevenDaysAgo).order("date", desc)`. 7-day sliding window matches QA brief. OK
+- **Cycle correlation** (L304–316): `Map<date, cycle_day>` napravljen iz `checkIns`; za svaki weight log, `logged_at.slice(0,10)` ključ. Mapa vraća `undefined` za dane bez check-in-a → normalisano u `null` (L314). Helper onda tretira `null` kao non-menstrual (neće skip). OK
+- **MA5 compute** (L319): poziva shared `calcMA5` — NE duplira algoritam. OK
+- **7-day avg compute** (L323–327):
+  - `sleepAvg`: filtriran `nonMenstrualCheckIns` (isMenstrual ne-skip). OK — matches QA brief.
+  - `stressAvg`: isti filter. OK.
+  - `hydrationAvg`: NE filtrira — koristi `checkIns` (svi dani). **Verify spec Rule 8 intent:** ciklus utiče na weight (edem) i na sleep/stress (PMS umor), ali hidratacija je volitional behavior ne-hormonalno modulisan — spec 03 §3.2 Rule 8 eksplicitno vezuje `weightDataReliable=false` samo za weight, ne za water. Implementacija ispravna. OK
+  - `avgOrNull` (L157–162): filtrira `null` pre racunanja; ako svi null → vraća `null` umesto NaN. OK. Math.round(x*100)/100 za 2 decimale — dovoljna preciznost za sleep hours i ml vode.
+- **Response** (L331–338): `{ ok, ma5, reliableSampleCount, sleepLast7DaysAvg, stressLast7DaysAvg, hydrationLast7DaysAvgMl }`. Polja match spec i IT-5 kontrakta. OK
+- **Error handling**: svaka DB operacija proverava `error` → 500 sa konkatenacijom error.message. **Low priority note:** `error.message` iz Supabase-a može da uključi sanitized string (ime tabele/constraint-a), ali ne leak-uje connection string-ove; acceptable za MVP.
+
+### `deno.json` review
+
+- Import map pokriva samo `edge-runtime.d.ts` + `@supabase/supabase-js@2` — oba jsr URI-ja (L3–4). Nema hardkodovanih secrets. OK
+- `tasks.dev`: `deno run --allow-net --allow-env --watch index.ts` (L7) — minimalne permission grants. OK
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` čita samo kroz `Deno.env.get()` u index.ts (L177–179) — standardni pattern za Supabase Edge Functions. OK
+
+### Shared helper duplicate (`supabase/functions/_shared/movingAverage.ts`)
+
+- Algoritam identičan `src/utils/db/movingAverage.ts` (verified line-by-line — logic L34–60 match src L58–88). OK
+- Komentar na L1–17 jasno označava "port of src/utils/db/movingAverage.ts ... Source of truth je src/ (pokriven vitest-om). Ako se logika menja, menja se na oba mesta". OK
+- Interface definicije (`WeightSample`, `MA5Result`) su identične. OK
+
+**Low priority follow-up:** CI check koji diff-uje dva fajla pri svakom PR-u bi sprečio drift. Ne blokira IT-4. Tema za IT-21 smoke layer ili raniju infra iteraciju.
+
+### No-touch zone verification
+
+- `src/utils/sync/syncEngine.ts` mtime Apr 20 00:25 (pre Ralph rad-a) — **nije diran u IT-4**. Git status ne pokazuje promenu. OK. Mock MA5 u L74–78 ostaje, IT-5 hook će patch-ovati real vrednosti preko EF response-a (kako je i planirano).
+- `src/logic/`, `src/engine/` — ne postoje u repo-u (confirmed u IT-3 audit-u). OK.
+- Nema novih user-facing stringova u JSX-u (IT-4 je backend + pure). Copy/i18n checks N/A. OK.
+- Svi postojeći 255 testovi i dalje prolaze (23 test files, 259 total — +4 tačno). OK
+
+### Biology invariants
+
+- MA5 skip dan 1–5 only (NE 1–7) — spec Rule 8 rigorous. OK
+- Hydration avg ne filtrira menstrual — hidratacija nije hormonalno-modulated metric. OK per spec 03 §3.2.
+- Sleep/stress filtriraju menstrual u 7-day avg — prevent false-high stress baseline u luteal/non-menstrual evaluaciji. OK per spec intent.
+- Recovery multiplier NE računa se u EF — IT-5 applyDailyCheckIn će to raditi. OK (scope je compute-only).
+- Calorie floor 1400 kcal invariant: EF ne dira calorie target. OK.
+- Direct UserStatus mutation: EF **ne poziva** `applyDailyCheckIn`, `saveUserStatus`, niti bilo šta iz `syncEngine.ts` — compute-only scope poštuje arhitektonsku granicu. OK
+
+### Design-system compliance
+
+- Hardcoded hex u `supabase/functions/**` i `src/utils/db/movingAverage.ts`: 0 matches. OK
+- Arbitrary Tailwind, touch targets, motion, dark mode: N/A (nema JSX-a u IT-4).
+
+### Copy + i18n
+
+- Nema user-facing stringova u IT-4 (svi error message-ovi su engleski u EF response body-ju — dizajnirani za programatičku konzumaciju od strane IT-5 hook-a, koji treba da mapira na `t('errors.*')` pre prikaza). Acceptable — IT-5 mora da obuhvati to mapiranje. Nije IT-4 blocker.
+- Zero-guilt scan: "propušteno", "kasniš", "nisi uradila", "zakasnila" — 0 matches u novim fajlovima. OK
+- ELI5 tone N/A (bez client-facing copy).
+
+### i18n key coverage
+
+- Nema `t()` poziva u novim fajlovima. Skipped.
+
+### Commit discipline
+
+- QA audit pre commit-a; main agent će commit-ovati sa `feat(IT-4): process-daily-check-in + MA5 pure helper`.
+- Co-Authored-By trailer expected per workflow.
+- Nema `--no-verify` signal u handoff-u. OK
+
+### Findings
+
+**Blocker:** none.
+
+**High:** none.
+
+**Low:**
+- (supabase/functions/_shared/movingAverage.ts) Duplikat pure helpera — drift risk dugoročno. Predložiti IT-21 CI check ili build-step za automatski sync. Ne blokira IT-4.
+- (supabase/functions/process-daily-check-in/index.ts L246) `logged_at` se postavlja na `{date}T12:00:00Z` fiksno podne UTC. Za klijentkinje u UTC-11 (Pacifik), to znači da ukucani datum 2026-04-23 postaje `logged_at` 2026-04-23T01:00 lokalnog vremena — tehnički OK za date-key korelaciju (`.slice(0,10)` ostaje isti), ali ako kasnije UI prikazuje "loggovano danas u 14:00", može biti buntif. Edge case za MVP, ne blokira.
+- (supabase/functions/process-daily-check-in/index.ts L239–242) Error message `daily_check_ins upsert failed: ${checkInErr.message}` uključuje raw Supabase message — verovatno bezopasno, ali sanitizacija (generički "DB write failed" + server-side log) bi bila paranoidan higijena. Nice-to-have, ne blocker.
+- (supabase/functions/process-daily-check-in/index.ts ceo fajl) Nema vitest-kompatibilnog testa za EF (Deno runtime, ne pokriva vitest). Live testiranje mora da ide kroz deploy + curl, ili kroz Deno test (posebna iteracija infra). Acceptable za MVP.
+- (deno.json L7) `tasks.dev` ima `--allow-net --allow-env` ali ne `--allow-read` — u EF runtime Supabase možda čita neke fajlove, ali `deno run` lokalno može da crash-uje na prvi FS pristup. Minor — main agent je napomenuo da neće lokalno pokretati (deploy kroz MCP). Ne blocker.
+
+### Round trips on this iteration: 1/3
+
+**Main agent može da deploy-uje EF kroz `mcp__supabase__deploy_edge_function`** i zatim komituje sa:
+`feat(IT-4): process-daily-check-in + MA5 pure helper`
+uz Co-Authored-By trailer. Ne dodavati `--no-verify`. Posle deploy-a, IT-5 mutation hook preuzima odgovornost za wire-up kroz real klijent.
+
+---
