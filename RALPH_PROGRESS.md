@@ -277,3 +277,56 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → commit `feat(IT-6): DailyCheckInSheet + Home CTA integracija`
 - **Ovo je poslednja iteracija Faze A.** Posle commit-a, cela FAZA A (IT-1..IT-6) je gotova. Sledeća je FAZA B — Workout completion loop (IT-7).
 
+
+---
+
+## IT-7 — process-workout-completion Edge Function + post-completion pure helper
+
+**Timestamp:** 2026-04-24 01:36 CEST
+**Agent:** Dev Implementer (Opus 4.7 1M) → pending QA
+**Spec:** 01_TRAINING §5 Korak 2.5 (onSessionCompleted), §4.8 (PauseEvent illness lifecycle), §7.5 (Return from Break); 03_INTEGRATION §3.1 (WorkoutCompletion flow)
+
+### Files touched
+- `src/utils/db/workoutCompletion.ts` (new) — pure `applyPostCompletionCounters(training, partition) → { training, pauseJustEnded }` helper za RFB decrement + illness penalty decrement + partitionLastSeen mirror + isInReturnFromBreak derive
+- `src/utils/db/workoutCompletion.test.ts` (new) — 7 test case-a: normal completion, RFB Lower 2→1, RFB both 1→0/1, illness 2→1, illness 1→0 end, travel no-op, immutability guard
+- `supabase/functions/_shared/queueAdvance.ts` (new, Deno port) — verbatim port `advancePointerAfterCompletion` + `resolveNextSession` + `hasMesocycleEnded` + `inferMicrocycleSize` iz `src/utils/training/sessionResolver.ts`; source of truth ostaje `src/`, ovo je Deno kopija
+- `supabase/functions/process-workout-completion/index.ts` (new) — Edge Function: JWT auth → clientId guard → SELECT user_status → sessionId guard → advance queue → inline Deno port applyPostCompletionCounters → recompute nextSessionId/Partition → atomic upsert user_status → UPDATE pause_events ako illness završena
+- `supabase/functions/process-workout-completion/deno.json` (new) — import map + dev task (analogno process-daily-check-in)
+- `RALPH_PROGRESS.md` (appended)
+
+### Test delta
+- 265 → 272 (+7). Svi `workoutCompletion.test.ts` case-ovi prolaze.
+
+### Baseline gate
+- [x] `npm test` → 272 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+
+### Arhitekturalne odluke
+- **EF save-uje interno (atomic path).** Queue pointer advance + RFB decrement + illness penalty decrement + `pause_events` UPDATE moraju ili svi da uspeju ili nijedan. Ako bi EF bio samo compute (kao IT-4) a hook save-ovao, mini-racing prozor između dva HTTP poziva mogao bi da ostavi UserStatus u "advanced" stanju bez persistiranja. EF ovde radi upsert `user_status` + update `pause_events` pa je race eliminisan na server strani. Razlika od IT-4: daily check-in je append-only (retry-safe), workout completion je state progression (ne sme da diverge-uje).
+- **EF NE poziva `runSyncRules` (god node no-touch).** Deno port svih 8 sync rule-ova + zavisnosti (calcBMR, calcTDEE, calcCalorieTarget, cycle sync, deload sync…) bi bio ogroman posao + duplikacija. Umesto toga, IT-9 hook posle uspešnog EF-a poziva klijent-side `runSyncRules(status)` + `save-user-status` za rebuild calorie target-a. Mini-race dok drugi save ne uspe: klijent može da vidi queue advance bez recomputed calorie target-a kratko; u praksi Realtime push prvog save-a stiže i drugi save brzo za njim (~100ms). Prihvatljivo za alpha.
+- **Pure helper `applyPostCompletionCounters` živi u `src/utils/db/`**, testiran Vitest-om. Inline-ovan u EF fajlu (bez _shared/ duplikata) jer je kratak (~30 LOC) i svaka promena algoritma će pogoditi samo dva mesta; za `advancePointerAfterCompletion` (150+ LOC sa inferMicrocycleSize + tipovi) _shared/queueAdvance.ts je bolji izbor.
+- **Shared Deno port duplicate** (`src/utils/training/sessionResolver.ts` ↔ `supabase/functions/_shared/queueAdvance.ts`). Source of truth je `src/`. Ako se `advancePointerAfterCompletion` menja, oba mesta treba sync-ovati. Ovo je isti pattern koji je već ustanovljen u IT-4 sa `movingAverage.ts`.
+- **sessionId guard (korak 2 iz briefa)** vraća 400 ako `queue.sessions[pointer].sessionId !== payload.sessionId`. Ovo čini EF idempotentan pri retry-ju: ako je prvi save prošao i pointer već napredovao, drugi poziv će naći drugu sesiju na pointer poziciji i odbiti — neće nastati duplikat advance.
+- **`pause_events` UPDATE je sekundaran**: ako fail-uje posle uspešnog user_status upsert-a, EF vraća 200 sa `warning` poljem umesto 500. Razlog: biology-critical path (calorie sync) već radi dobro preko `status_json.training.activePauseEvent=null`; `pause_events` red je audit trail za trener dashboard i može da stagnira 1 request bez biološke štete.
+- **activePauseEvent.type === 'travel' → no-op**. Travel pauza ima `penaltySessionsRemaining=0` od starta; helper već guard-uje `> 0` pa ne decrement-uje ispod nule niti završava travel (travel se gasi user-triggered, spec 01 §4.8).
+- **`nextSessionId` / `nextSessionPartition` recompute** kroz `resolveNextSession(advancedQueue)` — ako queue završen, ostavljamo prethodne vrednosti (mesocycle lifecycle IT-15 će resetovati pri generisanju novog mezociklusa).
+
+### Side-finds
+- `supabase/functions/_shared/` već je postojao od IT-4 (`movingAverage.ts`); `queueAdvance.ts` samo dodat u isti folder — jedinstveno mesto za Deno port-ove.
+- `workoutService.ts` u `src/services/` već ima ekvivalentnu orchestraciju (linije 52–125) za single-client mode. EF je server-side mirror, ne zamena — `workoutService` ostaje za legacy flows (local-first refactor path kroz `updateUserStatus`); IT-9 hook zameniti direktnim EF pozivom.
+- `PostCompletionResult.pauseJustEnded` flag izložen u helper-u jer EF treba da zna da UPDATE `pause_events` red (side-effect van UserStatus-a). Pure helper ostaje pure — signal je samo return value.
+
+### Deviations from plan
+- Brief je tražio test case (1) "Normal completion: session pointer napreduje za 1, partitionLastSeen update-ovan". Pointer advance je logika `advancePointerAfterCompletion` koja je već pokrivena u `sessionResolver.test.ts`; moj test case (1) umesto toga verifikuje partitionLastSeen mirror + isInReturnFromBreak + immutability aspekte helpera — fokus na NJEGOVE invariants, ne re-testiranje već pokrivene advance logike. Dodao sam 7 test case-a umesto 4 radi pokrivanja travel-no-op i immutability guard-a.
+- EF interno koristi inline Deno port `applyPostCompletionCounters` umesto _shared/ fajla. Helper je 30 LOC, jedan pozivalac u EF — shared/ bi uneo nepotrebni sloj za minimum benefita. Ako se pojavi drugi EF koji decrement-uje iste brojače, refaktor-ovaće se u _shared/.
+
+### Next
+- QA reviewer audit:
+  - verifikuje sessionId guard (400 response shape)
+  - verifikuje immutability helpera (da ne curi reference na ulazni queue)
+  - verifikuje atomic path (da pause_events UPDATE fail-safely ne vraća 500)
+  - verifikuje validate 7 case-ova pokrivaju sve grane `applyPostCompletionCounters`
+- Ako approved → main agent deploy kroz `mcp__supabase__deploy_edge_function` i git commit `feat(IT-7): process-workout-completion + workoutCompletion pure helper`
+- IT-8 — DPO calculator + useFinishWorkout + useCompleteSet mutation hooks
+

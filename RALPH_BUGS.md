@@ -797,3 +797,122 @@ uz Co-Authored-By trailer per workflow. Ne dodavati `--no-verify`. Posle commit-
 ### Round trips on this iteration: 1/3
 
 **Verdict (summary):** IT-6 approved.
+
+---
+
+## IT-7 — 2026-04-24 01:40 (Europe/Belgrade)
+
+**Scope:** Faza B prva iteracija — Edge Function `process-workout-completion` + pure helper `applyPostCompletionCounters` (post-completion counter decrement: RFB + illness penalty + partitionLastSeen mirror).
+**Spec refs:** 01_TRAINING_FLOW_MASTER §5 Korak 2.5 (onSessionCompleted), §7.5 (Return from Break), §4.8 (PauseEvent illness lifecycle), 03_INTEGRATION_LAYER §3.1 (WorkoutCompletion flow).
+
+**Files reviewed:**
+- `src/utils/db/workoutCompletion.ts` (new, 137 lines)
+- `src/utils/db/workoutCompletion.test.ts` (new, 7 cases, 241 lines)
+- `supabase/functions/_shared/queueAdvance.ts` (new, 157 lines — Deno port)
+- `supabase/functions/process-workout-completion/index.ts` (new, 432 lines)
+- `supabase/functions/process-workout-completion/deno.json` (new, 10 lines)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 265 → **272 passing (+7)**, 0 failures, 0 unexpected skips — green
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green (preexisting warn-only drift, unrelated to IT-7; IT-7 ne dodaje UI)
+- `npm run lint`: n/a (out of iteration scope, backend/pure only)
+
+### 1. `workoutCompletion.ts` — pure helper audit
+
+Signature: `applyPostCompletionCounters({ training, completedPartition }) → { training, pauseJustEnded }`. Matches brief. Verified:
+
+- **Immutability** (L76–133): sav return path koristi spread copies — `{ ...training, queue: { ...training.queue, ... }, partitionLastSeen: newPartitionLastSeen, activePauseEvent: newActivePauseEvent }`. Test `ne mutira ulaz` (L220–239) eksplicitno verifikuje da `training.queue.returnFromBreakCountdown.Lower` i `training.activePauseEvent.penaltySessionsRemaining` ostaju originalni posle poziva. OK.
+- **RFB clamp ≥ 0** (L88–89): `Math.max(0, prevCountdown - 1)`. Ne može ići negativno. Test `RFB obe particije na 1: Lower → 0` (L141–156) + normal-completion test (L87–115) koji verifikuje countdown.Lower=0 kad nema aktivnog RFB-a. OK.
+- **Partition-aware decrement** (L90–93): samo `[completedPartition]` se smanjuje, ostali ključevi preživljavaju kroz spread. Test `RFB aktivan za Lower: Upper=2 ostaje nediran` (L117–139) verifikuje. OK.
+- **isInReturnFromBreak derive** (L96–98): `Object.values(...).some(v > 0)` posle decrement-a. Konzistentno sa `queue.returnFromBreakCountdown` — tj. koristi `newReturnFromBreakCountdown` (ne originalni queue), što je ispravno. OK.
+- **Illness penalty lifecycle** (L104–119): provera `type === 'illness' && penaltySessionsRemaining > 0`, onda decrement, onda if `nextRemaining <= 0` → `null + pauseJustEnded=true`, inače clone. Tests `illness 2→1` (L158–177) i `illness 1→0 → null + pauseJustEnded=true` (L179–196) pokrivaju oba path-a.
+- **Travel NO-OP** (L104–108): guard `penaltySessionsRemaining > 0` preskače travel (penalty=0). Test `travel pauza: ne decrement-uje, pauseJustEnded=false` (L198–218) verifikuje da activePauseEvent ostaje non-null sa type='travel' i penalty=0. OK.
+- **Partition mirror queue → training** (L76–85): čita iz `training.queue.partitionLastSeen[completedPartition]` i upisuje u `newTraining.partitionLastSeen[completedPartition]`. Komentar na L74–75 objašnjava da advancePointerAfterCompletion već upisuje u queue stranu pre poziva helper-a. Normal-completion test (L87–115) proverava da `out.partitionLastSeen.Lower.sessionId === 'A1'` i date match. OK.
+- **Pointer + microcycle mirror** (L128–129): `sessionPointer = training.queue.sessionPointer` i `currentMicrocycleIndex = training.queue.currentMicrocycleIndex`. Pozivalac (EF) mora prethodno da merge-uje advanced queue u training.queue — EF to radi na L343–348.
+
+### 2. `workoutCompletion.test.ts` — 7 cases
+
+Sve 7 case-a prolaze:
+1. normal completion → mirror + pauseJustEnded=false
+2. RFB Lower 2→1 + Upper ostaje 2
+3. RFB obe particije na 1 → Lower=0, Upper=1 (still in RFB)
+4. illness 2→1 → ostaje active
+5. illness 1→0 → activePauseEvent=null + pauseJustEnded=true
+6. travel → NO-OP
+7. immutability (input unchanged)
+
+Dev handoff naveo 7 case-a, pokrivaju sve invariants iz brief-a (RFB clamp, illness lifecycle, travel no-op, partition mirror, immutability). OK.
+
+### 3. `process-workout-completion/index.ts` — Edge Function audit
+
+- **Auth pattern** (L246–260): Bearer JWT iz `Authorization` header → `anonClient.auth.getUser(jwt)` → userId. 401 ako nije validno. Mirror save-user-status pattern-a. OK.
+- **Payload validation** (L129–148): svi 3 polja (clientId/sessionId/completedAt) validirana; `Date.parse(completedAt)` checking za ISO. 400 sa eksplicitnom porukom. OK.
+- **Security guard** (L276–281): `payload.clientId !== userId` → 403. OK.
+- **Service role za DB** (L284): posebna instanca bez Authorization header-a. Standard Supabase pattern. OK.
+- **Load user_status** (L287–301): SELECT po client_id → `maybeSingle()` sa 404 ako nema reda (bolje od .single() jer ne throw-uje). OK.
+- **Queue active-session guard** (L306–327): proverava `queue.sessions[sessionPointer].sessionId === payload.sessionId` — ako ne match, vraća 400 sa `{ expected, received }` payload-om. Ovo je retry-safety guard iz brief-a: drugi poziv sa istim sessionId posle uspešnog advance-a će failovati jer je pointer napredovao i sessions[newPointer] je drugačija. OK.
+- **Advance queue** (L333–340): `advancePointerAfterCompletion(queue, completedAtDate)` u try/catch — throw (mesocycle već gotov) → 400 sa jasnom porukom. OK.
+- **Counters + pause decrement** (L343–353): merge-uje advanced queue nazad u training slice pa zove `applyPostCompletionCounters` (inline Deno port). OK.
+- **Recompute nextSessionId** (L356–360): `resolveNextSession(advancedQueue)`; ako null (queue završen), zadržava prethodne vrednosti sa komentarom da će IT-15 rešiti mesocycle lifecycle. Defensive i ispravno — ne brutalizuje status ako je poslednja sesija mezo-a upravo završena. OK.
+- **Atomic upsert** (L377–393): upsert user_status sa `{ client_id, status_json, last_updated_at }`; 500 ako fail. OK.
+- **pause_events UPDATE best-effort** (L397–422): kada `pauseJustEnded=true`, UPDATE pause_events SET is_active=false, end_date=YYYY-MM-DD za `user_id + is_active=true + pause_type='illness'`. Ako DB write fail-uje, **ne vraća 500** — vraća 200 sa `warning` poljem u response-u. Brief eksplicitno traži ovaj pattern ("200+warning, ne 500"). Komentar L411–414 opisuje zašto (status_json već reflektuje end; trener dashboard može da vidi stale row dok se ne retry-uje). OK.
+- **DB kolone pause_events** verifikovane u migraciji (`supabase/migrations/20260424120000_create_weekly_pause_water_tables.sql` L85–99): `user_id`, `pause_type`, `end_date`, `is_active` postoje. Enum `public.pause_type` sadrži 'illness' i 'travel'. EF koristi tačna imena. OK.
+- **CORS** (L108–113): standardni pattern iz IT-4/IT-5. OPTIONS handler vraća 204. OK.
+- **Response shape** (L425–430): `{ ok: true, queueAdvanced: true, pauseJustEnded, status: newStatus }` — match brief-ov expected response. OK.
+
+### 4. `_shared/queueAdvance.ts` — Deno port audit
+
+Uporedio port sa `src/utils/training/sessionResolver.ts` — algoritam je **verbatim**:
+
+- `hasMesocycleEnded` (L72–74): identičan (1 linija, `pointer >= sessions.length`). OK.
+- `resolveNextSession` (L80–83): identičan. OK.
+- `inferMicrocycleSize` (L89–101): iste heuristike (first partition+dayRole match, fallback=4, length<2 → 1). Jedina razlika — `readonly` modifikator u src verziji, što u Deno portu nije potrebno (type erasure). OK.
+- `advancePointerAfterCompletion` (L110–156): identičan algoritam — throw guard, map sessions sa completed/next/pending, newPointer+1, partitionLastSeen update, microcycleCompleted detection sa reset swap, vraća `{ queue, microcycleCompleted }`. OK.
+
+Source-of-truth komentar na L7–13. Ne diram `sessionResolver.ts` sa src strane (njegovi Vitest testovi — 26 passing — i dalje zeleni posle ove iteracije, što bi bilo fail-safe ako bi neko diff-ovao algoritam). OK.
+
+Napomena: port koristi `string | Date` unije za datumske polje (L36–51) umesto strogog `Date`, što je pragmatično jer status_json dolazi iz JSON persistencije kao ISO stringovi; `today: Date` parameter-a je konstruisan u EF-u kao `new Date(payload.completedAt)` što radi kroz `s.completedAt = today` map. Ponašanje identično src-u jer src takođe radi kroz Date. OK.
+
+### 5. Biology invariants
+
+- **Queue pointer monotonost**: `advancePointerAfterCompletion` radi strogo `newPointer = pointer + 1`, nikad nazad. `hasMesocycleEnded` guard sprečava advance posle kraja (throw → EF 400). Kombinacija sa guard-om `sessions[pointer].sessionId === payload.sessionId` blokira retry sa istim sessionId-om nakon napredovanja. Atomski invariant održan. OK.
+- **RFB countdown 2→1→0**: `Math.max(0, prev - 1)` — nikad negativno. Test L141–156 + L117–139. OK.
+- **Illness penalty 2→1→0 + auto-end**: testovi L179–196 i L158–177 pokrivaju tranziciju. Kad penalty → 0, `activePauseEvent=null` + `pauseJustEnded=true` → EF UPDATE-uje pause_events. OK.
+- **Travel pauza**: penalty=0 od starta, guard `penaltySessionsRemaining > 0` preskače decrement — ostaje aktivna dok user manuelno ne završi (ne u IT-7 scope-u). Test L198–218. OK.
+- **Partition-aware decrement**: samo `[completedPartition]` key — test L117–139 (Upper=2 ostaje nediran). OK.
+- **Atomic semantika**: ako upsert status fail-uje → EF vraća 500, klijent retry-uje → guard sessionId ne odbija jer pointer još nije napredovao u DB-u. Ako upsert status uspe ali pause_events UPDATE fail-uje → vraća 200 + warning; status_json već kanonizovan. OK.
+- **Calorie floor / recovery multiplier / cycle sync / liquid cals / AIF**: out-of-scope za IT-7 (ne dira nutrition/bio). Nema regresija — 272 tests green uključujući `calorieTarget.test.ts`, `recoveryCalibration.test.ts`, `cyclePhase.test.ts`, `antiIngredientFilter.test.ts`, `syncEngine.test.ts`. OK.
+
+### 6. No-touch zone — verifikacija
+
+- `src/utils/sync/syncEngine.ts` — **not touched** (syncEngine.test.ts 24 passing bez delta). OK.
+- `src/utils/training/sessionResolver.ts` — **not touched**; source-of-truth intakt (sessionResolver.test.ts 26 passing). Deno port u `_shared/queueAdvance.ts` samo kopira javne export-e. OK.
+- `runSyncRules` — **nije pozvan** iz EF-a (nigde u `process-workout-completion/index.ts` se ne pojavljuje). Komentar L37–41 objašnjava da IT-9 hook to radi client-side. OK.
+- `src/services/workoutService.ts` — **not touched** (mtime Apr 20, IT-7 fajlovi Apr 24). Legacy local-first flow netaknut; IT-9 će preusmeriti na EF. OK.
+- `t()` / i18n — nema nove UI copy u IT-7 (backend/pure), no-op za i18n reviewer. OK.
+
+### 7. Findings
+
+**Blocker:** nijedan.
+
+**High:** nijedan.
+
+**Low (nice-to-have, ne blokira approval):**
+1. [`supabase/functions/process-workout-completion/index.ts:398`] `payload.completedAt.slice(0, 10)` implicitno očekuje ISO-8601 sa vodećom `YYYY-MM-DD` formom. `validatePayload` verifikuje samo `Date.parse` uspešnost — što prihvata npr. `"Fri Apr 24 2026 01:30:00"` (parseable ali prefix ≠ YYYY-MM-DD). U praksi klijent šalje `new Date().toISOString()` pa format je garantovan, ali stroža regex validacija (`^\d{4}-\d{2}-\d{2}T`) bi eliminisala edge slučaj. Ostavljamo kao low (klijent kontrola + prefix je koristan samo za `end_date` DATE kolonu, koja prihvata samo validan YYYY-MM-DD). Ne blokira.
+2. [`supabase/functions/process-workout-completion/index.ts:326`] Pri session mismatch error response-u, returned `{ expected, received }` je debug-friendly ali može biti korisno dodati `currentPointer` za lakši client-side debug („gde smo sad u queue-u"). Low, nice-to-have.
+3. [Kontekst brief-a] Brief pominje `activePauseEvent?.pauseType === 'illness'` u sekciji 2, ali tip u `src/types/userStatus.ts:96` zapravo koristi polje `type` (ne `pauseType`). Implementacija je ispravna (koristi `type`); samo handoff opis je neprecizan. Bez posledica za kod.
+
+### 8. Commit readiness
+
+- Commit poruka predlaže `feat(IT-7): process-workout-completion EF + workoutCompletion helper` ili slično. Handoff navodi "glavni agent će commit-ovati posle approval-a i deploy-a EF-a preko MCP" — konvencija iz prethodnih iteracija. OK.
+- Co-Authored-By trailer obavezno.
+- Bez `--no-verify` / `--no-gpg-sign`.
+- Staging scope: pet novih fajlova iz handoff-a + `RALPH_PROGRESS.md`. Nijedan secret / .env. Safe za `git add` po imenu.
+- **Deploy pending**: `process-workout-completion` Edge Function treba deploy-ovati na main pre nego što IT-9 hook bude mogao da je pozove. Brief to već navodi kao DEPLOY_PENDING.
+
+### Round trips on this iteration: 1/3
+
+**Verdict (summary):** IT-7 approved.
