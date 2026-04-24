@@ -999,3 +999,93 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
 - IT-17 weekly check-in ✓
 - IT-18 trainer overrides ✓ (this)
 - Next: FAZA E (IT-19 IR meals, IT-20 i18n audit, IT-21 exercise seed, IT-22 E2E smoke)
+
+---
+
+## IT-19 — IR meal calorie distribution + integracija u generateMealPlan
+
+**Timestamp:** 2026-04-23 (FAZA E, prva iteracija)
+**Agent:** dev-implementer (Opus 4.7 [1M])
+**Spec:** 02_NUTRITION_FLOW_MASTER.md Sekcija 6.4 (IR meal structure)
+
+### Files touched
+- `src/utils/nutrition/irMealStructure.ts` (modified) — dodate konstante
+  `IR_MEAL_CALORIE_DISTRIBUTION` (28/10/32/10/20), `DEFAULT_MEAL_CALORIE_DISTRIBUTION`
+  (25/12/30/13/20), export `MealCalorieDistribution` tip, + helper
+  `pickMealCalorieDistribution(metabolicConditions)`
+- `src/utils/nutrition/irMealStructure.test.ts` (modified) — +4 test case-a za
+  `pickMealCalorieDistribution` (IR pick, default pick, IR+combo, sabiraju na 1.0)
+- `src/utils/mealPlanGenerator.ts` (modified):
+  - Import `pickMealCalorieDistribution` + tip
+  - `GeneratedMeal` interface: dodat optional `slotType?: 'standard' | 'mini_meal_ir'`
+    (non-breaking)
+  - `MealSlotConfig`: dodat `templateType: TemplateMealSlot['type']` (interni tip,
+    nije exported)
+  - Pre slot-loop-a: `pickMealCalorieDistribution` bira raspodelu, override-uje
+    `calPct` per slot BAZIRANO na `templateType`. Fallback na template
+    `caloriePercentage` ako slot tip nije u distribuciji (npr. `pre_workout`,
+    `evening_snack`) ili ako template nije 5-slot standard.
+  - Posle slot-loop-a: `applyIRMiniMealMarkers(meals, metabolicConditions,
+    slotConfigs)` — pure helper, za IR klijentkinje mark-uje slot 2 (morning_snack)
+    i slot 4 (afternoon_snack) kao `mini_meal_ir`, carbs=0, label "Mini-obrok (P+F)",
+    carbs kcal prebacuje na fat (konzervacija ukupnih kalorija)
+- `src/utils/mealPlanGenerator.test.ts` (new) — 4 integration test case-a:
+  1. Non-IR: default 25/12/30/13/20 raspodela, `slotType !== 'mini_meal_ir'`
+  2. IR: 28/10/32/10/20 raspodela, slotovi 2 i 4 `mini_meal_ir` + carbs=0 + label
+  3. IR: glavni obroci (slot 1, 3, 5) zadrzavaju carbs > 0
+  4. Idempotencija (2× poziv → isti rezultat)
+
+### Tests delta
+- Pre: 329 passed
+- Posle: 337 passed (+8: 4 u irMealStructure.test.ts + 4 u mealPlanGenerator.test.ts)
+
+### Acceptance
+- [x] `IR_MEAL_CALORIE_DISTRIBUTION = { breakfast: 0.28, morning_snack: 0.10,
+      lunch: 0.32, afternoon_snack: 0.10, dinner: 0.20 }` exported
+- [x] `DEFAULT_MEAL_CALORIE_DISTRIBUTION = { breakfast: 0.25, morning_snack: 0.12,
+      lunch: 0.30, afternoon_snack: 0.13, dinner: 0.20 }` exported
+- [x] `pickMealCalorieDistribution(conditions)` vraca IR distribuciju ako uslovi
+      sadrze `insulin_resistance`, inace default
+- [x] `generateMealPlan` za IR klijentkinju: slot 1 (breakfast) = 0.28 × target,
+      slot 3 (lunch) = 0.32 × target, slot 5 (dinner) = 0.20 × target
+- [x] IR slotovi 2 i 4 = `mini_meal_ir`, `carbs=0`, label "Mini-obrok (P+F)"
+- [x] Non-IR klijentkinja: default distribucija, nijedan slot `mini_meal_ir`
+- [x] `applyIRMealStructure` helper postoji (pre-existing) i ostaje zero-touch —
+      reuse-uje se samo tipologija (MealSlotType enum), izbegnuta direktna
+      primena jer operise na drugacijem tipu (`MealSlot` iz types/nutrition.ts,
+      ne na `GeneratedMeal` koji mealPlanGenerator vraca)
+
+### Baseline
+- [x] `npm test` — 337 passed (329 → 337, +8)
+- [x] `npx tsc --noEmit` — exit 0
+- [x] `npm run verify:tokens` — "All design tokens compliant"
+
+### Decisions / Notes
+- `applyIRMealStructure` u `irMealStructure.ts` operiše na `MealSlot[]` tipu iz
+  `@/types/nutrition` (sa `proteinTarget`/`carbsTarget`/`fatTarget`), dok
+  `generateMealPlan` vraca `GeneratedMeal[]` (sa `protein`/`carbs`/`fat`,
+  kalkulisano). Umesto da forsiram adapter, napravio sam paralelni post-hook
+  `applyIRMiniMealMarkers` direktno na `GeneratedMeal` nivou — iste semantike
+  (slot 2 i 4 → mini_meal_ir, carbs=0), zadrzava ukupne kalorije konzistentnim
+  pretvaranjem carbs kcal u fat. Ovo je backward-compatible (non-IR grana se
+  ne menja) i test coverage ostaje izolovan u `mealPlanGenerator.test.ts`.
+- Distribution override se primenjuje SAMO kad se svih 5 template slot tipova
+  poklopi sa distribution keys (breakfast/morning_snack/lunch/afternoon_snack/
+  dinner). Za 3-meal, 4-meal ili 6-meal template-e i customtypes
+  (pre_workout/evening_snack), zadrzava se original `caloriePercentage` — ne
+  ruši `MEAL_PRESETS[3/4/6]` ili trener-custom planove.
+- E2E testovi (`src/test/e2eScenarios.test.ts`) koriste `DEFAULT_5_MEAL_SLOTS`
+  koji ima 25/10/30/10/25 raspodelu; IT-19 override menja to na
+  25/12/30/13/20 za non-IR i 28/10/32/10/20 za IR. Testovi tamo assertuju SAMO
+  `dailyCalories` total (ne per-slot), tako da ostaju green — zero impact.
+- `Food.tsx` već ima sopstvenu `IR_MINI_MEAL_SLOT_INDEXES` konstantu i
+  derive-uje `isIRClient` iz `metabolicFilter` — ne zavisi od novog
+  `GeneratedMeal.slotType`. Novi field je potpuno additive i ne treba
+  follow-up u UI za IT-19.
+
+### Deviations from plan
+- None strukturno. Mini-meal transformacija primenjena na `GeneratedMeal`-
+  nivou (ne preko `applyIRMealStructure` direktno) zbog tipske razlike —
+  dokumentovano u komentaru funkcije. Spec Sekcija 6.4 ne nalaže konkretnu
+  implementaciju helper-a, samo ponašanje (P+F mini, carbs=0, 3h gap,
+  slot 2 i 4), koje je ispoštovano.
