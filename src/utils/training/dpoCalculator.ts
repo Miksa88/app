@@ -1,0 +1,179 @@
+// ============================================================================
+// dpoCalculator.ts — Loading Sloj 4: Double Progressive Overload
+// Spec: 01_TRAINING_FLOW_MASTER.md §5 Korak 6
+// ============================================================================
+//
+// Pure funkcija koja vraća target (weight, reps, RIR) za sledeći set iz
+// istorije setova + loading mode + RFB flag. Popunjava placeholder koji
+// programGenerator ranije vraćao samo kao `loadingNote` string.
+//
+// Algoritam:
+//   PROGRESS      → ako lastSet.reps >= slotRepsTop → +weight_increment
+//                   inače ostaje isto
+//   MAINTAIN      → ostaje isto
+//   MINI_DELOAD   → × 0.90 (ili × 0.80 ako je RFB aktivan — spec §7.5)
+//   First time    → estimateInitialWeight(profile, exercise)
+//
+// Weight se zaokružuje na najbliži `exercise.weight_increment`.
+// ============================================================================
+
+export type LoadingMode = 'PROGRESS' | 'MAINTAIN' | 'MINI_DELOAD';
+
+export interface ExerciseHistorySample {
+  weight_kg: number;
+  reps: number;
+  set_number: number;
+  rir: number | null;
+  completed_at: string;
+}
+
+export interface ExerciseMeta {
+  id: string;
+  weight_increment: number;
+  is_bilateral: boolean;
+  is_compound: boolean;
+}
+
+export interface ClientProfileSnapshot {
+  currentWeightKg: number;
+  experienceLevel: 'beginner' | 'intermediate';
+}
+
+export type DPOReason =
+  | 'first_time'
+  | 'hit_top'
+  | 'missed_top'
+  | 'rfb_deload'
+  | 'maintain';
+
+export interface DPOResult {
+  targetWeight: number;
+  targetReps: number;
+  targetRIR: number;
+  loadingMode: LoadingMode;
+  reason: DPOReason;
+}
+
+const ISOLATION_INITIAL_KG = 5;
+const COMPOUND_BILATERAL_RATIO = { beginner: 0.5, intermediate: 0.7 } as const;
+const COMPOUND_UNILATERAL_RATIO = 0.3;
+
+const MINI_DELOAD_MULTIPLIER = 0.9;
+const MINI_DELOAD_RFB_MULTIPLIER = 0.8;
+
+function estimateInitialWeight(
+  profile: ClientProfileSnapshot,
+  exercise: ExerciseMeta,
+): number {
+  if (!exercise.is_compound) return ISOLATION_INITIAL_KG;
+  if (exercise.is_bilateral) {
+    return profile.currentWeightKg * COMPOUND_BILATERAL_RATIO[profile.experienceLevel];
+  }
+  return profile.currentWeightKg * COMPOUND_UNILATERAL_RATIO;
+}
+
+function roundToIncrement(weight: number, increment: number): number {
+  if (increment <= 0) return weight;
+  return Math.round(weight / increment) * increment;
+}
+
+/**
+ * Bira top-set iz poslednje sesije (najnoviji `completed_at`): najveća
+ * kombinacija težina × reps unutar te grupe datuma.
+ *
+ * Ulaz sortiran DESC po completed_at (kako Supabase query vraća).
+ */
+function selectLastTopSet(
+  history: ExerciseHistorySample[],
+): ExerciseHistorySample | null {
+  if (history.length === 0) return null;
+
+  const latestDate = history[0].completed_at.slice(0, 10);
+  const latestSessionSets = history.filter(
+    (s) => s.completed_at.slice(0, 10) === latestDate,
+  );
+
+  return latestSessionSets.reduce((top, s) => {
+    const topVolume = top.weight_kg * top.reps;
+    const sVolume = s.weight_kg * s.reps;
+    return sVolume > topVolume ? s : top;
+  }, latestSessionSets[0]);
+}
+
+export function calcNextWeight(
+  history: ExerciseHistorySample[],
+  exercise: ExerciseMeta,
+  loadingMode: LoadingMode,
+  profile: ClientProfileSnapshot,
+  returnFromBreakActive: boolean,
+  slotRepsTop: number = 8,
+  slotTargetRIR: number = 2,
+): DPOResult {
+  if (history.length === 0) {
+    const raw = estimateInitialWeight(profile, exercise);
+    return {
+      targetWeight: Math.max(0, roundToIncrement(raw, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'first_time',
+    };
+  }
+
+  const topSet = selectLastTopSet(history);
+  if (!topSet) {
+    // Safety net — svejedno ne bi trebalo da se desi
+    const raw = estimateInitialWeight(profile, exercise);
+    return {
+      targetWeight: Math.max(0, roundToIncrement(raw, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'first_time',
+    };
+  }
+
+  const baseWeight = topSet.weight_kg;
+
+  if (loadingMode === 'MINI_DELOAD') {
+    const multiplier = returnFromBreakActive
+      ? MINI_DELOAD_RFB_MULTIPLIER
+      : MINI_DELOAD_MULTIPLIER;
+    return {
+      targetWeight: Math.max(0, roundToIncrement(baseWeight * multiplier, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'rfb_deload',
+    };
+  }
+
+  if (loadingMode === 'MAINTAIN') {
+    return {
+      targetWeight: Math.max(0, roundToIncrement(baseWeight, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'maintain',
+    };
+  }
+
+  // PROGRESS
+  if (topSet.reps >= slotRepsTop) {
+    return {
+      targetWeight: Math.max(0, roundToIncrement(baseWeight + exercise.weight_increment, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'hit_top',
+    };
+  }
+
+  return {
+    targetWeight: Math.max(0, roundToIncrement(baseWeight, exercise.weight_increment)),
+    targetReps: slotRepsTop,
+    targetRIR: slotTargetRIR,
+    loadingMode,
+    reason: 'missed_top',
+  };
+}

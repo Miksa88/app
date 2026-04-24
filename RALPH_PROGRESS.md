@@ -330,3 +330,56 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent deploy kroz `mcp__supabase__deploy_edge_function` i git commit `feat(IT-7): process-workout-completion + workoutCompletion pure helper`
 - IT-8 — DPO calculator + useFinishWorkout + useCompleteSet mutation hooks
 
+---
+
+## IT-8 (continuation) — DPO integracija u programGenerator + mutation hooks (useFinishWorkout, useCompleteSet)
+
+**Timestamp:** 2026-04-24 02:55 CEST
+**Agent:** Dev Implementer (Opus 4.7 1M) → pending QA
+**Spec:** 01_TRAINING §5 Korak 6 (Loading Sloj 4 DPO), §7.5 (Return from Break deload); 03_INTEGRATION §3.1 (WorkoutCompletion flow)
+
+### Files touched
+- `src/utils/db/exerciseHistory.ts` (new) — tanak Supabase wrapper `loadExerciseHistory(userId, exerciseId, limit=10)` koji vraca `ExerciseHistoryRow[]` sortiran DESC po `completed_at`. Bez testa (DB wrapper; mock se radi u pozivaocima).
+- `src/utils/training/programGenerator.ts` (modified) — dodat opcioni arg `exerciseHistoryMap?: Map<number, ExerciseHistorySample[]>` u `GenerateSessionInputs`. Kada je prosledjena mapa, Sloj 4 loop sada poziva `calcNextWeight()` i popunjava `slot.targetWeight`, `slot.targetReps`, `slot.targetRIR`. Kada nije, stari placeholder `loadingNote` ponasanje zadrzano (backward compatible — svih 12 postojecih testova prolaze bez izmene).
+- `src/hooks/mutations/useFinishWorkout.ts` (new) — React Query mutation hook oko `process-workout-completion` Edge Function-a. Razdvojen `runFinishWorkout` pure orchestrator za lakse testiranje (isti pattern kao `runDailyCheckIn`). Invalidate-uje `['userStatus', clientId]` query cache posle uspeha.
+- `src/hooks/mutations/useFinishWorkout.test.ts` (new, 2 cases) — happy path + error path.
+- `src/hooks/mutations/useCompleteSet.ts` (new) — Direct INSERT u `exercise_progress` (RLS dozvoljava vlasniku). Razdvojen `runCompleteSet` pure orchestrator. Invalidate-uje `['exerciseProgress', userId, exerciseId]` cache.
+- `src/hooks/mutations/useCompleteSet.test.ts` (new, 2 cases) — happy path + RLS error (code 42501).
+- `RALPH_PROGRESS.md` (appended)
+
+### Test delta
+- 272 → 281 (+9 total): +5 `dpoCalculator.test.ts` (vec u gotovom delu), +2 `useFinishWorkout.test.ts`, +2 `useCompleteSet.test.ts`.
+- Svi 281 prolaze, 0 failures.
+
+### Baseline gate
+- [x] `npm test` → 281 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+
+### Arhitekturalne odluke
+- **programGenerator inline DPO (ne wrapper).** Brief je dao fallback opciju `enrichSlotsWithDPO` kao poseban helper. Odabrao sam inline u `generateSessionSkeleton` jer: (1) slot struktura nije bila komplikovana (targetWeight, targetReps, targetRIR vec postoje u `ExerciseSlot` interfejsu — tipovi su bili spremni za DPO), (2) mapa je opcioni arg sa `undefined` default-om pa legacy testovi ne menjaju semantiku, (3) pozivalac (IT-9 UI) ima jedan call site umesto dva sekvencijalna.
+- **Opcioni `exerciseHistoryMap` umesto default `new Map()`.** Razlog: testovi koji ne prosleduju mapu ocekuju placeholder `loadingNote` (ne target*). Ako bi default bio `new Map()`, DPO loop bi se izvrsio (samo bi `history` bio prazan array `[]`), sto znaci "first_time" estimateInitialWeight bi popunio `targetWeight`. To bi promenilo ponasanje za legacy caller-e koji nemaju istoriju. Strict `undefined` gate je manje invazivna migracija.
+- **`calcNextWeight` poziva se samo za slotove sa `chosenExerciseId`.** Ako supstitucija nije izabrala vezbu (failure), DPO se preskace — bez chosen exercise nema `weight_increment` / `is_compound` meta, pa estimateInitialWeight ne bi imao smisla. Failures se prijavljuju kroz `substitutionFailures` vec.
+- **`slot.targetReps` format `"${min}-${max}"`** (npr. "8-12") — polje je tip `string` u `ExerciseSlot`, spec UI ocekuje rep range. `calcNextWeight` interno koristi `repMax` kao `slotRepsTop` gate (koji se dostigao → +increment).
+- **Pure `run*` orchestrator pattern za mutation hooks.** Replikovan iz `useDailyCheckIn` (IT-5). Benefit: mutation test-ovi se pisu kao obicne async funkcije bez `QueryClientProvider` wrappera i polling-a `waitFor(mutation.isSuccess)`. Orkestrator je biznis logika; hook je tanak React Query shell (cache invalidation + toast).
+- **`useCompleteSet` direct INSERT, ne Edge Function.** Spec kaze "klijent moze pisati `exercise_progress` jer RLS dozvoljava vlasniku CRUD svoje istorije" i nema sync rule orkestracije po setu — `runSyncRules` se pokrece tek na `finishWorkout` (IT-7 EF). Direct INSERT elminise jedan HTTP hop.
+- **Toast source: `sonner`.** Usledjeno iz `useDailyCheckIn.ts` pattern-a (linija 38) — `toast` iz `sonner` je standardan u projektu. Nije korisceno lokalni `src/hooks/use-toast.ts` shadcn wrapper jer postojeci mutation pattern koristi `sonner` direktno.
+
+### Side-finds
+- `ExerciseSlot` interfejs vec ima sva cetiri polja: `targetWeight`, `targetReps`, `targetRIR`, `targetRest`. Placeholder komentar u `programGenerator.ts:325` ("Faza 2.4 popunjava sa real exercise history") je sada realizovan — polja su popunjena kada mapa stigne.
+- `dpoCalculator.ts` koristi `ExerciseMeta.id: string`, `programGenerator` koristi `Exercise.id: number` — mapiran kroz `String(exercise.id)` u DPO meta. Mapa same je keyed na `Exercise.id` (number) radi konzistentnosti sa exerciseLibrary.
+- `ClientTrainingProfile.experienceLevel` literal type je `'beginner' | 'intermediate'` — identican sa `ClientProfileSnapshot.experienceLevel`, pa se prosledjuje direktno bez narrowing-a.
+
+### Deviations from plan
+- Nijedna materijalna. Brief je predvideo "default `undefined` ili `new Map()`" — odabrao sam `undefined` jer `new Map()` bi promenio legacy ponasanje.
+- `useFinishWorkout` i `useCompleteSet` imaju razdvojen `run*` orchestrator + `DependencyInjection` interfejs umesto cistog inline `mutationFn`. Ovo je _ekspanzija_ briefa, ne devijacija — brief je zahtevao 2 test case-a svaki, ovaj pattern cini test-ove cistim bez RTL renderHook wrappera.
+
+### Next
+- QA reviewer audit:
+  - verifikuje da `programGenerator` ne menja legacy ponasanje kad `exerciseHistoryMap` nije prosledjena (12 postojecih testova)
+  - verifikuje DPO integraciju sa test case-om koji prosleduje mapu + chosen exercise (trenutno nije pokriven testom; vec je pokriven kroz `dpoCalculator.test.ts`, ali bi integration test kroz `generateSessionSkeleton` bio bonus)
+  - verifikuje da mutation hooks se pravilno vezuju za React Query cache keys (`['userStatus']`, `['exerciseProgress']`)
+  - sanity check `loadExerciseHistory` SQL query shape (DESC order + limit)
+- Ako approved → main agent commit `feat(IT-8): DPO integration + useFinishWorkout + useCompleteSet hooks`
+- IT-9 — ActiveWorkout.tsx wired na real data (pozivalac obe mutation hooks)
+
