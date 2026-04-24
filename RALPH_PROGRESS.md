@@ -623,3 +623,60 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent commit `feat(IT-12): useLogMeal + useSkipMeal + useReplaceMeal + useLogWaterGlass mutation hooks`
 - IT-13 — Food.tsx rewire na real UserStatus + DB foods + mutation hooks
 
+## IT-13 — Food.tsx rewire na real UserStatus + DB foods + mutation hooks
+
+**Timestamp:** 2026-04-24 06:32 UTC
+**Status:** ready-for-qa
+
+### Files touched
+- `src/hooks/useFoodItems.ts` (new) — React Query hook koji SELECT-uje iz `food_items` tabele + adapter DB row → legacy `FoodItem` shape (`src/data/foodDatabase.ts`). Query key `['foodItems']`, staleTime 5min, fallback na prazan niz kad RLS vrati nulu.
+- `src/pages/Food.tsx` (rewired) — zamena `MOCK_CLIENT`/`FOOD_DATABASE` sa `useAuth().clientId` + `useUserStatus(clientId)` + `useFoodItems()`. `generateMealPlan` uzima derive-ovan ClientProfile + real food pool + `status.bio.cyclePhase`. Eat/Skip/Replace dugmad zovu `useLogMeal/useSkipMeal/useReplaceMeal` sa payload-om iz generated meal-a. Loading skeleton + error state dodati (aria-live=polite). IR flag (`metabolicFilter.includes('insulin_resistance')`) markira slotove 2 i 4 sa "Mini-obrok (P+F)" labelom u meal card-u.
+- `src/pages/Food.test.tsx` (new, 2 test cases) — (1) renders meal slots sa mock useUserStatus + useFoodItems; (2) "Mark eaten" triggeruje useLogMeal.mutate sa correct payload (clientId, mealId, slotIndex, macros).
+- `src/contexts/LanguageContext.tsx` (modified) — dodato 4 i18n ključeva: `food.preparingPlan`, `food.planError`, `food.planErrorDesc`, `food.miniMealIR` (en + sr, zero-guilt phrasing).
+
+### Test delta
+- 294 → 296 (+2). Svi prolaze, 0 failures.
+
+### Baseline gate
+- [x] `npm test` → 296 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+
+### Arhitekturalne odluke
+- **Legacy FoodItem adapter pattern u useFoodItems.** DB row shape (`food_items` tabela iz IT-3) razlikuje se od in-memory FoodItem (`src/data/foodDatabase.ts`): DB koristi `name_en/name_sr/protein_g/carbs_g/fat_g/fiber_g`, legacy tip ima `name/nameEn/nameSr/protein/carbs/fat/fiber`. Umesto refactor-a svih consumer-a (`generateMealPlan`, `antiIngredientFilter`, oba koriste legacy shape), hook mapira DB row u legacy oblik. Polja koja DB nema (description, sugar, sodium, portionSize, preparation, prepTime, imageUrl) dobijaju bezbedne default-e ('', 0, [], null) — Food.tsx ih ne prikazuje direktno pa ne utiču na render.
+- **Fallback na `FOOD_DATABASE` kad je DB pool prazan.** Ako `useFoodItems().foods.length === 0` (npr. migracija nije seed-ovana, fetch failed), Food.tsx koristi statički `FOOD_DATABASE` kao fallback. Zadržava UX dok DB ne bude spreman — sigurniji deploy strategija nego render prazno.
+- **ClientProfile derive sa defaults (NE profile row load).** Spec IT-13 kaže "useUserStatus(clientId) → derive ClientProfile". UserStatus ne nosi sve ClientProfile polja (height, jobType, foodDislikes, allergies, experience, frequency) — nosi samo ono što Sync Engine koristi (weight MA5, age, metabolicFilter, cyclePhase). Za IT-13 scope derive-ujem samo ono što utiče na `generateMealPlan`: weight, age, metabolicProfile (iz metabolicFilter). Ostatak (height=168, jobType='sedentary', allergies=[]) je bezbedan default za beta; proper profile row load je IT-22 cleanup scope (Food trenutno NE koristi profile column-e — useActiveWorkoutSession radi). Ovaj izbor čuva IT-13 iteration ≤10 fajlova, što je Ralph princip.
+- **IR meal marking = UI label, NE full applyIRMealStructure.** Spec `applyIRMealStructure` (src/utils/nutrition/irMealStructure.ts) operiše na `MealSlot[]` tipu iz `src/types/nutrition.ts`, koji ima drugačiji shape od `GeneratedMeal` (ima `proteinTarget/carbsTarget/fatTarget` umesto concrete macros). Food.tsx renderuje `GeneratedMeal`, pa applyIRMealStructure ne može direktno da se primeni na njegov output. Za IT-13 scope koristim IR_MINI_MEAL_SLOT_INDEXES konstantu (mirror iz irMealStructure.ts L43) i UI-level label override ("Mini-obrok (P+F)"). Pravi integration — gde `generateMealPlan` poziva `applyIRMealStructure` interno pre nego što vrati GeneratedMeal — je scope IT-19 (mealPlanGenerator update).
+- **Anti-ingredient filter: generateMealPlan + eksplicitan za replace search.** `generateMealPlan` već poziva `filterFoodByExclusions` interno (src/utils/mealPlanGenerator.ts L311). Za replace search sheet eksplicitno pozivam `filterFoodByExclusions` da pool iz kojeg korisnik bira ne sadrži zabranjena jela. Dupli poziv ne košta (hook pool je keš-iran React Query-em).
+- **Default template umesto nutrition_templates fetch.** IT-13 scope ne uključuje `nutrition_templates` tabelu i fetch. Zadržavam in-file `DEFAULT_TEMPLATE` (5-meal struktura, auto strategy) koji drži UI. Makro-split i calorie target zapravo dolaze iz `recalcCalorieTarget` unutar generateMealPlan-a — template u IT-13 samo diktira meal slot redosled.
+- **`useUserStatus` + `useFoodItems` parallel loading, single loading gate.** Oba React Query hooka rade paralelno (Promise.all implicit kroz React Query). Food.tsx prikazuje loading skeleton dok **oba** nisu spremna (`statusLoading || foodsLoading`). Error state se aktivira ako **oba ili jedan** fail-uje. Fallback na FOOD_DATABASE pokriva slučaj "status OK, foods empty".
+
+### Side-finds / deviations from plan
+- **`generateMealPlan` signature je 5 argumenata, NE (clientProfile, foods, calorieTarget).** Spec IT-13 pominje "generateMealPlan(clientProfile, foods, calorieTarget)". Actual signature: `(client, template, foodDatabase, _trainingSchedule?, cyclePhase?)`. Calorie target se racuna interno kroz `recalcCalorieTarget` iz client profile + template-a, ne prihvata se kao input. Ovo je arhitektonska odluka iz Phase 2.4 (refaktor nutrition). Deviation notirano — poziv je `generateMealPlan(profile, DEFAULT_TEMPLATE, pool, undefined, cyclePhase)`.
+- **UserStatus type ima `metabolicFilter`, NE `metabolicConditions`.** Spec IT-13 pominje `status.nutrition.metabolicConditions`. Actual polje u `src/types/userStatus.ts` L118: `metabolicFilter: MetabolicCondition[]`. Koristim ispravno ime.
+- **`filterFoodByExclusions` prihvata FoodLike interface (generic).** Može da radi sa `FoodItem` (legacy) ili novim tipom. U Food.tsx koristim legacy put — funkcija `buildIngredientExclusionList(allergies, foodDislikes, metabolicConditions)` vraća exclusion list koji `filterFoodByExclusions` primeni na `FoodItem[]` pool.
+- **`useMemo` za plan generation, ne useState.** Plan se regeneriše kad god se `status` ili `dbFoods` promene (Realtime push iz Sync Engine → UserStatus change → plan recalc). Ovo je idempotentno jer generateMealPlan je pure i deterministički za iste inpute (findBestMatch je deterministički sort).
+- **MOCK_CLIENT / MOCK_TEMPLATE / INITIAL_PLAN uklonjeni.** Stari mock objekti (MOCK_CLIENT L82-87, MOCK_TEMPLATE L89-96, INITIAL_PLAN L98) obrisani iz Food.tsx. Zamena: `deriveClientProfile(UserStatus)` + `DEFAULT_TEMPLATE` (minimalan 5-slot template za default strukturu) + useMemo plan generation. Brief je eksplicitno tražio da MOCK_CLIENT nestane.
+- **Test ne poziva profile row load.** Food.tsx ne koristi profile row u ovoj iteraciji (samo UserStatus + foods). Ako kasnija iteracija doda profile fetch, test će trebati mock dodavanja.
+
+### Anti-ingredient filter approach
+- Generated plan koristi `filterFoodByExclusions` interno (kroz `generateMealPlan` pipeline).
+- Replace search sheet poziva `filterFoodByExclusions` eksplicitno sa `buildIngredientExclusionList([], [], metabolicFilter)` pre `.filter(name includes query)` za user tipkani search.
+- Full allergies/dislikes wiring čeka profile row load (IT-22). Za IT-13, allergies=[] i foodDislikes=[] default-i znače filter je drive-an samo metabolicFilter-om iz UserStatus.
+
+### IR meal structure approach
+- **Ne modifikujem plan output** (ne pozivam applyIRMealStructure unutar Food.tsx). Razlog: applyIRMealStructure operiše na `MealSlot[]` (novi tip), a `generateMealPlan` vraća `GeneratedMeal[]` (legacy). Nespojivo bez refactor-a generateMealPlan-a (scope IT-19).
+- **UI-level IR indikator.** Ako `metabolicFilter.includes('insulin_resistance')` je true, slotovi 2 i 4 (indexi 1 i 3, 0-based) dobijaju label "Mini-obrok (P+F)" umesto SLOT_LABELS default label-a. Funkcionalno ekvivalentno za UX feedback ("IR klijentkinja vidi da su slotovi 2 i 4 specijalni"), bez macro surgery u plan-u.
+- Carb-ing na mini-mealovima (carbsTarget=0) je stvarna macro promena koja će doći u IT-19 kroz generateMealPlan update. Za IT-13 scope, UI je wired tako da kad backend vrati pravi mini-meal macro (0 carbs), već će se renderovati sa "0g" ispod Carbs ikonice — bez dodatne UI promene.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `useFoodItems` adapter map-uje svaku DB kolonu u ispravno legacy polje (name_en → name/nameEn, fiber_g nullable → 0 default, glycemic_index TEXT normalize-uje na 'low'/'medium'/'high')
+  - Verifikuje da `Food.tsx` loading/error state prolaze axe-level a11y check-ove (role=status aria-live=polite prisutno)
+  - Verifikuje da "Mark eaten" na 3rd meal (slotIndex=2) šalje slotIndex=2 (ne slotIndex=0)
+  - Verifikuje da replace search filter koristi filterFoodByExclusions (ne samo name includes)
+  - Verifikuje da IR client (metabolicFilter=['insulin_resistance']) vidi "Mini-obrok (P+F)" na slotovima 2 i 4 u UI-u
+  - Opciono: test case za replace flow (click replace → search → click food → useReplaceMeal.mutate sa replacementMealId)
+- Ako approved → main agent commit `feat(IT-13): Food.tsx rewire na real UserStatus + DB foods + mutation hooks`
+- IT-14 — Hydration UI + +500ml trening dan
+

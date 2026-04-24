@@ -893,6 +893,12 @@ const translations: Record<string, Record<Language, string>> = {
   "food.waterLogged": { en: "+1 glass", sr: "+1 čaša" },
   "food.waterLogError": { en: "Water not saved", sr: "Voda nije sačuvana" },
 
+  // IT-13 — Food.tsx rewire loading/error states
+  "food.preparingPlan": { en: "Preparing your meal plan", sr: "Pripremamo tvoj plan ishrane" },
+  "food.planError": { en: "Meal plan unavailable", sr: "Plan ishrane nedostupan" },
+  "food.planErrorDesc": { en: "Try again in a moment.", sr: "Probaj ponovo za trenutak." },
+  "food.miniMealIR": { en: "Mini-meal (P+F)", sr: "Mini-obrok (P+F)" },
+
   // Free trial
   "trial.quickTitle": { en: "Free Trial", sr: "Besplatni period" },
   "trial.daysLabel": { en: "days", sr: "dana" },
