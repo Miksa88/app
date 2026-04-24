@@ -885,6 +885,14 @@ const translations: Record<string, Record<Language, string>> = {
   "food.confirmReplace": { en: "Confirm replacement", sr: "Potvrdi zamenu" },
   "food.recent": { en: "Recent", sr: "Nedavno" },
 
+  // IT-12 — mutation toast copy (zero-guilt phrasing)
+  "food.mealLogged": { en: "Meal logged", sr: "Obrok zabeležen" },
+  "food.mealSkipped": { en: "Meal skipped", sr: "Obrok preskočen" },
+  "food.mealReplaced": { en: "Meal replaced", sr: "Obrok zamenjen" },
+  "food.mealLogError": { en: "Meal not saved", sr: "Obrok nije sačuvan" },
+  "food.waterLogged": { en: "+1 glass", sr: "+1 čaša" },
+  "food.waterLogError": { en: "Water not saved", sr: "Voda nije sačuvana" },
+
   // Free trial
   "trial.quickTitle": { en: "Free Trial", sr: "Besplatni period" },
   "trial.daysLabel": { en: "days", sr: "dana" },

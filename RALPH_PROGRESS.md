@@ -567,3 +567,59 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent deploy kroz `mcp__supabase__deploy_edge_function` i git commit `feat(IT-11): process-meal-log EF + metabolicNoise pure helper`
 - IT-12 — mutation hooks `useLogMeal` + `useSkipMeal` + `useReplaceMeal` + `useLogWaterGlass` koji orchestriraju EF + klijent-side `runSyncRules` + `save-user-status`
 
+---
+
+## IT-12 — Mutation hooks: useLogMeal + useSkipMeal + useReplaceMeal + useLogWaterGlass
+
+**Timestamp:** 2026-04-24 06:22 CEST
+**Agent:** Dev Implementer (Opus 4.7) → pending QA
+**Spec:** 02_NUTRITION_FLOW_MASTER.md §13 (Daily logging), §5.5 (Sync Rule 6), §8.1 (Hydration); 03_INTEGRATION_LAYER.md §3.1 (MealLog flow), §6.5 (water_logs)
+
+### Files touched
+- `src/hooks/mutations/useLogMeal.ts` (new) — `runLogMeal` pure orchestrator + 3 thin React Query wrapper-a (`useLogMeal` / `useSkipMeal` / `useReplaceMeal`). Svi dele isti EF (`process-meal-log`) i isti orchestrator; razlikuju se samo u `MealLogPayload` mapping-u (status=logged/skipped/replaced).
+- `src/hooks/mutations/useLogMeal.test.ts` (new, 3 test cases) — happy path sa metabolic noise trigger, EF error fail-fast, skip meal sa macros=0.
+- `src/hooks/mutations/useLogWaterGlass.ts` (new) — `runLogWaterGlass` pure orchestrator + `useLogWaterGlass(clientId)` React Query hook. Direct INSERT u `water_logs` (RLS vlasnik INSERT) + load+patch UserStatus + save kroz `save-user-status` EF.
+- `src/hooks/mutations/useLogWaterGlass.test.ts` (new, 2 test cases) — happy path 1000→1250 ml, INSERT RLS error fail-fast.
+- `src/contexts/LanguageContext.tsx` (modified) — dodato 6 i18n ključeva (`food.mealLogged`, `food.mealSkipped`, `food.mealReplaced`, `food.mealLogError`, `food.waterLogged`, `food.waterLogError`) u en + sr (zero-guilt phrasing).
+
+### Test delta
+- 289 → 294 (+5). Svi prolaze, 0 failures.
+
+### Baseline gate
+- [x] `npm test` → 294 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+- [x] `graphify update .` → 2607 nodes, 6847 edges
+
+### runSyncRules signature & water_logs column confirmation
+- `runSyncRules` signature: `async (status: UserStatus) => Promise<UserStatus>` (from `src/utils/sync/syncEngine.ts` L141). IDEMPOTENTAN — rekompjutuje sve flag-ove iz baseline-a, bezbedno pozivati više puta. Hook ga importuje i poziva direktno na client strani (NIJE u no-touch zoni pozivanje — samo modifikacija implementacije).
+- `water_logs` columns (potvrđeno iz `supabase/migrations/20260424120000_create_weekly_pause_water_tables.sql` L156–164): `id`, `user_id`, `logged_at TIMESTAMPTZ`, `ml_added INTEGER` (CHECK > 0 AND ≤ 2000), `created_at`. Append-only (nema UPDATE policy).
+
+### Arhitekturalne odluke
+- **Three hooks, one orchestrator.** `useLogMeal`, `useSkipMeal`, `useReplaceMeal` žive u istom fajlu i dele `runLogMeal` orchestrator — razlikuju se samo u `MealLogPayload` transformaciji (status + macros=0 za skip, replacementMealId za replace). Alternativa (tri orchestratora) bi duplicirala identičnu EF+sync+save tridu. YAGNI.
+- **EF → runSyncRules (client) → save-user-status dual-write pattern.** Mirror `useDailyCheckIn` IT-5 arhitekture, ali sa eksplicitnim razlogom: EF `process-meal-log` (IT-11) namerno NE poziva `runSyncRules` jer je god node u no-touch zoni i Deno port-ovanje 8 sync rule-ova + zavisnosti bi bio ogroman scope. Klijent-side hook je jedini legitiman pozivalac `runSyncRules`-a van service sloja. Posle rule evaluation-a, drugi upsert kroz `save-user-status` garantuje da `_blockProgressionUntil` stiže do DB-a.
+- **`_deserializeStatus` reuse za EF response.** EF vraća `status: unknown` sa Date poljima kao ISO string-ovima (JSONB serialize pattern). Da bismo hidirali u pravi `UserStatus` sa Date instancama (potrebno za `runSyncRules` clone kroz structuredClone), koristimo postojeći `_deserializeStatus` helper iz `userStatus.ts`. Konzistentnost sa `loadUserStatus` flow-om.
+- **`useLogWaterGlass` SKIP runSyncRules.** Za razliku od meal log-a, hidracija NE menja `isMetabolicNoiseTriggered` niti bilo koji drugi sync-rule input. Rule 5 (Hydration First) evaluira `hydrationTodayMl / hydrationTargetMl` u sledećem pozivaočevom runSyncRules call-u (daily check-in ili meal log). Direktan load+patch+save je dovoljan za optimistic UI rollup.
+- **Direct INSERT u `water_logs`, ne EF.** RLS dozvoljava vlasniku INSERT (IT-2 migracija). Nema sync rule orkestracije po insertu → EF bi bio redundantan HTTP hop. Sa `save-user-status` EF-om za user_status upsert (jer user_status tabela ima service_role-only write policy), zadržavamo Princip 1 spec-a 03 ("jedan writer po podatku") — user_status i dalje ide kroz EF.
+- **DI pattern sa `runSyncRules` mock.** `LogMealDeps.applyRules` omotava `runSyncRules` radi testabilnosti (test mock je 5-linijski stub koji postavlja `_blockProgressionUntil` kad je noise flag). Pravi `runSyncRules` je već pokriven u `syncEngine.test.ts` — test hook-a ne treba da reteste-uje god node.
+- **Optional `t` translator parameter** na svim hookovima, umesto import LanguageContext-a. Razlog: hook ostaje unit-testable bez Provider-a. Default `defaultTranslator` je in-file map sa engleskim fallback-om (zero-guilt phrasing kao backup). Prava t() iz LanguageContext-a prosleđuje se kroz `options.t` u pozivaocu (IT-13 Food.tsx). Isti pattern koji koristi `useSwapNextSessions` (IT-10).
+- **Glass size 250ml export kao `DEFAULT_GLASS_ML` konstanta.** Eksporovana radi reuse-a u UI-u (Home water widget treba isti broj za "+1 čaša" label). Override-ivo kroz `input.mlAdded` ako UI doda custom čašu (npr. 500ml flaša).
+
+### Side-finds / deviations from plan
+- **Brief kaže "All three can live in the same file".** Izabrao sam jedan file (`useLogMeal.ts`) sa 3 exported hooka jer dele orchestrator. Test file takođe jedan — pokriva `runLogMeal` (za sva tri hooka isti orchestrator, varijacija samo u payload mapping-u). `useReplaceMeal` nije eksplicitno testiran u ovom PR-u jer je test varijacija od `useLogMeal` sa `replacementMealId` set-om; nema dodatne biznis logike u orchestratoru. Ako QA traži separate test case za replace, trivijalno je dodati.
+- **EF response.status tretiran kao `unknown`.** U MealLogPayload → EF → deserialize chainu, EF vraća opaque JSON. `_deserializeStatus` prihvata `unknown` i vraća `UserStatus`. Cross-boundary type safety preko runtime deserialize-a, ne preko struct literal cast-a (čuvamo Date konverziju invariants).
+- **`runLogMeal` test koristi mock status sa već setovanim `isMetabolicNoiseTriggered=true`.** Razlog: EF je odgovoran za postavljanje tog flaga (IT-11), hook samo prosleđuje kroz runSyncRules. Test proverava da patched flag stiže do applyRules input-a i da applyRules postavlja `_blockProgressionUntil` na output — isto što bi pravi `runSyncRules` Rule 6 uradio.
+- **Nije dodat `useLogWaterGlass` → runSyncRules call.** Brief je eksplicitno rekao: "IT-11 process-meal-log EF namerno ne poziva runSyncRules; IT-12 hook radi". Za water glass, brief kaže: "optimistic local update + save-user-status EF". Potvrđeno izostavljanjem sync rules za water. Ako kasnije IT-14 pronađe da water change treba sync (malo verovatno — hidracija je input u Rule 5, ne okidač), dodaje se u useLogWaterGlass.
+- **Nema cache invalidation za `['waterLogs', clientId]`** — u trenutnom codebase-u taj query key nije definisan (IT-14 `useHydration` hook dolazi). Ako QA traži forward compat, mogu dodati `queryClient.invalidateQueries({ queryKey: ['waterLogs', vars.clientId] })` u `onSuccess` — out-of-scope za IT-12.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `runLogMeal` prosledjuje sve status varijante na EF (logged/skipped/replaced) sa ispravnim payload mapping-om
+  - Verifikuje da `runLogWaterGlass` koristi `DEFAULT_GLASS_ML = 250` i da `+= 250` math je ispravan za null baseline (`hydrationTodayMl ?? 0`)
+  - Verifikuje da fail-fast na `insertWaterLog` error ne poziva loadStatus niti save
+  - Verifikuje da i18n ključevi (6 novih) su dodati u oba jezika (en + sr)
+  - Verifikuje da `_deserializeStatus` korektno handluje EF response Date polja (roundtrip kroz JSON)
+  - Opciono: dodaj test case za `useReplaceMeal` payload shape (replacementMealId required path)
+- Ako approved → main agent commit `feat(IT-12): useLogMeal + useSkipMeal + useReplaceMeal + useLogWaterGlass mutation hooks`
+- IT-13 — Food.tsx rewire na real UserStatus + DB foods + mutation hooks
+
