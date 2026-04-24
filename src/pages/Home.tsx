@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   Flame, Droplets, Minus, Plus, MessageCircle, Lock,
   ChevronRight, Moon, AlertTriangle, Footprints, Activity, Sun, Clock, Dumbbell, Check,
-  Play, Sparkles, Drumstick, Wheat,
+  Play, Sparkles, Drumstick, Wheat, CalendarCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +22,7 @@ import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
 import { Button } from "@/components/ui/button";
 import { DailyCheckInSheet } from "@/components/checkin/DailyCheckInSheet";
+import { AlertBanner } from "@/components/ui/alert-banner";
 import { useHydration } from "@/hooks/useHydration";
 import { useLogWaterGlass, DEFAULT_GLASS_ML } from "@/hooks/mutations/useLogWaterGlass";
 import type { Partition } from "@/types/training";
@@ -155,6 +156,13 @@ const Home = () => {
   const showSyncBanner = isLuteal || isMenstrual || isInDeload || isIllness;
   const syncBanner = getSyncBannerContent({ isLuteal, isMenstrual, isInDeload, isIllness });
 
+  // IT-17: nedeljni check-in banner — ako je prošlo > 7 dana od poslednjeg.
+  // Brojač se resetuje u process-weekly-check-in EF-u (redFlags.daysSinceLastWeeklyCheckIn=0).
+  // Increment logika (daily tick ili lazy cron) je out-of-scope za IT-17;
+  // ova grana samo čita flag.
+  const showWeeklyCheckInBanner =
+    (status?.redFlags.daysSinceLastWeeklyCheckIn ?? 0) > 7;
+
   return (
     <div className="min-h-screen bg-background-secondary pb-24">
       {/* Trial expired overlay */}
@@ -241,6 +249,31 @@ const Home = () => {
         {showSyncBanner && syncBanner && (
           <motion.div {...fadeUp(0.1)}>
             <SyncBanner {...syncBanner} />
+          </motion.div>
+        )}
+
+        {/* ============ 1a. Weekly check-in banner (IT-17) — > 7 dana ============ */}
+        {showWeeklyCheckInBanner && (
+          <motion.div {...fadeUp(0.105)}>
+            <AlertBanner
+              tone="info"
+              icon={CalendarCheck}
+              title={t("weeklyCheckIn.banner.title")}
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    haptic("light");
+                    navigate("/weekly-check-in");
+                  }}
+                >
+                  {t("weeklyCheckIn.banner.cta")}
+                </Button>
+              }
+            >
+              {t("weeklyCheckIn.banner.desc")}
+            </AlertBanner>
           </motion.div>
         )}
 

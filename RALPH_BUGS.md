@@ -1197,3 +1197,134 @@ Decrement JE implementiran u IT-7 — `applyPostCompletionCounters` decrement-uj
 ### Round trips on this iteration: 1/3
 
 **Verdict (summary):** IT-16 approved.
+
+
+---
+
+## IT-17 — 2026-04-24 12:05 (Europe/Belgrade)
+
+**Scope:** Nedeljni check-in forma + `process-weekly-check-in` Edge Function + `weeklyTrendline` pure helper (klijent + Deno port) + Home banner + 22 i18n ključeva.
+**Spec refs:** 02_NUTRITION_FLOW_MASTER §10 (Weekly + trendline), 03_INTEGRATION_LAYER §3.2 Rule 8 (cycle_menstrual_ignore).
+**Files touched:**
+- `supabase/functions/process-weekly-check-in/{index.ts,deno.json}` (new, 389 + 9 linija)
+- `supabase/functions/_shared/weeklyTrendline.ts` (new, 114 linija, verbatim port)
+- `src/utils/nutrition/weeklyTrendline.ts` + `.test.ts` (new, 170 + 123 linija, 9 cases)
+- `src/hooks/mutations/useWeeklyCheckIn.ts` + `.test.ts` (new, 131 + 117 linija, 3 cases)
+- `src/pages/WeeklyCheckIn.tsx` (new, 501 linija)
+- `src/App.tsx` (+1 lazy import + 1 ruta)
+- `src/pages/Home.tsx` (+35 linija — CalendarCheck icon, banner branch)
+- `src/contexts/LanguageContext.tsx` (+62 linije — 22 ključa)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 315 → 327 (+12), 42 test files, 0 failures — green
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a (script not invoked per iteration scope)
+
+### 1. `weeklyTrendline.ts` pure helper — biology invariants
+
+Verified line-by-line (`src/utils/nutrition/weeklyTrendline.ts`):
+- **L102–108** Rule 8 (menstrual skip): `weightDataReliable === false` → rano vraćanje sa `action='skipped_menstrual'`, target bez promene. Ispravno — odgovara specu §3.2.
+- **L111–117** `weeklyWeightDelta === null || !Number.isFinite` → status_quo `no_previous_weekly_checkin`. Defanzivan Number.isFinite poklopac hvata i NaN iz floating parse-a. OK.
+- **deficit grane (L124–136):**
+  - `delta > -0.3` → tighten -100 kcal (`deficit_slow_loss`)
+  - `delta < -1.0` → relax +50 kcal (`deficit_too_fast`)
+  - `-1.0 <= delta <= -0.3` → status_quo (default `deltaKcal = 0`)
+  - Test case L49–59 (`-0.7`) ispravno ide u status_quo, potvrđuje range.
+- **lean_bulk grane (L138–150):**
+  - `delta < 0` → +100 kcal (`lean_bulk_weight_loss`)
+  - `delta > +0.5` → -50 kcal (`lean_bulk_too_fast`)
+- **maintenance/recomposition (L152–159):** eksplicitni `status_quo` (tolerancija ±0.2 iz komentara — istraživa delta samo protiv 0 opsega, što je konzistentno sa spec "toleriše oscilaciju").
+- **Calorie floor (L162–163):** `Math.max(CALORIE_FLOOR=1400, Math.round(rawTarget))`. Test L112–122 direktno pokriva clamp (1450 - 100 = 1350 → clamp na 1400). OK.
+- **Pure:** nema side effects, `{...inputs}` destructure → immutable; bez Date/Math.random — deterministic.
+
+### 2. Deno port `supabase/functions/_shared/weeklyTrendline.ts`
+
+Verbatim diff sa src/ verzijom — isti konstanti (CALORIE_FLOOR=1400, DEFICIT_OK=-0.3, DEFICIT_MIN=-1.0, LEAN_BULK_MIN=0.0, LEAN_BULK_MAX=0.5), isti kcal pomeraji (-100, +50, +100, -50), iste grane u switch-u. Komentar na vrhu eksplicitno dokumentuje duplikat razlog (Deno runtime nema src/ path alias). Ništa za flag.
+
+### 3. `process-weekly-check-in` Edge Function
+
+Verified (`supabase/functions/process-weekly-check-in/index.ts`):
+- **L192–198** CORS preflight + non-POST → 405. OK.
+- **L201–207** ENV guard (SUPABASE_URL, ANON, SERVICE_ROLE) → 500 misconfigured.
+- **L210–222** JWT check via anon client `getUser(jwt)` → 401 invalid. Ista pattern kao u `process-daily-check-in` i `start-pause`.
+- **L238–244** clientId guard: `payload.clientId !== userId` → 403 sa porukom `"Forbidden: clientId ne odgovara auth.uid"`. Ispravno.
+- **L247** admin client sa service role.
+- **L250–278** `insert weekly_check_ins` → na 23505 vraća 409 sa "Već si popunila ovu nedelju." (zero-guilt copy). Na ostale greške → 500.
+- **L281–303** Fetch poslednja 2 reda (`order week_start_date desc limit 2`) → compute delta `rows[0].weight_avg_kg - rows[1].weight_avg_kg` na `toFixed(2)`. Ispravno — simple delta, ne MA, odgovara spec "weeklyWeightDelta = current - previous". Null-safe (`weight_avg_kg != null`).
+- **L306–320** Load user_status → 404 ako nema reda (blocking svestan fail umesto upsert-a).
+- **L324–341** `isKnownTargetMode` guard → nepoznat mode fallback `status_quo` sa `unknown_target_mode:<mode>` reason (konzervativno, ne lomi insert). OK.
+  - **L339** `weightDataReliable: status.bio.weightDataReliable !== false` — default-uje na `true` ako polje nedostaje (safer: adaptira). Konzistentno sa drugim EF-ovima.
+- **L343–360** Patch status: preservira postojeća polja (`...status`, `...status.bio`, itd.), postavlja `weeklyWeightDelta`, `currentCalorieTarget`, `daysSincePlanChange=0`, `daysSinceLastWeeklyCheckIn=0`, `lastUpdatedAt`. Dobra immutable patch praksa.
+- **L363–379** Upsert sa `onConflict: 'client_id'`. OK.
+
+### 4. No-touch zone verification
+
+- **`src/utils/sync/syncEngine.ts`** mtime Apr 20 — netaknut. OK.
+- **`src/utils/sync/redFlags.ts`** mtime Apr 20 — netaknut. Postojeći `weeklyCheckInJustCompleted` input je već u `calcRedFlags` (L48, L68–70) koji set-uje brojač na 0. EF-ov direktni `redFlags.daysSinceLastWeeklyCheckIn=0` write je konzistentan sa tom logikom — sledeći daily tick (kada bude pozvan sa `weeklyCheckInJustCompleted=false`) će inkrementovati dalje. OK.
+- EF nikad ne poziva `runSyncRules` niti `applyDailyCheckIn` — potvrđeno grep-om. Direktan calorie patch je u skladu sa Dev handoff odlukom ("sledeći daily tick rekonstruiše target"). `nutrition.daysSincePlanChange=0` reset je smislen signal da je plan upravo pomeren.
+
+### 5. `useWeeklyCheckIn` hook
+
+- `runWeeklyCheckIn` orkestrator van useMutation wrappera → DI testable (ista pattern kao `useDailyCheckIn.ts`).
+- **L84–89** Na `!payload.ok` throw sa server porukom (hvata 409 "Već si popunila ovu nedelju" string). Test L71–94 pokriva ovaj put.
+- **L118–122** onSuccess invalidate `['userStatus', clientId]` → Realtime push + query refetch. OK.
+- **L124–128** onError toast sa `silent` escape hatch.
+- 3 testa: happy, 409, invoke error — sva prolaze.
+
+### 6. `WeeklyCheckIn.tsx` page
+
+- Ruta `/weekly-check-in` pod `RouteGuard` u App.tsx L95, lazy import L32. OK.
+- `mondayOfWeek()` L67–77: `jsDay === 0 ? -6 : 1 - jsDay` — korektno za JS `getDay()` gde ned=0 (vraća prošli ponedeljak). Lokalni datum (ne UTC) — svesna odluka konzistentna sa drugim formama.
+- **Auto-prefill L114–163:** čita `weight_logs` zadnja 3 dana, avg rounded na 1 decimalu, pushuje u `weightStr` samo ako je `weightStr === ''` (line 148) → ne overwriteuje ručni unos. Bug-free. `cancelled` guard za race condition OK.
+- **Validacija:** `isWeightValid` (20–300 kg) + optional `isMeasurementValid` (20–200 cm or null) — poklapa se sa EF-ovom validacijom (EF index.ts L142–161).
+- **Submit (L191–219):** haptic light, mutacija + onSuccess confetti + toast + `navigate('/home')` posle 1.4s. OK.
+- **i18n:** Svi stringovi kroz `t()`. Nema hardcoded srpski/engleski. `weekStart`/`weightKg` itd. su nazivi varijabli, ne displayed strings.
+- **Zero-guilt:** grep za `propušteno|kasniš|nisi uradila|zakasnila` u page + catalog ne pokazuje forbidden copy. "Kako je prošla nedelja", "Kratak nedeljni pregled" — afirmativan ton. OK.
+- **Touch targets:** `IdentitySegmented` buttons koriste `min-h-11` (L483). CTA `<Button size="xl">` u variants default. OK.
+- **Dark mode:** koristi `text-foreground`, `text-muted-foreground`, `bg-background-secondary`, `bg-primary/primary-foreground`, `bg-muted/60` — sve token CSS variables, nema hardcoded hex. OK.
+- **Motion:** jedini motion je `ConfettiCelebration` komponenta (reuse). Nema novog `framer-motion` u ovoj page-i.
+
+### 7. Home banner
+
+- `showWeeklyCheckInBanner = (status?.redFlags.daysSinceLastWeeklyCheckIn ?? 0) > 7` (src/pages/Home.tsx L161). Ispravno — strogo veće od 7, ne >=.
+- Koristi postojeći `AlertBanner` sa `tone='info'`, ikona `CalendarCheck`. OK.
+- CTA `<Button variant="outline" size="sm">` → haptic + navigate. Tap target: `size="sm"` u button variants je `h-10` → ispod min-h-11 gole granice, ali `size="sm"` je standardan pattern u projektu za inline action buttons i Design Audit ga prihvata unutar AlertBanner action slota. Ne blokira.
+- Zero-guilt copy: "Vreme je za nedeljni check-in" / "Kratak nedeljni pregled drži plan usklađen sa telom." — afirmativno, bez guilt trigger-a.
+
+### 8. i18n key coverage
+
+22 nova ključa u `src/contexts/LanguageContext.tsx` (L1620–1681). Srpski + engleski, zero-guilt. Cross-check: svi `t('weeklyCheckIn.*')` pozivi u WeeklyCheckIn.tsx + Home.tsx se nalaze u catalog-u:
+- `weeklyCheckIn.title`, `.subtitle`, `.sections.{weight,measurements,measurementsHint,howYouFeel}`, `.fields.{weight,weightUnit,weightPlaceholder,weightLoading,weightHint,waist,hip,thigh,cmUnit,energyAvg,identity,identityHint,notes,notesHint,notesPlaceholder}`, `.identity.{1..5}`, `.submit`, `.submitting`, `.successToast`, `.successDesc`, `.banner.{title,desc,cta}` — svi prisutni. OK.
+
+### 9. Design-system compliance (WS-1..8)
+
+- `grep` za hex (`#[0-9a-fA-F]{6}`), arbitrary width (`w-\[`), arbitrary text (`text-\[`), non-ms duration (`duration-[0-9]+[^m]`) u `WeeklyCheckIn.tsx` → 0 matches. Čist fajl.
+- `verify:tokens` prolazi bez novih warning-a.
+- `z-toast` alijas u confetti overlay (L399) umesto hardcoded. OK.
+
+### 10. Findings
+
+**Blocker:** nijedan.
+
+**High:** nijedan.
+
+**Low:**
+1. `src/hooks/mutations/useWeeklyCheckIn.ts:126` — toast error poruka hardcoded srpski (`"Nedeljni check-in nije sačuvan."`). Isti pattern kao u `useDailyCheckIn.ts` i `useStartPause.ts`. Ne blokira — globalni t() sweep za toast poruke je već na nice-to-have listi iz IT-16 audita.
+2. `src/pages/WeeklyCheckIn.tsx:123` — `threeDaysAgo` koristi `Date.now() - 3 * 86_400_000` (rolling 72h umesto kalendarskih 3 dana). U vecini slučajeva razlika je zanemariva; za klijentkinju koja se vagala pre jutra pa popuni check-in kasno uveče, mogla bi izgubiti jedan weigh-in. Ne utiče na tačnost avg-a bitno (klip 10 redova, dovoljno uzoraka).
+3. `supabase/functions/process-weekly-check-in/index.ts:201–244` — umesto inline env check + JWT verify, mogao bi se u IT-20 refaktoru izdvojiti u shared helper (`_shared/auth.ts`). Nije scope za IT-17.
+4. `src/pages/WeeklyCheckIn.tsx:212` — `window.setTimeout(... 1400ms)` pre navigate-a je magic number. Isti pattern u drugim celebration flow-ovima; ako se standardizuje u IT-20 (`MOTION_DURATIONS.confetti`), ovaj fajl se može update-ovati.
+5. `supabase/functions/process-weekly-check-in/index.ts:353` — `daysSincePlanChange: 0` reset se uvek radi, čak i kad trendline vrati `status_quo` (nema stvarne promene plana). Semantički sporno — "plan change" je opravdan samo ako je `action != status_quo`. Međutim, dev handoff eksplicitno navodi ovaj reset kao deo scope-a i `daysSincePlanChange` downstream telemetry će tek pokazati da li zahteva granularnost. Ne blokira.
+
+### 11. Commit readiness
+
+- Predlog commit: `feat(IT-17): weekly check-in form + processWeeklyCheckIn EF + trendline adaptation`.
+- Co-Authored-By obavezno.
+- Bez `--no-verify` / `--no-gpg-sign` / `--amend`.
+- Staging: 9 novih fajlova + 3 modifikovana (`App.tsx`, `Home.tsx`, `LanguageContext.tsx`) + `RALPH_PROGRESS.md` + ovaj `RALPH_BUGS.md`. Bez secrets. Safe.
+
+### Round trips on this iteration: 1/3
+
+**Verdict (summary):** IT-17 approved.

@@ -1617,6 +1617,68 @@ const translations: Record<string, Record<Language, string>> = {
   "a11y.openCheckin": { en: "Open morning check-in", sr: "Otvori jutarnji check-in" },
   "a11y.waterAdd": { en: "Add a glass of water", sr: "Dodaj čašu vode" },
   "a11y.waterRemove": { en: "Remove a glass of water", sr: "Ukloni čašu vode" },
+
+  // Weekly Check-In (IT-17) — zero-guilt copy
+  "weeklyCheckIn.title": { en: "Weekly check-in", sr: "Nedeljni check-in" },
+  "weeklyCheckIn.subtitle": {
+    en: "A short weekly update helps your plan stay tuned to your body.",
+    sr: "Kratak nedeljni pregled pomaže da ti plan bude usklađen sa telom.",
+  },
+  "weeklyCheckIn.sections.weight": { en: "Weight", sr: "Težina" },
+  "weeklyCheckIn.sections.measurements": { en: "Measurements", sr: "Mere" },
+  "weeklyCheckIn.sections.measurementsHint": {
+    en: "Optional — leave blank if you prefer.",
+    sr: "Opciono — slobodno preskoči ako ti ne prija.",
+  },
+  "weeklyCheckIn.sections.howYouFeel": { en: "How the week felt", sr: "Kako je prošla nedelja" },
+  "weeklyCheckIn.fields.weight": { en: "Average weight", sr: "Prosečna težina" },
+  "weeklyCheckIn.fields.weightUnit": { en: "kg", sr: "kg" },
+  "weeklyCheckIn.fields.weightPlaceholder": { en: "e.g. 62.4", sr: "npr. 62.4" },
+  "weeklyCheckIn.fields.weightLoading": { en: "Loading prefill…", sr: "Učitavam prosek…" },
+  "weeklyCheckIn.fields.weightHint": {
+    en: "Prefilled from your daily weigh-ins when available.",
+    sr: "Automatski popunjeno iz dnevnih merenja kada su dostupna.",
+  },
+  "weeklyCheckIn.fields.waist": { en: "Waist", sr: "Struk" },
+  "weeklyCheckIn.fields.hip": { en: "Hip", sr: "Kukovi" },
+  "weeklyCheckIn.fields.thigh": { en: "Thigh", sr: "Butina" },
+  "weeklyCheckIn.fields.cmUnit": { en: "cm", sr: "cm" },
+  "weeklyCheckIn.fields.energyAvg": { en: "Average energy this week", sr: "Prosečna energija ove nedelje" },
+  "weeklyCheckIn.fields.identity": { en: "Identity check-in", sr: "Identitetski check-in" },
+  "weeklyCheckIn.fields.identityHint": {
+    en: "How much did this week feel like the version of you you're becoming?",
+    sr: "Koliko je ova nedelja ličila na verziju tebe koja se rađa?",
+  },
+  "weeklyCheckIn.fields.notes": { en: "Notes", sr: "Beleške" },
+  "weeklyCheckIn.fields.notesHint": {
+    en: "Anything you want to remember about this week — mood, cravings, wins.",
+    sr: "Sve što želiš da zabeležiš — raspoloženje, želje, male pobede.",
+  },
+  "weeklyCheckIn.fields.notesPlaceholder": {
+    en: "Optional — write freely…",
+    sr: "Opciono — piši slobodno…",
+  },
+  "weeklyCheckIn.identity.1": { en: "Far", sr: "Daleko" },
+  "weeklyCheckIn.identity.2": { en: "Distant", sr: "Udaljeno" },
+  "weeklyCheckIn.identity.3": { en: "Neutral", sr: "Neutralno" },
+  "weeklyCheckIn.identity.4": { en: "Close", sr: "Blisko" },
+  "weeklyCheckIn.identity.5": { en: "That's me", sr: "To sam ja" },
+  "weeklyCheckIn.submit": { en: "Save weekly check-in", sr: "Sačuvaj nedeljni check-in" },
+  "weeklyCheckIn.submitting": { en: "Saving…", sr: "Čuvam…" },
+  "weeklyCheckIn.successToast": { en: "Weekly check-in saved", sr: "Nedeljni check-in sačuvan" },
+  "weeklyCheckIn.successDesc": {
+    en: "Your plan will fine-tune to what your body is doing.",
+    sr: "Plan će se fino prilagoditi onome što tvoje telo radi.",
+  },
+  "weeklyCheckIn.banner.title": {
+    en: "Time for your weekly check-in",
+    sr: "Vreme je za nedeljni check-in",
+  },
+  "weeklyCheckIn.banner.desc": {
+    en: "A short weekly update keeps your plan aligned.",
+    sr: "Kratak nedeljni pregled drži plan usklađen sa telom.",
+  },
+  "weeklyCheckIn.banner.cta": { en: "Start check-in", sr: "Započni check-in" },
 };
 
 const LanguageContext = createContext<LanguageContextType>({

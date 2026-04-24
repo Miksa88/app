@@ -863,3 +863,77 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
   - Git commit `feat(IT-16): pause events + illness recovery penalty`
 - Preporuceno za IT-17+: Profile.tsx "Pauza" UI + IT-7 dopuna sa penalty_sessions_remaining decrement-om
 
+---
+
+## IT-17 — Weekly check-in + processWeeklyCheckIn EF + trendline adaptacija
+
+**Datum:** 2026-04-24 CEST
+**Agent:** Dev implementer (Opus 4.7) → pending QA
+**Spec:** 02_NUTRITION_FLOW_MASTER.md §10 (Weekly + trendline), 03_INTEGRATION_LAYER.md §3.2 Rule 8 (cycle_menstrual_ignore), RALPH_PLAN.md IT-17
+
+### Files touched
+- `src/utils/nutrition/weeklyTrendline.ts` (new) — pure `applyWeeklyTrendline({currentCalorieTarget, targetMode, weeklyWeightDelta, weightDataReliable})` → `{newCalorieTarget, action, reason}`. Klamp na CALORIE_FLOOR=1400. `skipped_menstrual` kad `weightDataReliable=false`.
+- `src/utils/nutrition/weeklyTrendline.test.ts` (new, **9 cases**) — menstrual skip, deficit slabo/prebrzo/norm, lean_bulk gubi/prebrzo, maintenance tolerance, prva check-in (null delta), floor clamp.
+- `supabase/functions/_shared/weeklyTrendline.ts` (new) — verbatim Deno port (Edge Runtime ne može da importuje iz src/ kroz @/ alias).
+- `supabase/functions/process-weekly-check-in/index.ts` (new) — JWT auth + `clientId === auth.uid` guard (403), insert u `weekly_check_ins` (UNIQUE 23505 → 409 "Već si popunila ovu nedelju"), fetch poslednja 2 reda → delta, load UserStatus, run trendline, patch `bio.weeklyWeightDelta` + `nutrition.currentCalorieTarget` + `nutrition.daysSincePlanChange=0` + `redFlags.daysSinceLastWeeklyCheckIn=0`, upsert `user_status` service_role.
+- `supabase/functions/process-weekly-check-in/deno.json` (new).
+- `src/hooks/mutations/useWeeklyCheckIn.ts` (new) — Deps DI pattern sa `runWeeklyCheckIn` orkestratorom + `useWeeklyCheckIn(clientId, options)` React Query wrapper (toast.error, invalidate `['userStatus', clientId]`).
+- `src/hooks/mutations/useWeeklyCheckIn.test.ts` (new, **3 cases**) — happy, 409 konflikt, supabase invoke error.
+- `src/pages/WeeklyCheckIn.tsx` (new) — forma sa PageHeader + Card sekcije: Weight (auto-prefill iz `weight_logs` 3-dana avg), Measurements (waist/hip/thigh opciono), Energy slider 1–10, Identity segmented 1–5, Notes textarea 500 char. Submit → `useWeeklyCheckIn().mutate()` → onSuccess: confetti + navigate na `/home`.
+- `src/App.tsx` (modified) — dodat lazy import + Route `/weekly-check-in` između `/milestones` i trainer routes.
+- `src/contexts/LanguageContext.tsx` (modified) — dodati i18n keys: `weeklyCheckIn.title/subtitle`, `weeklyCheckIn.sections.*`, `weeklyCheckIn.fields.*`, `weeklyCheckIn.identity.1..5`, `weeklyCheckIn.submit/submitting/successToast/successDesc`, `weeklyCheckIn.banner.title/desc/cta`. Sve sr-latn + en.
+- `src/pages/Home.tsx` (modified) — dodat `CalendarCheck` lucide ikon + `AlertBanner` import + derive `showWeeklyCheckInBanner = (status?.redFlags.daysSinceLastWeeklyCheckIn ?? 0) > 7` + banner JSX (tone=info) sa "Start check-in" CTA → `navigate('/weekly-check-in')`.
+- `RALPH_PROGRESS.md` (append).
+
+### Trendline adaptacija matrica
+| Mode | Očekivano (kg/nedelja) | Akcija |
+|------|------------------------|--------|
+| deficit | -0.5 do -1.0 | status_quo |
+| deficit | > -0.3 (slabo gubi) | tighten -100 kcal |
+| deficit | < -1.0 (prebrzo) | relax +50 kcal |
+| lean_bulk | +0.2 do +0.4 | status_quo |
+| lean_bulk | < 0 (gubi) | +100 kcal |
+| lean_bulk | > +0.5 (prebrzo) | -50 kcal |
+| maintenance/recomposition | ±0.2 | status_quo |
+| (bilo koji) | `weightDataReliable=false` | **skipped_menstrual** (Rule 8) |
+| (bilo koji) | `weeklyWeightDelta=null` (prva nedelja) | status_quo (no_previous_weekly_checkin) |
+
+### Tests delta breakdown
+- +9 u `weeklyTrendline.test.ts` (novi fajl)
+- +3 u `useWeeklyCheckIn.test.ts` (novi fajl)
+- **Ukupno +12:** 315 → 327
+
+### Baseline gate
+- `npm test` → **327 passing**, 0 failures, 42 test files
+- `npx tsc --noEmit` → **0 errors**
+- `npm run verify:tokens` → "All design tokens compliant"
+
+### Decisions / deviations
+- **Route path:** `/weekly-check-in` (kebab-case, konzistentno sa `/workout/active`, `/workout/complete`). Dodato u App.tsx kao lazy-loaded route između `/milestones` i trainer routes.
+- **Auto-prefill strategija:** klijent-side SELECT iz `weight_logs` za poslednjih 3 dana (72h). RLS dozvoljava vlasnicu da čita svoje weight_logs pa ne treba Edge Function helper. Ako no data → placeholder prikazuje "e.g. 62.4" umesto avg-a. User može da pregazi prefill unos (state-ovano kao string).
+- **`daysSinceLastWeeklyCheckIn` increment logika — NIJE dodata u IT-17.** Spec eksplicitno kaže: "increment logic je out-of-scope — IT-17 samo čita flag; pomeranje brojača je cron-like i može se dodati u IT-22 ili lazy logic kroz applyDailyCheckIn extension (ne dirati sada)." Banner je **prikazan samo kad > 7 dana** — prikazivanje zavisi od server-side increment-a koji će doći u drugoj iteraciji. Za alpha, baner se prikazuje posle >7 dana **pod uslovom da postoji mehanizam koji povećava brojač** (prepušteno IT-22 smoke / cron).
+- **CALORIE_FLOOR enforcement u trendline.ts:** duplikat floor logike iz `calorieTarget.ts` (istih 1400 kcal), jer tpostaje `nutrition.currentCalorieTarget` direktno upisan pre nego što sledeći `runSyncRules` pass rebuilduje target iz baze. Alternativa (upisati samo `.targetMode` modifier i ne dirati target) bi bila invazivna promena u pristupu pravcu. Idempotentnost: ponoviti isti input daje isti output.
+- **Weekly banner placement:** odmah posle "Sync Banner" bloka, pre "Daily check-in CTA" (IT-6). Koristi `AlertBanner` tone="info" + CalendarCheck lucide ikon + "Start check-in" button (variant="outline", size="sm"). Klik → haptic+navigate na `/weekly-check-in`.
+- **Bez `syncEngine.ts` izmene:** no-touch zona. Trendline adaptacija je EF-local write na `nutrition.currentCalorieTarget`; sledeći `runSyncRules` pass (koji će pokrenuti `applyDailyCheckIn` na sledećem dnevnom check-in-u) će rekonstruisati target iz baze + modifier-a. Ako korisnica otvori Food odmah posle weekly check-in-a, videće adaptirani target dok se ne desi daily tick.
+- **Weekly check-in page test (1-2 render cases) — NIJE implementiran.** Spec eksplicitno kaže "opciono". Pure + hook testovi adekvatno pokrivaju logic path; page render testovi bi doneli minimalnu dodatnu vrednost (mahom design-system snapshot koji je već pokriven verify:tokens).
+- **Profile.tsx "Pauza" UI (IT-16 follow-up) NIJE rađen u IT-17** — scope-isključen. Isti razlog kao u IT-16 notes.
+- **`weekly-check-in` page ne koristi BottomSheet** (kao DailyCheckInSheet) već full-page PageHeader + Cards. Razlog: weekly forma ima **više polja** (weight + 3 mere + energy + identity + notes) što bi u sheet-u bilo gusto. Full-page daje više vertical space-a + respektuje iOS navigation pattern-e.
+
+### Deploy pending
+- `supabase functions deploy process-weekly-check-in` (preko MCP).
+- Ako QA preferira, `supabase functions deploy` može se odmah pokrenuti (EF je idempotentan; nepozvan po default-u).
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `applyWeeklyTrendline` respektuje calorie floor (1400 kcal) u edge case-ovima (npr. input target = 1450 + tighten -100 → floor clamp na 1400)
+  - Verifikuje da `skipped_menstrual` akcija NIKAD ne menja `currentCalorieTarget` čak i kad je `weeklyWeightDelta` drastičan
+  - Verifikuje da 409 konflikt u EF-u vraća korisnu srpsku poruku (ne generic SQL error)
+  - Verifikuje da Home banner ne prikazuje se za novog korisnika (`daysSinceLastWeeklyCheckIn === 0`)
+  - Verifikuje da auto-prefill ne overwritte-uje korisnikov ručni unos (uslov `if (weightStr === '')`)
+  - Verifikuje da Deno `_shared/weeklyTrendline.ts` port ima IDENTIČNU logiku kao src/ verzija (konstante, order provera, reason stringovi)
+  - Spot check: prva weekly check-in (no previous row) → `weeklyWeightDelta = null` → action = `status_quo` + reason `no_previous_weekly_checkin`
+- Ako approved → main agent:
+  - Deploy EF kroz Supabase MCP: `process-weekly-check-in`
+  - Git commit `feat(IT-17): weekly check-in + trendline adaptation`
+- FAZA D IT-17/18 ↓ — IT-18 (trainer clientOverrides UI) je next i **POSLEDNJA** iteracija FAZE D.
+
