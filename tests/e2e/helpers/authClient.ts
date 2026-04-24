@@ -16,6 +16,12 @@ const ANON_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
 let cachedClient: SupabaseClient | null = null;
 let cachedAccessToken: string | null = null;
 
+/** Clear session cache — za testove koji menjaju profile.role. */
+export function resetAuthClient(): void {
+  cachedClient = null;
+  cachedAccessToken = null;
+}
+
 /**
  * Vraća supabase klijent ulogovan kao test user. Cache-uje session između
  * poziva u istom test run-u.
