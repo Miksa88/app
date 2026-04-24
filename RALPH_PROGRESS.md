@@ -1152,3 +1152,101 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
 
 ### Deviations from plan
 - Nijedna. Scope je tacno 3 fajla kao u planu (+progress append).
+
+---
+
+## IT-22 — E2E smoke + cleanup + baseline tag
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** main (self-audit)
+**Spec:** RALPH_PLAN.md final iteration
+
+### Smoke gates
+- [x] `npm test` → 337 passing (44 test files)
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+
+### Cleanup
+- [x] `MOCK_CLIENT` / `MOCK_TEMPLATE` / `MOCK_PROFILE` odsutni iz Food.tsx (čišćeno u IT-13)
+- [x] No-touch zone poštovana: `src/utils/sync/syncEngine.ts` netaknut kroz celu Ralph seriju
+
+### Infrastructure (finalni snapshot)
+**10 Edge Functions deployed (ACTIVE, verify_jwt=true osim mesocycle-tick):**
+1. `process-daily-check-in` (IT-4)
+2. `save-user-status` (IT-5)
+3. `process-workout-completion` (IT-7)
+4. `swap-next-sessions` (IT-10)
+5. `process-meal-log` (IT-11)
+6. `mesocycle-tick` (IT-15, cron auth via CRON_SECRET)
+7. `start-pause` (IT-16)
+8. `end-pause` (IT-16)
+9. `process-weekly-check-in` (IT-17)
+10. `update-client-overrides` (IT-18)
+
+**DB (13 tabela + 3 enum):**
+- profiles, user_status, session_templates, client_template_assignments
+- weight_logs, daily_check_ins (IT-1)
+- weekly_check_ins, pause_events, water_logs (IT-2)
+- exercise_progress, food_items (IT-3)
+- exercises (107 rows posle IT-21 seed expansion)
+- meal_logs (pre-Ralph)
+- Enums: meal_log_status, pause_type, template_position, etc.
+
+### Testovi — rast kroz iteracije
+- Baseline pre Ralph: 255
+- Faza A (IT-1..6): +10 (265)
+- Faza B (IT-7..10): +16 (281 posle IT-8 merge + IT-9/10)
+- Faza C (IT-11..14): +20 (301)
+- Faza D (IT-15..18): +26 (327/329)
+- Faza E (IT-19..21): +8 (337)
+- **Finalni total: 337 tests, 0 failures**
+
+### Kompletan commit chain
+```
+28addef feat(IT-21): exercise library expansion 32 → 107 (seed)
+d40399a fix(IT-20b): migrate Home.tsx getSyncBannerContent na i18n keys
+843e74e feat(IT-20): i18n keys za sve sync banner-e + zero-guilt copy
+4a9f8c3 feat(IT-19): IR meal calorie distribution 28/10/32/10/20 + mealPlanGenerator integration
+10577cf feat(IT-18): trainer clientOverrides UI — FAZA D kompletna (18/22)
+fe03310 feat(IT-17): WeeklyCheckIn page + process-weekly-check-in EF
+a9b9614 feat(IT-16): pause events + illness recovery penalty
+d224f39 feat(IT-15): mesocycle lifecycle + mesocycle-tick cron EF
+1d2c505 feat(IT-14): hydration pure helper + useHydration hook + Home water widget — FAZA C kompletna (14/22)
+2dea331 feat(IT-13): Food.tsx rewired to real UserStatus + DB foods + mutations
+4c0b53f feat(IT-12): useLogMeal + useSkipMeal + useReplaceMeal + useLogWaterGlass hooks
+4460f59 feat(IT-11): process-meal-log EF + metabolicNoise pure helper
+c4dd779 feat(IT-10): swap-next-sessions EF + useSwapNextSessions hook + Gym.tsx wiring
+30da0ac feat(IT-9): ActiveWorkout.tsx wired na real data
+dd7520f feat(IT-8): Loading Sloj 4 DPO + workout mutation hooks
+4262127 feat(IT-7): process-workout-completion Edge Function + workoutCompletion helper
+fde4b9b feat(IT-6): DailyCheckInSheet UI — FAZA A kompletna (6/22)
+9bafe99 feat(IT-5): useDailyCheckIn mutation hook + save-user-status EF
+cc43563 feat(IT-4): process-daily-check-in Edge Function + MA5 pure helper
+948567a feat(IT-3): exercise_progress + food_items + seed
+d30c5ea feat(IT-2): weekly_check_ins + pause_events + water_logs migration
+a199cfd feat(IT-1): weight_logs + daily_check_ins migration
+a94daa7 chore(diagnostika): Faza 1 reportovi + Ralph plan
+```
+
+### Ralph acceptance (iz originalnog plana)
+- [x] 22 iteracija (IT-1..IT-22 + IT-20b hotfix) committed
+- [x] Baseline gates green
+- [x] No-touch zone preserved (syncEngine.ts netaknut)
+- [x] Zero-guilt copy discipline kroz ceo run
+- [x] 10 Edge Functions live u produkciji
+- [x] Exercise library ≥100 (107 actual)
+- [x] food_items seeded (30; IT-21 scope expansion food_items je prepušten post-beta ako treba)
+
+### Tag
+`ralph-beta-baseline` — commit posle IT-22 smoke završetka.
+
+### Open items (post-beta follow-up)
+- food_items seed expansion 30 → 100+ (spec 02 §11)
+- pg_cron wire-up za mesocycle-tick EF (trenutno manual-trigger)
+- Home.tsx `SyncBanner` vs global `SyncEventBanner` konsolidacija (duplikat surfaces)
+- Deload week intensity -10% (DPO) — tracker flag u queue postoji, program generator integraciju treba validirati
+- Playwright E2E scripts (trenutno smoke = unit + integration tests)
+
+---
+
+**RALPH LOOP END** — FAZA A+B+C+D+E kompletna, 22/22 iteracija, 24 commit-a.
