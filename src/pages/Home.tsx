@@ -22,6 +22,8 @@ import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
 import { Button } from "@/components/ui/button";
 import { DailyCheckInSheet } from "@/components/checkin/DailyCheckInSheet";
+import { useHydration } from "@/hooks/useHydration";
+import { useLogWaterGlass, DEFAULT_GLASS_ML } from "@/hooks/mutations/useLogWaterGlass";
 import type { Partition } from "@/types/training";
 
 // ============================================================================
@@ -53,11 +55,27 @@ const Home = () => {
   const { session: nextSession } = useNextSession(clientId);
   const { view: weeklyView } = useWeeklyCalendar(clientId);
 
-  const [waterGlasses, setWaterGlasses] = useState(3);
   const [unreadCount] = useState(3);
   const [checkinOpen, setCheckinOpen] = useState(false);
-  const waterGoal = 8;
   const haptic = useHaptic();
+
+  // ============================================================================
+  // Hidracija (IT-14) — real state iz UserStatus + mutation hook
+  // ============================================================================
+  const hydration = useHydration(clientId);
+  const logWaterGlass = useLogWaterGlass();
+
+  // Optimistic local layer: pending mutation-i se dodaju na server vrednost
+  // dok Realtime ne vrati updated hydrationTodayMl. Svaka čaša = 250ml
+  // (DEFAULT_GLASS_ML), pa se pending koristi i za čaše i za ml prikaz.
+  const [optimisticGlasses, setOptimisticGlasses] = useState(0);
+  const waterGoal = hydration.targetGlasses > 0 ? hydration.targetGlasses : 8;
+  const waterGlasses = Math.min(
+    waterGoal,
+    hydration.glasses + optimisticGlasses,
+  );
+  const waterMlDisplay =
+    hydration.hydrationMl + optimisticGlasses * DEFAULT_GLASS_ML;
 
   // Derive "has checked in today" — heuristika:
   //   status.lastUpdatedAt >= startOfToday signalizira da je save-user-status
@@ -84,16 +102,33 @@ const Home = () => {
   const { milestone, dismissMilestone } = useStreakMilestones(currentStreak);
 
   const addWater = () => {
-    setWaterGlasses(Math.min(waterGoal, waterGlasses + 1));
+    if (!clientId) return;
+    if (waterGlasses >= waterGoal) return;
     haptic("light");
+    // Optimistic +1 glass; rollback u onError; pending prikaz traje do Realtime
+    // refresh-a (useUserStatus → React Query invalidate).
+    setOptimisticGlasses((p) => p + 1);
+    logWaterGlass.mutate(
+      { clientId },
+      {
+        onSuccess: () => setOptimisticGlasses((p) => Math.max(0, p - 1)),
+        onError: () => setOptimisticGlasses((p) => Math.max(0, p - 1)),
+      },
+    );
   };
+  // Remove/setTo nisu podržani kao operacije — water_logs je append-only po
+  // spec-u 02 §8.1. UI zadržava isti layout ali minus dugme postaje no-op /
+  // hidden (disabled kad je waterGlasses === 0 pokriva vizuel).
   const removeWater = () => {
-    setWaterGlasses(Math.max(0, waterGlasses - 1));
     haptic("selection");
+    // NOOP: append-only store. Rollback pending optimistic ako postoji.
+    setOptimisticGlasses((p) => Math.max(0, p - 1));
   };
   const setWaterTo = (n: number) => {
-    setWaterGlasses(n);
-    haptic("light");
+    // Dots ostaju za prikaz; klik na dot i dalje dodaje staklo ako je tap iznad
+    // trenutne vrednosti (append-only UX model).
+    if (n > waterGlasses) addWater();
+    else haptic("selection");
   };
 
   const displayName = String(user?.user_metadata?.first_name ?? "Sarah");
@@ -253,7 +288,7 @@ const Home = () => {
             <BioFeedbackRings
               steps={{ current: 6400, goal: 10000 }}
               activity={{ current: 28, goal: 45 }}
-              hydration={{ current: waterGlasses * 250, goal: waterGoal * 250 }}
+              hydration={{ current: waterMlDisplay, goal: hydration.targetMl }}
             />
           </Card>
 
@@ -291,24 +326,33 @@ const Home = () => {
           </Card>
         </motion.div>
 
-        {/* ============ 7. Unos vode ============ */}
-        <MotionCard {...fadeUp(0.3)} className="p-5">
-          {/* Header: ikona + naslov + counter */}
+        {/* ============ 7. Unos vode (IT-14) ============ */}
+        <MotionCard {...fadeUp(0.3)} className="p-5" data-testid="water-widget">
+          {/* Header: ikona + naslov + counter (+training bonus badge ako je trening dan) */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center shrink-0">
                 <Droplets size={ICON_SIZE.md} className="text-info" aria-hidden="true" />
               </div>
-              <p className="text-subhead font-semibold text-foreground">Unos vode</p>
+              <div className="min-w-0">
+                <p className="text-subhead font-semibold text-foreground">{t("home.water")}</p>
+                {hydration.isTrainingDay && (
+                  <span className="inline-flex items-center mt-0.5 px-2 py-0.5 rounded-full bg-info/10 ring-1 ring-info/20">
+                    <span className="text-caption-2 font-semibold text-info">
+                      {t("home.waterTrainingBonus")}
+                    </span>
+                  </span>
+                )}
+              </div>
             </div>
-            <span className="text-title-3 font-bold text-foreground tabular-nums">
+            <span className="text-title-3 font-bold text-foreground tabular-nums" data-testid="water-count">
               {waterGlasses}/{waterGoal}
             </span>
           </div>
 
-          {/* 8 glass buttons u redu */}
+          {/* Glass dots u redu — ne renderujemo ako je goal nerazuman (safety) */}
           <div className="flex items-center gap-2 mb-5">
-            {Array.from({ length: waterGoal }).map((_, i) => (
+            {Array.from({ length: Math.min(waterGoal, 16) }).map((_, i) => (
               <motion.button
                 key={i}
                 whileTap={{ scale: 0.85 }}
@@ -318,7 +362,7 @@ const Home = () => {
                     ? "bg-info/20 ring-1 ring-info/40"
                     : "bg-muted/60"
                 }`}
-                aria-label={`Čaša ${i + 1}`}
+                aria-label={`${t("home.waterGlasses")} ${i + 1}`}
               >
                 <Droplets
                   size={ICON_SIZE.sm}
@@ -329,7 +373,7 @@ const Home = () => {
             ))}
           </div>
 
-          {/* Minus · centralni broj · Plus (kao na staroj slici) */}
+          {/* Minus (rollback optimistic) · ml / target prikaz · Plus */}
           <div className="flex items-center justify-center gap-6">
             <motion.button
               whileTap={{ scale: 0.9 }}
@@ -341,21 +385,24 @@ const Home = () => {
               <Minus size={ICON_SIZE.md} className="text-foreground" aria-hidden="true" />
             </motion.button>
 
-            <div className="text-center min-w-20">
+            <div className="text-center min-w-20" data-testid="water-ml-display">
               <p className="text-title-2 font-bold text-foreground tabular-nums leading-none">
-                {waterGlasses * 250}
+                {waterMlDisplay}
               </p>
-              <p className="text-caption-1 text-muted-foreground mt-1">ml danas</p>
+              <p className="text-caption-1 text-muted-foreground mt-1">
+                / {hydration.targetMl} ml
+              </p>
             </div>
 
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={addWater}
-              disabled={waterGlasses === waterGoal}
-              className="w-11 h-11 rounded-full bg-muted flex items-center justify-center min-w-11 min-h-11 disabled:opacity-30"
-              aria-label={t("a11y.waterMore")}
+              disabled={!clientId || waterGlasses >= waterGoal || logWaterGlass.isPending}
+              className="w-11 h-11 rounded-full bg-info flex items-center justify-center min-w-11 min-h-11 disabled:opacity-30"
+              aria-label={t("home.waterAddGlass")}
+              data-testid="water-add-glass"
             >
-              <Plus size={ICON_SIZE.md} className="text-foreground" aria-hidden="true" />
+              <Plus size={ICON_SIZE.md} className="text-primary-foreground" aria-hidden="true" />
             </motion.button>
           </div>
         </MotionCard>

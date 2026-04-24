@@ -680,3 +680,60 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent commit `feat(IT-13): Food.tsx rewire na real UserStatus + DB foods + mutation hooks`
 - IT-14 — Hydration UI + +500ml trening dan
 
+---
+
+## IT-14 — Hydration UI + +500ml trening dan
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** Dev implementer (Opus 4.7) → pending QA
+**Spec:** 02_NUTRITION §8.1 (Hydration baseline + training bonus)
+
+### Files touched
+- `src/utils/nutrition/hydration.ts` (new) — pure `calcHydrationTarget(weightKg, isTrainingDay)` helper; base 35ml/kg + 500ml training bonus, clamp [1500, 4000]
+- `src/utils/nutrition/hydration.test.ts` (new) — 4 cases (base 70kg, training 70kg, floor 40kg, fractional 72.5kg)
+- `src/hooks/useHydration.ts` (new) — derive view-model `{hydrationMl, targetMl, glasses, targetGlasses, isTrainingDay, isLoading}` iz `useUserStatus`; pure helperi `deriveIsTrainingDayFromStatus` i `deriveHydrationView` za test-ability
+- `src/contexts/LanguageContext.tsx` (update) — `home.water` relabel ("Water"/"Voda"), nove keys `home.waterGlasses`, `home.waterAddGlass`, `home.waterTrainingBonus`
+- `src/pages/Home.tsx` (update) — water widget rewire sa lokalnog `useState` na `useHydration` + `useLogWaterGlass.mutate`; optimistic local glass counter sa rollback u onError/onSuccess; `BioFeedbackRings` hydration ring koristi `waterMlDisplay` i `hydration.targetMl`; "+500ml workout" badge se prikazuje ako je trening dan; Plus dugme disabled kad je `clientId` null ili isPending
+- `src/pages/Home.test.tsx` (new) — 1 test: water widget renders ml + target (500/2450 fixture), klik +1 glass poziva useLogWaterGlass.mutate sa clientId
+
+### Acceptance
+- [x] `calcHydrationTarget(70, false)` = 2450 (70 × 35)
+- [x] `calcHydrationTarget(70, true)` = 2950 (+500 bonus)
+- [x] `calcHydrationTarget(40, false)` = 1500 (floor clamp)
+- [x] `calcHydrationTarget(72.5, true)` = 3038 (fractional round)
+- [x] Home.tsx water widget render-uje pravu vrednost iz UserStatus (500ml fixture → "500" u ml display; target 2450 iz 70kg non-training)
+- [x] "+1 glass" dugme poziva `useLogWaterGlass({ clientId })`
+
+### Tests
+- `hydration.test.ts` → 4 cases passing
+- `Home.test.tsx` → 1 case passing (water widget + mutation call)
+- Full suite: 296 → 301 (+5) passing, 0 failing
+
+### Baseline gate
+- `npm test` → 301 passed / 37 test files / 0 failing
+- `npx tsc --noEmit` → exit 0
+- `npm run verify:tokens` → All design tokens compliant
+
+### isTrainingDay derive
+Simplest alpha derivacija:
+1. Primary: `queue.sessions[queue.sessionPointer].scheduledDate` == today (local calendar date) → trening dan (sesija pending/next)
+2. Fallback: `partitionLastSeen[Lower|Upper|FullBody].date` == today → sesija je već završena danas
+3. Else → rest day
+
+Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija je dnevni koncept iz korisničke perspektive (7AM local workout = taj dan).
+
+### Deviations
+- Spec naveo `initUserStatus + processDailyCheckIn poštuju is_training_day flag (derive iz queue.sessions[pointer-1] današnji datum)`. IT-14 scope: implementirano kao **client-side derive** u `useHydration` (queue snapshot je u UserStatus.training.queue već). Backend write strane (init + daily check-in) ne mutiraju `hydrationTargetMl` — pure UI derive je dovoljan za +500ml prikaz, i ne povlači dodatnu EF izmenu. Ako QA preferira server-side perzistovan flag, to je N-Y post-beta stavka (recompute `hydrationTargetMl` u sync engine-u).
+- Minus dugme u water widget-u nije prava operacija (water_logs je append-only, spec 02 §8.1). Zadržan kao rollback optimistic counter-a. Nije uklonjen iz layout-a da bi se očuvala vizualna uniformnost sa pre-IT-14 stanjem.
+- `home.glasses` key zadržan netaknut (drugi screeni ga možda koriste); dodat novi `home.waterGlasses` sa identičnom vrednošću radi spec-complete keys liste.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `calcHydrationTarget` clamp-uje max 4000 (npr. 150kg + training = 5750 → 4000)
+  - Verifikuje da `deriveIsTrainingDayFromStatus` radi kad je `scheduledDate` došao kao ISO string (Supabase serialization edge-case) — test fallback branch
+  - Verifikuje optimistic rollback kad `useLogWaterGlass.mutate` fail-uje (onError branch smanji `optimisticGlasses`)
+  - Verifikuje da "+500ml workout" badge nema `home.waterTrainingBonus` hardcoded srpski/engleski (prolazi kroz `t()`)
+  - Opciono: RTL test case za training day fixture (queue sa sesijom scheduledDate=today → waterWidget prikaže bonus badge + target=2950 za 70kg)
+- Ako approved → main agent commit `feat(IT-14): Hydration UI + +500ml trening dan + useHydration hook`
+- FAZA C kompletna — checkpoint
+
