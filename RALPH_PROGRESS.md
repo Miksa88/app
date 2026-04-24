@@ -937,3 +937,65 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
   - Git commit `feat(IT-17): weekly check-in + trendline adaptation`
 - FAZA D IT-17/18 ↓ — IT-18 (trainer clientOverrides UI) je next i **POSLEDNJA** iteracija FAZE D.
 
+
+---
+
+## IT-18 — Trainer clientOverrides UI
+
+**Timestamp:** 2026-04-24 12:15 CEST
+**Agent:** dev-implementer (Opus) → pending QA
+**Spec:** 03_INTEGRATION §3.2 (clientOverrides gate), RALPH_PLAN.md IT-18
+
+### Files touched
+- `supabase/functions/update-client-overrides/index.ts` (new)
+- `supabase/functions/update-client-overrides/deno.json` (new)
+- `src/hooks/mutations/useUpdateClientOverrides.ts` (new)
+- `src/hooks/mutations/useUpdateClientOverrides.test.ts` (new — 2 tests)
+- `src/components/trainer/SyncRulesOverrideSection.tsx` (new)
+- `src/pages/trainer/ClientProfile.tsx` (modified — settings tab dobija novu sekciju)
+- `src/contexts/LanguageContext.tsx` (modified — 19 i18n keys, sr + en)
+- `RALPH_PROGRESS.md` (append)
+
+### Tests delta
+- 327 → 329 (+2: happy path + non-trainer 403)
+
+### Baseline
+- `npm test` — 329 passed / 0 failed (43 test files)
+- `npx tsc --noEmit` — clean
+- `npm run verify:tokens` — "All design tokens compliant"
+
+### Decisions / deviations
+- **clientOverrides shape je SyncRuleName[] array, NE Record<SyncRuleName,'active'|'disabled'>.** Spec IT-18 je pominjao Record shape, ali postojeci `src/types/userStatus.ts` (IT-1 i ranije) vec definise `clientOverrides: SyncRuleName[]` i `syncEngine.ts` koristi `isRuleDisabled(status, ruleName)` koji proverava `includes()` na nizu. E2E testovi (`e2eScenarios.test.ts`) i `userStatus.test.ts` vec imaju array format u fixtures. Promena shape-a bi invazivno rewire-ovala 10+ fajlova. **Resenje:** EF prihvata Record input (trener UI contract: `{ruleName: 'active'|'disabled'}`), ali server-side patcher konvertuje u array — `disabled` → add, `active` → remove. Tip `SyncRuleName[]` ostaje netaknut. `syncEngine.ts` zero-touch (no-touch zone ✓).
+- **Role guard: samo `role='trainer'` check.** Spec IT-18 eksplicitno kaze alpha-level; buduca iteracija moze dodati trener-klijentkinja binding. EF vraca 403 sa "Forbidden: caller is not a trainer".
+- **UI placement:** Settings tab u ClientProfile.tsx (izmedju "Program settings" i "Notifications"). Razlog: logicno — override-i su per-client settings, ne overview stavka. Ako QA predlaze overview / eksplicitnu podtab, mozemo premestiti.
+- **Fetch strategy:** SyncRulesOverrideSection fetch-uje status interno preko `getClientStatusByTrainer` (isti patern kao `ClientUserStatusPanel`). Posle uspesne mutacije, refetch okida preko `useEffect` deps-a na `mutation.data`. Alternativa (centralizovani useClientStatus hook) je YAGNI za sada.
+- **Debounce: 250ms per rule.** Svaki toggle ima svoj tajmer — trener moze da toggle-uje vise rule-ova nezavisno bez debounce collision-a. Cleanup tajmera na unmount.
+- **Audit log:** console.log `[trainer-audit] <trainerId> changed <rule> to <state> for <clientId>` — alpha-level. Spec eksplicitno kaze "može biti samo console za alpha". Produkcija treba audit tabelu (npr. `trainer_actions`).
+- **i18n keys:** 19 novih (title, description, status labels, 8×{title, description}). Sve kroz `t()`, nema hardkodovanih stringova. Sr-latn + en-US, zero-guilt copy.
+- **UserStatus tip — BEZ izmene.** Vec postoji `clientOverrides: SyncRuleName[]`. `isRuleDisabled` u syncEngine.ts vec radi na ovom polju (syncEngine.ts:195 `!isRuleDisabled(s, 'hormonal_sync')`). Zero-touch na syncEngine ✓.
+
+### Deploy pending
+- `supabase functions deploy update-client-overrides` (preko MCP).
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da EF vraca 403 ako caller NIJE trener (proveriti kroz mock profile row sa `role='client'`)
+  - Verifikuje da EF vraca 404 ako `user_status` ne postoji za `clientId`
+  - Verifikuje da input `{hormonal_sync: 'disabled'}` rezultuje sa `clientOverrides: ['hormonal_sync']` u DB-u
+  - Verifikuje da drugi input `{hormonal_sync: 'active'}` rezultuje sa `clientOverrides: []` (idempotent toggle)
+  - Verifikuje da `SYNC_RULE_LABELS` mapa u `ClientUserStatusPanel` i dalje radi (novi i18n keys ne konfliktuju sa `trainer.overrides.*`)
+  - Spot check da `syncEngine.ts:195` i dalje cita `isRuleDisabled` (postojeca funkcija, zero-touch)
+  - Verifikuje da toggle u Settings tab-u prikazuje Active ako rule nije u nizu, Disabled ako jeste
+  - Verifikuje debounce: 5 brzih toggle-ova na istom rule-u → 1 EF poziv
+  - a11y: Switch ima `aria-label` sa rule naslovom + stanjem
+- Ako approved → main agent:
+  - Deploy EF kroz Supabase MCP: `update-client-overrides`
+  - Git commit `feat(IT-18): trainer clientOverrides UI + update-client-overrides EF — FAZA D kompletna`
+  - Git tag `ralph-iter-18-faza-d-baseline`
+
+### FAZA D KOMPLETNA
+- IT-15 mesocycle lifecycle ✓
+- IT-16 pause events ✓
+- IT-17 weekly check-in ✓
+- IT-18 trainer overrides ✓ (this)
+- Next: FAZA E (IT-19 IR meals, IT-20 i18n audit, IT-21 exercise seed, IT-22 E2E smoke)

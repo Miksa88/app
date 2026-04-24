@@ -1529,6 +1529,28 @@ const translations: Record<string, Record<Language, string>> = {
   "clients.upcoming": { en: "Upcoming", sr: "Predstoji" },
   "clients.rest": { en: "Rest", sr: "Odmor" },
 
+  // Trainer — Sync Rules Override (IT-18)
+  "trainer.overrides.title": { en: "Sync Rules Override", sr: "Override sync pravila" },
+  "trainer.overrides.description": { en: "Disable specific sync rules for this client. For 1-on-1 premium clients only.", sr: "Isključi pojedina sync pravila za ovu klijentkinju. Samo za 1-na-1 premium klijentkinje." },
+  "trainer.overrides.statusActive": { en: "Active", sr: "Aktivno" },
+  "trainer.overrides.statusDisabled": { en: "Disabled", sr: "Isključeno" },
+  "trainer.overrides.hormonal_sync.title": { en: "Luteal carb bonus", sr: "Lutealna faza — bonus ugljenih hidrata" },
+  "trainer.overrides.hormonal_sync.description": { en: "+150 kcal and +38g carbs during luteal phase (not for IR clients).", sr: "+150 kcal i +38g ugljenih hidrata tokom lutealne faze (ne za IR klijentkinje)." },
+  "trainer.overrides.fatigue_sync.title": { en: "Fatigue safeguard", sr: "Fatigue sigurnosni prekidač" },
+  "trainer.overrides.fatigue_sync.description": { en: "Switch to maintenance when sleep is low and stress is high.", sr: "Prebaci na održavanje kada je san nizak i stres visok." },
+  "trainer.overrides.deload_sync.title": { en: "Deload nutrition sync", sr: "Deload — sync ishrane" },
+  "trainer.overrides.deload_sync.description": { en: "Switch nutrition to maintenance during training deload week.", sr: "Prebaci ishranu na održavanje tokom deload nedelje." },
+  "trainer.overrides.return_from_break_sync.title": { en: "Return from break", sr: "Povratak iz pauze" },
+  "trainer.overrides.return_from_break_sync.description": { en: "Soft deficit ramp-up during first sessions after a break.", sr: "Mekši deficit na prvim treninzima nakon pauze." },
+  "trainer.overrides.hydration_first.title": { en: "Hydration first", sr: "Hidracija ima prednost" },
+  "trainer.overrides.hydration_first.description": { en: "Block macro changes for 24h when recovery is low and hydration is poor.", sr: "Blokiraj promene makroa 24h kada je oporavak slab i hidracija loša." },
+  "trainer.overrides.metabolic_noise_block.title": { en: "Metabolic noise block", sr: "Metabolic noise blokada" },
+  "trainer.overrides.metabolic_noise_block.description": { en: "Block progression for 3 days when liquid calories exceed 10% of target.", sr: "Blokiraj napredovanje 3 dana kada tečne kalorije pređu 10% cilja." },
+  "trainer.overrides.illness_penalty.title": { en: "Illness penalty", sr: "Illness penal" },
+  "trainer.overrides.illness_penalty.description": { en: "Soft deficit (0.95) during active illness pause.", sr: "Mekši deficit (0.95) tokom aktivne bolesti." },
+  "trainer.overrides.cycle_menstrual_ignore.title": { en: "Menstrual weight ignore", sr: "Menstrualna težina — ignoriši" },
+  "trainer.overrides.cycle_menstrual_ignore.description": { en: "Skip weight data during menstrual days 1–5 (MA5 unreliable).", sr: "Preskoči težinu tokom menstrualnih dana 1–5 (MA5 nepouzdan)." },
+
   // Packages - Trainer
   "packages.title": { en: "Packages", sr: "Paketi" },
   "packages.addPackage": { en: "New package", sr: "Novi paket" },
