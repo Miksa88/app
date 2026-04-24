@@ -27,13 +27,19 @@ test.describe("Authentication", () => {
 
   test("invalid credentials show error toast", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await page.getByRole("button", { name: /continue with email|email/i }).click();
-    await page.getByPlaceholder(/email/i).fill(TEST_USER.email);
-    await page.getByPlaceholder(/password/i).fill("wrong-password-12345");
-    await page.getByRole("button", { name: /^sign in$/i }).click();
-    // Sonner toast appears
-    await expect(page.getByText(/pogrešan|invalid|wrong/i)).toBeVisible({ timeout: 5_000 });
+    // Open sign-in sheet
+    await page.getByRole("button", { name: /^sign in$/i }).first().click();
+    const sheet = page.locator("[class*='z-sheet'], [role='dialog']").first();
+    await sheet.getByRole("button", { name: /continue with email|nastavi sa email/i }).click();
+    // Fill wrong creds (scoped to sheet)
+    await sheet.locator('input[type="email"]').fill(TEST_USER.email);
+    await sheet.locator('input[type="password"]').fill("wrong-password-12345");
+    // Submit
+    await sheet.locator('button[type="submit"]').click();
+    // Sonner toast appears (matches Supabase or our fallback messages)
+    await expect(
+      page.getByText(/pogrešan|invalid|wrong|credentials/i),
+    ).toBeVisible({ timeout: 5_000 });
     // Still on login (no redirect)
     await expect(page).toHaveURL("/");
   });

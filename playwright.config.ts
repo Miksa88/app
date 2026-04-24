@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
-import * as path from "path";
 import * as dotenv from "dotenv";
 
 // Load .env.test (local-only, contains service_role for DB verify)
-dotenv.config({ path: path.resolve(__dirname, ".env.test") });
+// Playwright sets CWD to project root, so relative path works.
+dotenv.config({ path: ".env.test" });
 
 export default defineConfig({
   testDir: "./tests/e2e",
