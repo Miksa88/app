@@ -187,6 +187,12 @@ const translations: Record<string, Record<Language, string>> = {
   "workout.weight": { en: "Weight (kg)", sr: "Težina (kg)" },
   "workout.target": { en: "Target", sr: "Cilj" },
   "workout.lastTime": { en: "Last time", sr: "Prošli put" },
+  "workout.rir": { en: "RIR", sr: "RIR" },
+  "workout.reps": { en: "reps", sr: "pon" },
+  "workout.finish": { en: "Finish workout", sr: "Završi trening" },
+  "workout.finishing": { en: "Finishing…", sr: "Završavam…" },
+  "workout.noSession": { en: "No session scheduled.", sr: "Nema zakazane sesije." },
+  "workout.loading": { en: "Preparing your workout…", sr: "Priprema treninga…" },
 
   // Post Workout
   "postWorkout.complete": { en: "Workout Complete!", sr: "Trening završen!" },

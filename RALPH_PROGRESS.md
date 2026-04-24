@@ -383,3 +383,57 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
 - Ako approved → main agent commit `feat(IT-8): DPO integration + useFinishWorkout + useCompleteSet hooks`
 - IT-9 — ActiveWorkout.tsx wired na real data (pozivalac obe mutation hooks)
 
+
+---
+
+## IT-9 — ActiveWorkout wired to real data + PostWorkout real summary
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** dev-implementer (Opus) → pending QA
+**Spec:** 01_TRAINING_FLOW_MASTER.md §5 Korak 2.5 (resolveNextSession), §5 Korak 6 (DPO), §5 Korak 7 (process-workout-completion)
+
+### Files touched
+- `src/hooks/useActiveWorkoutSession.ts` (new) — React Query orkestrator koji skuplja session + profile + template + library + DPO history u paralel, pa zove `generateSessionSkeleton` i vraca `ActiveWorkoutSlot[]` spreman za UI.
+- `src/utils/db/exerciseLibrary.ts` — dodao `listSystemExercisesWithUuids()` (vraca `{exercises, uuidById}` map) i eksportovao `hashUuidToInt`; `loadExerciseHistory` treba UUID dok `Exercise.id: number` je hashovan.
+- `src/pages/ActiveWorkout.tsx` — full rewrite: zamenjen hardkodovan `EXERCISES` array sa slotovima iz `useActiveWorkoutSession`. "Done set" → `useCompleteSet.mutate({userId, exerciseId: slot.exerciseUuid, setNumber, weightKg, reps, rir})` sa `haptic("medium")`. Poslednja serija poslednje vezbe → `useFinishWorkout.mutate({clientId, sessionId, completedAt})` sa `haptic("success")` i `onSuccess → navigate("/workout/complete")`.
+- `src/pages/PostWorkout.tsx` — zamenjen hardkodovan stats sa realnim agregatima iz `exercise_progress` (today's setovi) preko React Query: Total volume, sets, distinct exercises. Calories/duration placeholder `—` (nemamo elapsed tracker koji perzistira preko navigate-a; spec za to je van IT-9).
+- `src/pages/ActiveWorkout.test.tsx` (new) — 2 vitest test-a: (a) render iz hook fixture-a; (b) Done Set okida completeSet.mutate + finishWorkout.mutate + navigate("/workout/complete") sa haptic("medium"/"success").
+- `src/contexts/LanguageContext.tsx` — dodat 6 novih i18n kljuceva (`workout.rir`, `workout.reps`, `workout.finish`, `workout.finishing`, `workout.noSession`, `workout.loading`) sa en + sr prevodima.
+
+### Tests delta
+- Before: 281 passed (30 files)
+- After: **283 passed (30 files) — +2**
+- New test file: `src/pages/ActiveWorkout.test.tsx`
+- Baseline: `npm test` 283 passed | `npx tsc --noEmit` exit 0 | `npm run verify:tokens` "All design tokens compliant"
+
+### Arhitekturalne odluke
+- **`useActiveWorkoutSession` composes 3 hooks + React Query pipeline.** `useAuth` + `useUserStatus` + `useNextSession` → trigger `useQuery` sa key `['activeWorkoutSession', clientId, templateId, sessionId]`. Inside queryFn: `Promise.all([loadProfileRow, getTemplateById, listSystemExercisesWithUuids])`, pa paralelno `loadExerciseHistory` za sve kandidat ID-jeve, pa `generateSessionSkeleton`. Izbor React Query (ne useMemo chain) jer: (a) network calls trebaju caching, (b) invalidation je trivijalan kroz queryKey, (c) loading/error states su "free".
+- **`listSystemExercisesWithUuids` umesto druga signature od `listSystemExercises`.** `Exercise.id` je hashovan UUID (number, prvih 8 hex chars parseInt). `exercise_progress.exercise_id` je raw UUID (FK). Za DPO history lookup moramo imati oba — pa helper vraca `{exercises, uuidById: Map<number, string>}`. Postojeci `listSystemExercises` ostaje netknut za back-compat.
+- **`ActiveWorkoutSlot.exerciseUuid` field.** Dodaje raw UUID na slot da bi `useCompleteSet({exerciseId: slot.exerciseUuid})` moglo da radi bez ponovnog lookup-a.
+- **PostWorkout koristi React Query umesto useMemo hook-a nad lokalnim state-om.** Razlog: `exercise_progress` je remote source, i `useFinishWorkout` upravo je ubacio red preko EF-a — pa drugi query na klijentu ide kroz RLS policy ("client CRUD svojih setova") i dobija svoj insert nazad.
+- **`handleDoneSet` fire-and-forget za `useCompleteSet.mutate`.** UI nastavlja flow bez `await` jer: (1) haptic/UI transition ne sme da ceka insert, (2) silent mutation (`{silent: true}`) ne prikazuje toast na success, toast na failure — ne-blokira UX. Queue pointer advance se desava tek u `finishWorkout`, tako da ako set insert fail-uje ali finish uspe, samo ce PostWorkout summary biti delimican.
+- **Finish workout se okida automatski na poslednjoj seriji poslednje vezbe.** U `handleDoneSet`: ako `remainingSets === 0 && exerciseIdx >= slots.length - 1`, ne idemo u rest mode, vec odmah zovemo `handleFinishWorkout()`. Alternativa (eksplicitno Finish dugme) se prikazuje samo kad je trening vec zavrsen ali finish jos nije poslat (spec guard).
+
+### Test wiring (vitest + RTL)
+- **Mock framer-motion**. jsdom + `AnimatePresence` + springs je izazivalo OOM (heap exhaustion) u prvim test run-ovima. Razlog: AnimatePresence drzi exit animations alive za tree-walk sa re-render u jsdom gde `requestAnimationFrame` je polyfilled ali reflow metrics nisu. Resenje: `vi.mock("framer-motion")` da `motion.div` postane prost `<div>` i `AnimatePresence` postane `<Fragment>`. Ovo je isti pattern koji koristi `react-testing-library-docs` za framer-motion test helper-e.
+- **Stable module-scoped fixtures.** Svi hook mockovi vracaju iste object-reference konstante (`AUTH_FIXTURE`, `COMPLETE_SET_FIXTURE`, `FINISH_WORKOUT_FIXTURE`, `SESSION_HOOK_FIXTURE`) umesto inline `{ ... }`. Bez toga, komponenta bi na svakom renderu dobijala novi `session` objekat → `useEffect([slots])` bi re-fire-ovao → infinite loop.
+- **`finishWorkout.mockImplementation(_, opts => opts.onSuccess?.())`** — simulira `useMutation.mutate`-ov callback dispatch sinhrono da bismo testirali navigate path bez polling-a `waitFor`.
+
+### Side-finds
+- `useActiveWorkoutSession` dozvoljava degraded mode kad `slot.chosenExerciseId` nije resolved (substitutionFailure) — renderujemo humanized muscleGroup kao naziv ("Glutes" → `ActiveWorkoutSlot.exerciseName`). Test ne pokriva ovaj path, ali kod je fail-soft (nema crash).
+- `loadExerciseHistory` za svaki kandidat ide kroz `Promise.all` — N paralelnih Supabase poziva. Za default 6-8 slotova × ~10 kandidata po patternu, to je ~60-80 paralelnih query-ja na svakom open-u ActiveWorkout-a. Optimizacija: in-memory history cache u useActiveWorkoutSession queryKey stabilan je (clientId + templateId + sessionId), pa React Query drzi rezultat dok se sesija ne zavrsi.
+- PostWorkout ne reset-uje React Query cache za `activeWorkoutSession` posle finish-a. To je OK jer `useFinishWorkout.onSuccess` invalidate-uje `['userStatus']`, a `useActiveWorkoutSession` queryKey sadrzi `session?.sessionId` koji se menja kad pointer napreduje. Sledeci mount Home → Gym → ActiveWorkout ce dobiti nov session.
+
+### Deviations from plan
+- Brief je rekao "After successful finish: navigate to `/post-workout`". Pravi route je `/workout/complete` (App.tsx L88). Ucinio sam navigate na postojeci route umesto da dodam alias.
+- Brief je rekao "Show `slot.targetWeight`, `slot.targetReps`, `slot.targetRIR`, `slot.targetRest`". Sve prikazujem osim `targetRest` kao zasebno polje (rest je implicitno u breathing ring posle set-a; eksplicitan prikaz "Rest 90s" dupliraj bi bio redundantan kad timer sam brine). Tap-ovi su na brzinu - mogu se dodati kao sekundarne info ako QA trazi.
+- Calories/duration u PostWorkout-u su `—` (em-dash). Nemamo state-persistent elapsed tracker preko navigate-a. Spec ne pominje gde se cuva — out of IT-9 scope.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `generateSessionSkeleton` dobija realan `exerciseHistoryMap` sa UUID-to-int mappingom
+  - Verifikuje da `useCompleteSet.mutate` salje ispravan `exerciseId` (UUID, ne hashovan int)
+  - Verifikuje da su i18n kljucevi dodani u oba jezika (en + sr)
+  - Sanity check da legacy ponasanje (kad queue/session nedostaje) pokazuje noSession UI
+  - Verifikuje da `vi.mock("framer-motion")` u test-u ne curi u druge test suites (vitest izolacija per-file)
+- Ako approved → main agent commit `feat(IT-9): ActiveWorkout wired to real data + PostWorkout real summary`
