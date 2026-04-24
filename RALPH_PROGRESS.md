@@ -1089,3 +1089,66 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
   dokumentovano u komentaru funkcije. Spec Sekcija 6.4 ne nalaže konkretnu
   implementaciju helper-a, samo ponašanje (P+F mini, carbs=0, 3h gap,
   slot 2 i 4), koje je ispoštovano.
+
+---
+
+## IT-20 — i18n keys za sve sync banner-e + UI banner copy
+
+**Timestamp:** 2026-04-24 12:33 CEST
+**Agent:** dev-implementer → pending QA
+**Spec:** 03_INTEGRATION_LAYER.md Sekcija 6.6 (Notifikacije i banner sistem)
+
+### Files touched
+- `src/hooks/useSyncEvents.ts` (modified — refactor: `title/description` →
+  `titleKey/descKey`, svi hardcoded srpski stringovi uklonjeni)
+- `src/components/queue/SyncEventBanner.tsx` (modified — `BannerCard`
+  prima `t` iz parent-a, renderuje `t(banner.titleKey)` / `t(banner.descKey)`)
+- `src/contexts/LanguageContext.tsx` (modified — +16 novih keys, 8 banner
+  tipova × [title, desc] × 2 jezika = 32 prevoda)
+- `RALPH_PROGRESS.md` (append)
+
+### Tests delta
+- Pre: 337 passed
+- Posle: 337 passed (bez izmena — i18n refactor je pure key rename +
+  copy data; nijedan postojeci test nije zavisio od `banner.title` /
+  `banner.description` shape-a)
+
+### Acceptance
+- [x] useSyncEvents.ts — 0 hardcoded srpski/engleski stringova (emoji uklonjeni
+      iz copy-ja jer su bili deo hardcoded title-a; title copy ostaje bez
+      emoji-ja, severity boja vec daje vizuelni cue)
+- [x] SyncEventBanner.tsx — renderuje `t(banner.titleKey)` i `t(banner.descKey)`,
+      aria-label i dalje kroz `t("a11y.hideBanner24h")`
+- [x] LanguageContext.tsx — 16 keys dodato:
+      `banner.{luteal,deload,returnFromBreak,illness,hydrationFirst,
+      metabolicNoise,menstrualWeight,fatigue}.{title,desc}` × {en, sr}
+- [x] Zero-guilt pravilo: nijedan novi copy ne sadrzi "propušteno", "kasniš",
+      "nisi uradila", "zakasnila", "moraš" (grep confirmed)
+- [x] Copy tone: warm + factual + neutralno (luteal "telo trazi jos malo
+      energije", deload "manje kilaže više fokusa", fatigue "san i stres kažu
+      odmor — maintenance ne deficit")
+
+### Baseline
+- [x] `npm test` — 337 passed (nepromenjeno)
+- [x] `npx tsc --noEmit` — exit 0
+- [x] `npm run verify:tokens` — "All design tokens compliant"
+
+### Decisions / Notes
+- Hook tipski rebaseline: `SyncBanner.title: string` → `SyncBanner.titleKey: string`,
+  `SyncBanner.description: string` → `SyncBanner.descKey: string`. Cist
+  kontrakt — hook se bavi samo derivacijom sync state-a, `t()` resolve
+  se desava u render sloju (SyncEventBanner). Ovo drzi hook React-context-free
+  i testable bez LanguageProvider-a.
+- Emoji prefix (🌙 🩸 🔄 ↩️ 🤒 💧 ⚠️ 😴) iz starog hardcoded title-a je
+  uklonjen. Stara implementacija je stavljala emoji u hardcoded string koji
+  bi inace morao da se duplira u oba jezika. Severity tint (info/warning)
+  vec daje vizuelnu kategoriju; ako UI treba emoji ikonu, QA moze predloziti
+  `banner.<type>.icon` poseban key ili `lucide-react` ikonu mapiranu po tipu
+  (out of scope za IT-20).
+- Za sada nema dedicated snapshot test-a za `SyncEventBanner` (component
+  render-uje iz hook + useLanguage, zavisi od RTL wiring-a koji trenutno
+  nije podesena u vitest config-u). Handoff ima +0 testova — pure copy
+  iteracija, spec ne zahteva test dopunu.
+
+### Deviations from plan
+- Nijedna. Scope je tacno 3 fajla kao u planu (+progress append).

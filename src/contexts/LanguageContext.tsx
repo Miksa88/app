@@ -1701,6 +1701,76 @@ const translations: Record<string, Record<Language, string>> = {
     sr: "Kratak nedeljni pregled drži plan usklađen sa telom.",
   },
   "weeklyCheckIn.banner.cta": { en: "Start check-in", sr: "Započni check-in" },
+
+  // ==========================================================================
+  // Sync event banners (useSyncEvents → SyncEventBanner)
+  // Spec: 03_INTEGRATION_LAYER.md Sekcija 6.6
+  // Zero-guilt ELI5 copy — nikad "propušteno", "kasniš", "nisi uradila".
+  // ==========================================================================
+  "banner.luteal.title": {
+    en: "Luteal phase — +150 kcal",
+    sr: "Lutealna faza — +150 kcal",
+  },
+  "banner.luteal.desc": {
+    en: "Your body needs a bit more energy this week. Target increased.",
+    sr: "Tvoje telo traži još malo energije ove nedelje. Target je povećan.",
+  },
+  "banner.deload.title": {
+    en: "Recovery week",
+    sr: "Nedelja oporavka",
+  },
+  "banner.deload.desc": {
+    en: "Less weight, more focus — your nervous system recovers.",
+    sr: "Manje kilaže, više fokusa — tvoj nervni sistem se regeneriše.",
+  },
+  "banner.returnFromBreak.title": {
+    en: "Back to training",
+    sr: "Povratak u trening",
+  },
+  "banner.returnFromBreak.desc": {
+    en: "The first two sessions are lighter so your body can ease back in.",
+    sr: "Prve dve sesije su lakše da bi telo moglo da se privikne.",
+  },
+  "banner.illness.title": {
+    en: "Recovery in progress",
+    sr: "Oporavak u toku",
+  },
+  "banner.illness.desc": {
+    en: "Lighter calories and intensity while your immune system bounces back.",
+    sr: "Laganije kalorije i manji intenzitet dok ti je imunitet na snazi.",
+  },
+  "banner.hydrationFirst.title": {
+    en: "Water first",
+    sr: "Prvo voda",
+  },
+  "banner.hydrationFirst.desc": {
+    en: "Before we change calories, drink some water — aim for 70%+ of target.",
+    sr: "Pre nego što promenimo kalorije, popij vode — 70%+ target-a.",
+  },
+  "banner.metabolicNoise.title": {
+    en: "Let's wait 3 days",
+    sr: "Sačekajmo 3 dana",
+  },
+  "banner.metabolicNoise.desc": {
+    en: "Lots of liquid calories showing up — plan stays the same until the signal settles.",
+    sr: "Vidimo puno tečnih kalorija — plan ostaje isti dok se signal ne stabilizuje.",
+  },
+  "banner.menstrualWeight.title": {
+    en: "Scale can wait",
+    sr: "Vaga čeka",
+  },
+  "banner.menstrualWeight.desc": {
+    en: "Cycle week 1 shows water, not fat — we're skipping adaptation for now.",
+    sr: "Prva nedelja ciklusa prikazuje vodu, ne mast — preskačemo adaptaciju.",
+  },
+  "banner.fatigue.title": {
+    en: "Recovery over progress",
+    sr: "Oporavak iznad progresa",
+  },
+  "banner.fatigue.desc": {
+    en: "Sleep and stress say: rest. This is maintenance, not a deficit.",
+    sr: "San i stres kažu: odmor. Ovo je maintenance, ne deficit.",
+  },
 };
 
 const LanguageContext = createContext<LanguageContextType>({
