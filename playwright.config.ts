@@ -10,7 +10,7 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false, // sequential — write to same DB
-  retries: 0,
+  retries: 1, // Supabase cold-start + state leakage tolerance
   workers: 1,
   reporter: [
     ["list"],
