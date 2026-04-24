@@ -497,3 +497,73 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
   - Sanity: `useSwapNextSessions` options.t default ne rusi test (fallback translator radi)
 - Ako approved → main agent commit `feat(IT-10): Swap mutation hook + Edge Function + Gym wire-up`
 
+---
+
+## IT-11 — process-meal-log Edge Function + metabolicNoise pure helper
+
+**Timestamp:** 2026-04-24 06:15 CEST
+**Agent:** Dev Implementer (Opus 4.7) → pending QA
+**Spec:** 02_NUTRITION_FLOW_MASTER.md §5.5 (Sync Rule 6 — Metabolic Noise), §13 (Daily logging, skipCount7d); 03_INTEGRATION_LAYER.md §3.1 (MealLog flow), §3.2 Rule 6
+
+### Files touched
+- `src/utils/nutrition/metabolicNoise.ts` (new) — pure `isMetabolicNoise(liquidKcal, calorieTarget) → boolean` sa `>10%` strict threshold + guards za `calorieTarget <= 0` i `liquidKcal <= 0`
+- `src/utils/nutrition/metabolicNoise.test.ts` (new, 3 cases) — 10% → false, 11% → true, target=0 → false
+- `supabase/functions/process-meal-log/index.ts` (new) — Deno Edge Function
+- `supabase/functions/process-meal-log/deno.json` (new) — standard import map (identicno ostalim EF-ovima)
+- `RALPH_PROGRESS.md` (appended)
+
+### Test delta
+- 286 → 289 (+3). Svi `metabolicNoise.test.ts` case-ovi prolaze.
+
+### Baseline gate
+- [x] `npm test` → 289 passed, 0 failures
+- [x] `npx tsc --noEmit` → exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+- [x] `graphify update .` → 2588 nodes (+5), 6824 edges
+
+### meal_logs column mapping (iz IT-1 migracije 20260419180100_extend_profiles_and_create_meal_logs.sql)
+- `user_id` (UUID, FK → profiles.id)
+- `meal_id` (TEXT, payload.mealId)
+- `meal_slot_index` (INTEGER 0–4, payload.slotIndex)
+- `status` (ENUM meal_log_status: logged|skipped|replaced, payload.status)
+- `logged_at` (TIMESTAMPTZ, server now())
+- `calories_actual` / `protein_actual` / `carbs_actual` / `fat_actual` (NUMERIC, payload.calories/protein/carbs/fat)
+- `was_liquid_calories` (BOOLEAN, payload.wasLiquidCalories default false)
+- `replacement_meal_id` (TEXT nullable, payload.replacementMealId)
+- NOTE: Spec task brief je pomenuo "calories" vs "calories_actual" mismatch — potvrdjeno iz migracije da je column ime `calories_actual` (i pandan za ostale makroe).
+
+### UserStatus field paths used
+- `nutrition.currentCalorieTarget` (number) — autoritativno ime, potvrdjeno iz `src/types/userStatus.ts` L109. Polje `dailyCalorieTarget` ne postoji.
+- `nutrition.isMetabolicNoiseTriggered` (boolean) — `src/types/userStatus.ts` L119.
+- `redFlags.skipCount7d` (number) — `src/types/userStatus.ts` L141. Top-level `redFlags` sekcija, NE `nutrition.redFlags` (task brief je oprezno pomenuo mogucnost nested pod nutrition; zapravo je flat).
+
+### Arhitekturalne odluke
+- **EF atomic write** (insert meal_logs + upsert user_status u istom handleru). Alternativa je bila split na "compute-only" + hook-side save (kao IT-4 daily check-in), ali ovde je state transition (skipCount7d += 1, isMetabolicNoiseTriggered = true) pa ne smemo da dozvolimo mini-race. Paralelno sa IT-7/IT-10 pattern-om.
+- **EF NE poziva `runSyncRules`** (god node, no-touch zone). IT-12 mutation hook ce klijent-side pozvati `runSyncRules(status)` posle EF response-a — tada Rule 6 ulazi i postavlja `_blockProgressionUntil = +3 dana`. EF samo postavlja `isMetabolicNoiseTriggered = true`, Rule 6 chain dalje.
+- **`isMetabolicNoiseTriggered` never-reset-here**: EF samo OR-uje novi rezultat sa prethodnim (`metabolicNoiseTriggered || status.nutrition.isMetabolicNoiseTriggered`). Razlog: server ne zna kada je prozor od 3 dana prosao — samo Rule 6 klijent-side (koji ima `_blockProgressionUntil` date gate) moze da ga resetuje na false. Jedan pravac promene na EF-u.
+- **Pure helper duplicated**: `isMetabolicNoise` zivi i u `src/utils/nutrition/metabolicNoise.ts` (source of truth, pokriveno Vitest-om) i inline u EF-u. Isti pattern kao MA5 u IT-4 — ako se threshold promeni, dva mesta treba sync-ovati. Alternativa je `supabase/functions/_shared/metabolicNoise.ts` — inline izabran jer je helper 3-linijska funkcija.
+- **Liquid aggregate client-side SUM** (fetch redovi + `reduce`): Supabase `.select()` nema direktan SUM aggregate. U 24h prozoru retko ima >20 tečnih unosa, pa je overhead zanemarljiv. Ako bude scale issue, refaktor u `rpc("sum_liquid_kcal_24h", { user_id })` PL/pgSQL funkciju.
+- **skipCount7d je "soft" brojač**: EF inkrementuje +1 po skip event-u bez 7d gate guard-a. Pravi 7-day count (koji bi iz meal_logs SELECT-om rekonstruisao) je posao weekly check-in (IT-17) ili dedicated scan; ovaj flag je hot-path UI signal, ne audit truth.
+- **Validation mirrors DB CHECK constraints**: skipped→sve makro = 0, replaced→replacement_meal_id obavezan, non-replaced→replacement_meal_id mora biti null. Catch 400 u EF-u pre nego što DB odbije (bolji error poruka).
+- **Threshold strict `>` 10%**: tacno 10.0% NE triggeruje (`isMetabolicNoise(200, 2000) === false`). Razlog: floating-point stabilnost + benefit-of-doubt na granici. Dokumentovano u pure helper komentaru i pokriveno test case-om.
+
+### Side-finds
+- DB migracija ima CHECK constraint na meal_logs koji kaze "skipped → macros = 0". EF validation dodaje isti guard na app-side da dobijemo 400 umesto 500 sa kriptiranim PostgREST error-om.
+- `redFlags` nije pod `nutrition.redFlags` — top-level UserStatus polje. Task brief je oprezno pomenuo oba oblika; potvrdjeno da je flat (L158 `src/types/userStatus.ts`).
+- Pure helper `isMetabolicNoise` dodatno guarda `liquidKcal <= 0` (dvostruka zastita — meal_logs ima CHECK >= 0, ali edge case gde EF racuna negativan saber je nemoguc). Guard cisti ali ne menja happy path.
+
+### Deviations from plan
+- Task brief je rekao `{ ok: true, status, liquidTotal, isMetabolicNoiseTriggered }`. Implementirao 1:1 — nijedna devijacija.
+- Brief je spomenuo "IT-12 hook calls runSyncRules client-side" — nije IT-11 scope. Ovo je napomena za QA i sledeci iteration.
+- Brief je rekao 3 test cases za pure helper. Implementirao tacno 3 kako je zatraženo (10%, 11%, target=0).
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da EF validator hvata sve CHECK violations pre insert-a (skipped macros, replaced/non-replaced replacement_meal_id)
+  - Verifikuje da `isMetabolicNoiseTriggered` never downgrade na false u EF-u (samo `||` OR)
+  - Verifikuje da `skipCount7d` inkrementuje samo za `status === 'skipped'`
+  - Verifikuje da liquid aggregate koristi `logged_at > now() - 24h` (strict greater than, ne >=)
+  - Verifikuje UserStatus field paths (nutrition.currentCalorieTarget, redFlags.skipCount7d) — svi potvrdjeni sa src/types/userStatus.ts
+- Ako approved → main agent deploy kroz `mcp__supabase__deploy_edge_function` i git commit `feat(IT-11): process-meal-log EF + metabolicNoise pure helper`
+- IT-12 — mutation hooks `useLogMeal` + `useSkipMeal` + `useReplaceMeal` + `useLogWaterGlass` koji orchestriraju EF + klijent-side `runSyncRules` + `save-user-status`
+
