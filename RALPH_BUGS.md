@@ -916,3 +916,127 @@ Napomena: port koristi `string | Date` unije za datumske polje (L36–51) umesto
 ### Round trips on this iteration: 1/3
 
 **Verdict (summary):** IT-7 approved.
+
+---
+
+## IT-15 — 2026-04-24 11:34 (Europe/Belgrade)
+
+**Scope:** Mesocycle lifecycle pure module + `mesocycle-tick` Edge Function (Faza D, prva iteracija).
+**Spec refs:** 01_TRAINING_FLOW_MASTER.md §6.1 (Makrociklus default — 4+1 deload), §6.2 (Deload), 03_INTEGRATION_LAYER.md §3.2 Rule 3 (deload sync).
+**Files touched:**
+- `src/utils/training/mesocycleLifecycle.ts` (new, 136 lines)
+- `src/utils/training/mesocycleLifecycle.test.ts` (new, 115 lines, 5 test cases)
+- `src/types/training.ts` (modified — added `isDeloadWeek?: boolean` on `QueuedSession`)
+- `supabase/functions/mesocycle-tick/index.ts` (new, 373 lines)
+- `supabase/functions/mesocycle-tick/deno.json` (new, import map)
+- `supabase/functions/_shared/mesocycleLifecycle.ts` (new, Deno port — verbatim)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 301 → **306 passing** (+5 in `mesocycleLifecycle.test.ts`), 38 test files — green
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a
+
+### Pure module review (`mesocycleLifecycle.ts`)
+
+- `shouldStartDeload(currentMicrocycleIndex, mesocycleWeeks=4, targetMode='deficit')`:
+  - Lean bulk short-circuit (L60–62): `targetMode === 'lean_bulk'` → `{ shouldStart: false, reason: 'lean_bulk_no_deload' }`. OK.
+  - Last microcycle (L65–67): `currentMicrocycleIndex === mesocycleWeeks - 1` → `{ shouldStart: true, reason: 'week_4_of_mesocycle' }`. OK.
+  - Default fall-through (L69): `{ shouldStart: false, reason: 'not_yet' }`. OK.
+- `handleMesocycleEnd(queue, profile, skeleton, weeks=4)`:
+  - Mid-cycle guard (L99–101): ako `sessionPointer < sessions.length` → vraća **isti queue reference** + `mesocycleJustEnded: false`. Test 1 verifikuje `.toBe(queue)` (reference equality). OK.
+  - Rollover path (L107–135): poziva postojeći `buildMesocycleQueue` (reused, ne modifikovan) sa `mesocycleIndex+1`, `startDate=new Date()`, weeks=4.
+  - Deload marker (L120–128): `sessionsPerWeek = sessions.length / weeks` = 16/4 = 4; `deloadStartIndex = 16-4 = 12`; poslednje 4 sesije dobijaju `isDeloadWeek: true` preko immutable `.map` + spread. Nema mutation postojećih sesija (novi array, novi objekti).
+- Nema mutation `queue` parametra (sve spread-ovi). OK.
+- Nema poziva ka `runSyncRules` / `applyDailyCheckIn` / direct UserStatus mutation. OK.
+
+### Test review (5 cases)
+
+- Test 1 (mid mezo): `pointer=0, length=16` → `.toBe(queue)` reference equality, `mesocycleJustEnded=false`. OK.
+- Test 2 (end mezo): forsira `sessionPointer=16` → new queue 16 sesija, `slice(12)` svi imaju `isDeloadWeek===true`, `slice(0,12)` svi nemaju; `mesocycleIndex+1`; `sessionPointer=0`. Assertions precizne. OK.
+- Test 3 (deload week start): `shouldStartDeload(3, 4, 'deficit')` → `true, 'week_4_of_mesocycle'`. OK.
+- Test 4 (deload week end / new mezo start): `shouldStartDeload(0, 4, 'deficit')` → `false, 'not_yet'`. OK.
+- Test 5 (lean bulk preserved): `shouldStartDeload(3, 4, 'lean_bulk')` → `false, 'lean_bulk_no_deload'`. OK.
+
+### Edge Function review (`mesocycle-tick/index.ts`)
+
+- **Auth** (L155–173): 
+  - `!supabaseUrl || !serviceRoleKey` → 500 "Server misconfigured (supabase env)". OK.
+  - `!cronSecret` → 500 "Server misconfigured (CRON_SECRET missing)" — **pravilno**, ne dozvoljava default-allow. OK.
+  - `providedSecret !== cronSecret` → 403 "Forbidden". OK.
+  - Custom `x-cron-secret` header pattern umesto user-JWT — konzistentno sa cron use-case-om.
+- **Method guard** (L147–153): OPTIONS → 204 (CORS preflight); non-POST → 405. OK.
+- **Payload validation** (L126–140): `clientIds` opciono, mora biti array stringova ako je prisutan. Prazan body OK. Malformed JSON → 400 "Invalid JSON". OK.
+- **Batched template fetch** (L216–245): 
+  - Prikuplja jedinstvene `activeTemplateId` kroz `new Set`, filtrira prazne stringove.
+  - Jedan `.in("id", templateIds)` query umesto per-client round-trip. Efikasno. OK.
+  - Greška na template fetch → 500 (fatal, ne može se rollover-ovati bez skeleton-a). OK.
+- **Per-client loop** (L247–362):
+  - Missing `training` section → push error, continue. OK.
+  - Rollover branch (L274–320): 
+    - `hasMesocycleEnded(queue)` guard.
+    - Missing template → push error, `continue` (skip deload branch takođe — safe: ne flipovati flag na stale microcycleIndex). OK.
+    - `handleMesocycleEnd` wrapped u try/catch — per-client error ne prekida ceo tick. OK.
+    - Upsert sets: `queue`, `sessionPointer`, `currentMesocycleIndex+1`, `currentMicrocycleIndex: 0`, `isInDeload: false`. Consistent sa novim mezo start (week 1, no deload). OK.
+  - Deload branch (L321–344, `else`): 
+    - Pokreće se SAMO ako queue nije iscrpljen — sprečava double-write na istoj iteraciji.
+    - `shouldStart && !isInDeload` → set flag, `deloadsStarted++`.
+    - `!shouldStart && isInDeload` → clear flag, `deloadsEnded++`.
+    - Rule 3 (deload sync) iz syncEngine-a će na sledećem `applyDailyCheckIn` pokupiti `isInDeload` → maintenance mode; ovde se **ne poziva** `runSyncRules` (pure separation). OK.
+  - Upsert (L347–362): `.update({ status_json, last_updated_at })` + `.eq("client_id", ...)`. Per-client error dodaje se u `errors[]`, ne prekida loop. OK.
+- **Summary response** (L365–372): `{ ok, processed, mesocyclesRolled, deloadsStarted, deloadsEnded, errors }`. Spec-compliant.
+
+### `_shared/mesocycleLifecycle.ts` (Deno port) — verbatim diff-check
+
+Uporedio sam src vs Deno port (`diff`):
+- Razlike isključivo u komentarima + inline-ovanim tipovima (Deno port nema `@/` alias).
+- `shouldStartDeload`: identična logika, identična grana (L60–69 src ↔ L207–215 Deno).
+- `handleMesocycleEnd`: identičan rollover algoritam, isti `sessionsPerWeek` izračun, isti `deloadStartIndex`, isti map + spread pattern (L92–136 src ↔ L233–269 Deno).
+- `buildMesocycleQueue` port: isti Rest-filter, isti `cycleLetter`, isti `scheduledDate` formula `(week-1)*7 + day.dayIndex - 1`, isti `status: sessions.length === 0 ? 'next' : 'pending'`, isti return shape. Verbatim. OK.
+- `derivePartition`, `buildSessionLabel`, `displayPartition` — identične switch grane. OK.
+- Dodatni export `hasMesocycleEnded` (Deno only): convenience helper `queue.sessionPointer >= queue.sessions.length`. Koristi ga Edge Function. Ne-src asymmetry ali logičan; ne blokira.
+
+### Types change review (`src/types/training.ts`)
+
+- L289–291: `isDeloadWeek?: boolean` dodat na `QueuedSession`, uz komentar koji referencira §6.1. **Opcioni** — postojeći 301 test ne fail-uje (301 → 306 only +5 new). Backward-compat potvrđen.
+
+### No-touch zone verification
+
+- `src/utils/sync/syncEngine.ts` — ne diran (nije u FILES listi, ne appeared u grep rezultatima).
+- `src/utils/training/queueBuilder.ts` — ne diran (samo `import { buildMesocycleQueue }`, reused).
+- `src/utils/training/sessionResolver.ts` — ne diran.
+- `runSyncRules` nije pozvan iz novog koda. Rule 3 ostaje na sledećem `applyDailyCheckIn`. Čisto razdvajanje lifecycle od sync. OK.
+
+### Biology invariants (spot-check)
+
+- Deload tagovi samo na sesije poslednje nedelje mezociklusa — **potvrđeno** test 2 (slice(12) all true, slice(0,12) all false).
+- Deload tagovi ne pogađaju Rest dane — garantovano jer `buildMesocycleQueue` filtrira Rest dane (L42 src, L139 Deno port) pa u queue-u NEMA Rest QueuedSession entry-ja. Siguran invariant.
+- Lean bulk režim preskače deload — test 5 verifikuje.
+- Recovery multiplier clamp [0.7, 1.1], calorie floor 1400, liquid calories, cycle sync — **van scope-a IT-15**, ne dirano, OK.
+- Queue pointer/partitionLastSeen — IT-15 ne dira runtime advance logiku, samo rollover pri kraju. OK.
+
+### Findings
+
+**Blocker:** nijedan.
+
+**High:** nijedan.
+
+**Low (nice-to-have, ne blokira approval):**
+1. [`src/utils/training/mesocycleLifecycle.ts:107`] `handleMesocycleEnd` koristi `new Date()` kao `startDate` za novi queue — pure funkcija implicitno zavisi od sistemskog sata. Trenutni testovi asertiraju samo strukturne invariante (length, deload flags, mesocycleIndex), pa ne hvata ovo. Ako u budućnosti treba deterministički kalendarski test, razmotri injection `now: Date` kao opcioni parametar. Dev je explicitno naveo "kalendarska alignment van scope-a IT-15"; OK za sada.
+2. [`supabase/config.toml`] Fajl sadrži samo `project_id`, nema `[functions.mesocycle-tick]` sekcije sa `verify_jwt = false`. Pošto Edge Function koristi custom `x-cron-secret` auth, **deploy-vreme** treba eksplicitno postaviti `verify_jwt = false` (ili će Supabase odbaciti zahteve bez user-JWT-a pre nego što custom header provera dođe do izvršenja). Dev handoff flag-uje ovo kao napomenu za deploy; treba uvrstiti u IT-22 smoke checklist. Nije code blocker.
+3. [`supabase/functions/_shared/mesocycleLifecycle.ts:276–278`] `hasMesocycleEnded` helper postoji samo u Deno portu, nema counterpart u `src/utils/training/mesocycleLifecycle.ts`. Za konzistentnost, razmotri dodavanje u src verziju (jedna linija, pure). Nice-to-have; trenutno EF je jedini caller i ima ga.
+4. [`supabase/functions/mesocycle-tick/index.ts:62`] `MESOCYCLE_WEEKS = 4` hardcode-ovan u EF-u. Kad dođe customizable mezo duration po klijentkinji (buduće iteracije), ovo će morati da se prebaci u `status.training.mesocycleWeeks` ili slično. Trenutno OK jer svi klijenti imaju 4-nedeljne mezo cikluse.
+
+### 8. Commit readiness
+
+- Commit poruka predlaže `feat(IT-15): mesocycle lifecycle pure + mesocycle-tick Edge Function` ili slično. OK.
+- Co-Authored-By trailer obavezno.
+- Bez `--no-verify` / `--no-gpg-sign`.
+- Staging scope: 6 novih/modifikovanih fajlova iz handoff-a + `RALPH_PROGRESS.md`. Nijedan secret / .env. Safe za `git add` po imenu.
+- **Deploy pending**: `mesocycle-tick` Edge Function treba deploy-ovati na main preko MCP; `CRON_SECRET` env var mora biti postavljen u Supabase dashboard-u pre prvog invocation-a; `verify_jwt = false` override ili u config.toml ili u MCP deploy komandi. Dev flag-uje sve ovo u handoff-u; pg_cron wire-up je plan za IT-22 smoke.
+
+### Round trips on this iteration: 1/3
+
+**Verdict (summary):** IT-15 approved.

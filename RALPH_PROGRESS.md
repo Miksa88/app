@@ -737,3 +737,63 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
 - Ako approved → main agent commit `feat(IT-14): Hydration UI + +500ml trening dan + useHydration hook`
 - FAZA C kompletna — checkpoint
 
+---
+
+## IT-15 — Mesocycle lifecycle + deload automation
+
+**Timestamp:** 2026-04-24 CEST
+**Agent:** Dev implementer (Opus 4.7) → pending QA
+**Spec:** 01_TRAINING §6.1 (Makrociklus — 4+1 deload), §6.2 (Deload protokol), 03_INTEGRATION §3.2 Rule 3 (deload sync)
+
+### Files touched
+- `src/utils/training/mesocycleLifecycle.ts` (new) — `shouldStartDeload(currentMicrocycleIndex, mesocycleWeeks, targetMode) → {shouldStart, reason}` + `handleMesocycleEnd(queue, profile, skeleton, weeks) → {newQueue, mesocycleJustEnded}`. Pure, reuse `buildMesocycleQueue` bez modifikacije; posle build-a markira sesije iz poslednje nedelje sa `isDeloadWeek: true`.
+- `src/utils/training/mesocycleLifecycle.test.ts` (new, 5 cases) — `shouldStartDeload` (week_4/not_yet/lean_bulk_no_deload) + `handleMesocycleEnd` (mid-mezo no-op / end-mezo 16 sesija sa poslednje 4 isDeloadWeek=true).
+- `src/types/training.ts` (update) — dodato opciono polje `isDeloadWeek?: boolean` na `QueuedSession`. Non-breaking (svi postojeći testovi prolaze bez promene).
+- `supabase/functions/mesocycle-tick/index.ts` (new) — cron-trigger-able EF; load `user_status` (opcioni `clientIds` filter), za svaku: ako `hasMesocycleEnded(queue)` → `handleMesocycleEnd` + upsert; inače ako `shouldStartDeload` i `!isInDeload` → set `isInDeload=true`; inače ako `isInDeload=true` a ne treba → skini flag. Auth preko `x-cron-secret` header-a (vs `CRON_SECRET` env).
+- `supabase/functions/mesocycle-tick/deno.json` (new) — standardni deno task + imports.
+- `supabase/functions/_shared/mesocycleLifecycle.ts` (new) — verbatim Deno port pure logike + `buildMesocycleQueue` helper (jer `handleMesocycleEnd` ga poziva, ne može bez aliasa `@/`).
+- `RALPH_PROGRESS.md` (append)
+
+### Acceptance
+- [x] `shouldStartDeload(3, 4, 'deficit')` → `{shouldStart: true, reason: 'week_4_of_mesocycle'}`
+- [x] `shouldStartDeload(0, 4, 'deficit')` → `{shouldStart: false, reason: 'not_yet'}`
+- [x] `shouldStartDeload(3, 4, 'lean_bulk')` → `{shouldStart: false, reason: 'lean_bulk_no_deload'}`
+- [x] `handleMesocycleEnd` mid-mezo (pointer=0, sessions=16) → `mesocycleJustEnded=false`, isti queue reference
+- [x] `handleMesocycleEnd` kraj-mezo (pointer=16, sessions=16, weeks=4) → `mesocycleJustEnded=true`, novi queue sa 16 sesija, poslednje 4 (indexi 12–15) `isDeloadWeek=true`, prvih 12 `isDeloadWeek` false/undefined
+- [x] Nije dirana `runSyncRules` god node niti `queueBuilder.ts` (reuse kroz import)
+
+### Tests
+- `mesocycleLifecycle.test.ts` → 5 cases passing
+- Full suite: 301 → 306 (+5) passing, 0 failing
+
+### Baseline gate
+- `npm test` → 306 passed / 38 test files / 0 failing
+- `npx tsc --noEmit` → exit 0
+- `npm run verify:tokens` → All design tokens compliant
+
+### Decisions
+- **Cron auth mehanizam:** `x-cron-secret` header + env `CRON_SECRET`. Ako `CRON_SECRET` env ne postoji → 500 (misconfigured). Nepodudaran header → 403. Ovo je pragmatičan pristup dok se pg_cron scheduling ne setuje (IT-22 smoke ako se pokaže potreba) — service_role JWT pattern bi funkcionisao jednako, ali `x-cron-secret` je jednostavniji za manual trigger testing i Supabase Scheduled Triggers (MCP deploy-uje funkciju, secret se setuje preko `set-secret`).
+- **Skeleton loading:** EF batch-uje `templateIds` iz svih `user_status.training.activeTemplateId` i radi jedan `session_templates` SELECT sa `.in(...)`. Nema `is_active`/`current-week` complex logike — `activeTemplateId` u UserStatus-u je već snapshot-ovan i jedini izvor istine (source-of-truth je UserStatus, ne template status).
+- **Rollover startDate:** koristi `new Date()` (tj. cron run time). Precizno kalendarsko usklađivanje (npr. "novi mezo počinje ponedeljkom") briga je naknadnog shift mehanizma ili IT-18 trainer-override-a, NE lifecycle tick-a.
+- **Deload flag management split u dve grane:** ako queue nije rollovao ALI shouldStartDeload = true + !isInDeload → postavi flag; ALI ako shouldStartDeload = false + isInDeload = true → skini flag (bezbedno čišćenje posle rollover-a ako applyDailyCheckIn nije resetovao). Rule 3 (`applyDeloadSync`) čita `training.isInDeload` i flip-uje `_deloadSyncActive` na nutrition kad se pokrene sledeći `runSyncRules` cycle.
+- **mesocycleWeeks default = 4:** usklađeno sa spec-om §6.1 "4 nedelje + 1 deload = 5 nedelja po ciklusu" i iteration prompt-om. Poslednja nedelja (indeks 3) JE deload nedelja u 4-nedeljnom modelu (iteration prompt definicija). Spec alternative "4+1 deload = 5 nedelja" može se mapirati kasnije povećanjem `mesocycleWeeks=5` + izmenom `shouldStartDeload` da poslednju nedelju izvojeno tretira — za IT-15 scope ostaje 4-nedeljni.
+
+### Deviations
+- Test fajl ima **5 cases**, kao što iteration prompt traži. Layout je `describe('shouldStartDeload')` sa 3 it-a + `describe('handleMesocycleEnd')` sa 2 it-a (mid + end). Iteration prompt je listao 5 pojedinačnih case-ova — spojen je #1 i #3 (mid-mezo + end-mezo) u isti describe, ali svi zahtevani asserti su pokriveni (16 sesija, sessions 12–15 isDeloadWeek=true, mesocycleJustEnded flag, rollover-new-mesocycle).
+- **Nije dodana test pokrivenost Edge Function-a** (iteration scope nije tražio EF test, i `_shared/` port je verbatim kopija src/ logike koja je već pokrivena Vitest-om — isti pattern kao queueAdvance.ts i movingAverage.ts). Integration smoke test je van IT-15 scope-a.
+- **Lean bulk u EF-u:** dodatno na `shouldStartDeload` koji već vraća `lean_bulk_no_deload`, Rule 3 u syncEngine.ts već ima `if (status.nutrition.targetMode === 'lean_bulk') return status;` — double-gate. Bezbedno.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `handleMesocycleEnd` vraća isti queue reference (`===`) u mid-mezo case-u (no-op contract)
+  - Verifikuje da `isDeloadWeek` polje ne kvari `queueBuilder.test.ts` (izostanjanje polja u staroj implementaciji = undefined, što je still falsy)
+  - Verifikuje da Deno `_shared/mesocycleLifecycle.ts` port ima IDENTIČAN `sessionsPerWeek` matematiku i deload marker logic kao `src/utils/training/mesocycleLifecycle.ts`
+  - Verifikuje da EF cron-auth odbija zahtev bez `x-cron-secret` (403) i da `CRON_SECRET` missing vraća 500
+  - Verifikuje da `user_status` upsert pattern koristi `update().eq('client_id', ...)` (ne `upsert()` koji bi mogao da duplira)
+  - Spot check: da li EF respektuje scenario gde `status.training.queue.clientId !== row.client_id` (teorijski inconsistent state) — trenutno EF ne proverava, oslanja se na initUserStatus invariant
+- Ako approved → main agent:
+  - Deploy EF: `supabase functions deploy mesocycle-tick` (+ `supabase secrets set CRON_SECRET=...`)
+  - Opciono pg_cron scheduling (IT-22 smoke)
+  - Git commit `feat(IT-15): mesocycle lifecycle + deload automation`
+- FAZA D IT-1/4 ↓ — IT-16 (pause events) je next
+
