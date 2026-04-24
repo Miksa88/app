@@ -437,3 +437,63 @@ Progres po Ralph iteracijama. Svaka iteracija ima timestamp, file delta, test de
   - Sanity check da legacy ponasanje (kad queue/session nedostaje) pokazuje noSession UI
   - Verifikuje da `vi.mock("framer-motion")` u test-u ne curi u druge test suites (vitest izolacija per-file)
 - Ako approved → main agent commit `feat(IT-9): ActiveWorkout wired to real data + PostWorkout real summary`
+
+---
+
+## IT-10 — Swap mutation + UI
+
+**Timestamp:** 2026-04-24 06:05 CEST
+**Agent:** dev (Opus 4.7) → pending QA
+**Spec:** 01_TRAINING_FLOW_MASTER.md §5 Korak 2.5 (Swap request), RALPH_PLAN IT-10
+
+### Files touched
+- `supabase/functions/swap-next-sessions/index.ts` (new) — EF: JWT auth, canSwapNextTwoSessions validation, swapNextTwoSessions, upsert user_status (service_role)
+- `supabase/functions/swap-next-sessions/deno.json` (new) — standard import map
+- `supabase/functions/_shared/queueAdvance.ts` (extended) — verbatim Deno portovi `canSwapNextTwoSessions` + `swapNextTwoSessions` iz `src/utils/training/sessionResolver.ts`
+- `src/hooks/mutations/useSwapNextSessions.ts` (new) — `runSwapNextSessions(deps)` orchestrator + React Query `useSwapNextSessions(clientId)` hook sa toast + Undo action (30s duration)
+- `src/hooks/mutations/useSwapNextSessions.test.ts` (new) — 3 Vitest tests (happy, supabase error, EF ok:false body)
+- `src/contexts/LanguageContext.tsx` (edited) — dodao gym.swapButton, gym.swapSuccess, gym.swapNotAllowed, gym.swapUndo (en + sr)
+- `src/pages/Gym.tsx` (edited) — zamenio `requestSessionSwap` sa `useSwapNextSessions` hook; label je sada t('gym.swapButton'); disabled bind na isPending
+
+### Test delta
+- 283 → 286 (+3) — 3 nova testa za runSwapNextSessions
+- Vitest config pokriva novi fajl automatski (glob `**/*.test.ts`)
+
+### Acceptance
+- [x] Edge Function `swap-next-sessions`: JWT auth, service_role SELECT/upsert, canSwap guard → 400 sa reason ako nije allowed
+- [x] Hook `useSwapNextSessions(clientId)` prati isti pattern kao useFinishWorkout (runSwapNextSessions pure orchestrator + useMutation shell)
+- [x] Toast success sa Undo akcijom (30s duration) — drugi swap poziv (u istom mikrociklusu ce EF odbiti, user vidi error toast)
+- [x] Toast error sa porukom iz EF-a (ili fallback t('gym.swapNotAllowed'))
+- [x] Gym.tsx dugme vidi samo ako `canSwapNextTwoSessions(queue).allowed === true` (Full Body → hidden)
+- [x] Dugme disabled dok `swapMutation.isPending`
+- [x] Label t('gym.swapButton') kroz oba jezika
+- [x] `npm test` 286 passed, 0 failed
+- [x] `npx tsc --noEmit` exit 0
+- [x] `npm run verify:tokens` → "All design tokens compliant"
+- [x] `graphify update .` → 2583 nodes, 6820 edges
+
+### Important design decisions
+- **Deno port strategy** — dodao `canSwapNextTwoSessions` + `swapNextTwoSessions` u postojeci `_shared/queueAdvance.ts` (istog domena, verbatim ports iz `src/utils/training/sessionResolver.ts`). Alternativa bi bila nov fajl, ali za samo dve male funkcije na istoj queue strukturi drzanje na jednom mestu je cleaner.
+- **Undo mechanics** — pravi undo (audit-trail sa 30s window koji ignorira swapUsedThisMicrocycle flag) je out-of-scope za IT-10 (spec kaze "1 swap po mikrociklusu"). Za alpha, Undo dugme poziva istu mutaciju ponovo; EF ce odbiti sa "Vec si iskoristila swap" i user vidi error toast. Dokumentovano u EF-u i hook JSDoc-u.
+- **Hook signature** — `useSwapNextSessions(clientId, options)`. Opcije: `silent` (bez toast-a), `deps` (test override), `t` (i18n translator — hook inace ne importuje LanguageContext da bi ostao testable bez Provider-a).
+- **Button label** — bio hardcoded "Swap" u JSX-u. Zamenjen sa `t('gym.swapButton')` koji je "Zameni sledeća 2 treninga" / "Swap next 2 workouts". Aria-label i dalje koristi existing `a11y.swapNextSessions` (nije promenjen).
+
+### Side-finds
+- `src/services/workoutService.ts` export `requestSessionSwap` je sada dead code — Gym.tsx je bio jedini callsite, ali funkcija jos uvek zivi u fajlu. Namerno nisam brisao (YAGNI, out-of-scope cleanup; mozda IT-22 smoke test-cleanup iteracija).
+- Gym.tsx je imao pre-existing bug: koristi `<Button>` na liniji 59 (trial locked screen) bez import-a. Nije IT-10 scope — ostavio kao-je.
+- EF test coverage: nema Deno test-a za EF sam (isti pattern kao process-workout-completion — samo hook-ovi imaju vitest). E2E sanity ce verifikovati kroz manual smoke test.
+
+### Deviations from plan
+- Brief pomen "2 vitest tests" — implementirao 3 (happy + supabase error + EF ok:false body). Treci case pokriva da EF moze da vrati HTTP 200 sa `{ok:false, error}` body-em, sto supabase-js ne konvertuje u error object; hook mora eksplicitno da detektuje i throw-a.
+- Brief pomen "Also: deno.json" — kreiran sa istim import map-om kao ostale EF-ove.
+- Brief pomen `t('gym.swapButton')` kao button label — implementirao u MotionCard header strip-u gde je vec bilo `<ArrowRightLeft>` dugme (zamenjeno sa tekstualnim labelom umesto ikonice "Swap"). Ikonica ostaje, pored teksta.
+- Brief je rekao `canSwapNextTwoSessions` checkuje "swap count < 1 this microcycle" — kod u sessionResolver koristi bool `swapUsedThisMicrocycle`, implicitno isto ponasanje (max 1 swap po ciklusu). Koristim postojeci flag; nema promene u pure helper-u.
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da Edge Function handler sve 3 grane pokriva (allowed, not-allowed, JWT fail)
+  - Verifikuje da `newFirstSession` u response-u odgovara `queue.sessions[pointer]` posle swap-a (ne pre)
+  - Verifikuje da Gym.tsx dugme ne prikazuje se za Full Body queue
+  - Sanity: `useSwapNextSessions` options.t default ne rusi test (fallback translator radi)
+- Ako approved → main agent commit `feat(IT-10): Swap mutation hook + Edge Function + Gym wire-up`
+

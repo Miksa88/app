@@ -172,6 +172,10 @@ const translations: Record<string, Record<Language, string>> = {
   "gym.exercisesTitle": { en: "Exercises", sr: "Vežbe" },
   "gym.sets": { en: "sets", sr: "serija" },
   "gym.reps": { en: "reps", sr: "ponavljanja" },
+  "gym.swapButton": { en: "Swap next 2 workouts", sr: "Zameni sledeća 2 treninga" },
+  "gym.swapSuccess": { en: "Workouts swapped", sr: "Treninzi zamenjeni" },
+  "gym.swapNotAllowed": { en: "Swap not available", sr: "Zamena nije moguća" },
+  "gym.swapUndo": { en: "Undo", sr: "Poništi" },
 
   // Active Workout
   "workout.leaveTitle": { en: "Leave workout?", sr: "Napusti trening?" },

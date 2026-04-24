@@ -154,3 +154,68 @@ export function advancePointerAfterCompletion(
 
   return { queue: newQueue, microcycleCompleted };
 }
+
+// ----------------------------------------------------------------------------
+// canSwapNextTwoSessions — verbatim Deno port iz sessionResolver.ts
+// ----------------------------------------------------------------------------
+//
+// Pravila (Spec 01 §5 Korak 2.5):
+//   1. Swap nije vec iskoristen u ovom mikrociklusu
+//   2. Mora postojati sledeca sesija (pointer+1 < length)
+//   3. Trenutna i sledeca moraju biti razlicite particije
+//   4. Full Body splitovi nemaju swap
+
+export interface SwapEligibility {
+  allowed: boolean;
+  reason?: string;
+}
+
+export function canSwapNextTwoSessions(queue: MesocycleQueue): SwapEligibility {
+  if (queue.swapUsedThisMicrocycle) {
+    return { allowed: false, reason: 'Vec si iskoristila swap u ovom krugu sesija.' };
+  }
+  if (queue.sessionPointer + 1 >= queue.sessions.length) {
+    return { allowed: false, reason: 'Nema sledece sesije za swap.' };
+  }
+  const current = queue.sessions[queue.sessionPointer];
+  const next = queue.sessions[queue.sessionPointer + 1];
+
+  if (current.partition === next.partition) {
+    return { allowed: false, reason: 'Dve sesije iste particije ne mogu da se zamene.' };
+  }
+
+  if (current.partition === 'FullBody') {
+    return { allowed: false, reason: 'Swap nije dostupan za Full Body splitove.' };
+  }
+
+  return { allowed: true };
+}
+
+// ----------------------------------------------------------------------------
+// swapNextTwoSessions — verbatim Deno port iz sessionResolver.ts
+// ----------------------------------------------------------------------------
+//
+// Vraca novi queue sa zamenjenim sesijama na pozicijama pointer i pointer+1.
+// scheduledDate ostaje vezan za kalendarski slot, ne za sessionId. Bacan ako
+// swap nije dozvoljen.
+
+export function swapNextTwoSessions(queue: MesocycleQueue): MesocycleQueue {
+  const eligibility = canSwapNextTwoSessions(queue);
+  if (!eligibility.allowed) {
+    throw new Error(`swapNextTwoSessions: ${eligibility.reason}`);
+  }
+
+  const newSessions = [...queue.sessions];
+  const i = queue.sessionPointer;
+  const a = newSessions[i];
+  const b = newSessions[i + 1];
+
+  newSessions[i] = { ...b, scheduledDate: a.scheduledDate };
+  newSessions[i + 1] = { ...a, scheduledDate: b.scheduledDate };
+
+  return {
+    ...queue,
+    sessions: newSessions,
+    swapUsedThisMicrocycle: true,
+  };
+}
