@@ -12,6 +12,19 @@ import { TEST_USER } from "./helpers/auth";
 test.describe("Pause event", () => {
   test.beforeEach(async () => {
     await resetTestUserData(TEST_USER.id);
+    // Reset activePauseEvent u JSONB (resetTestUserData briše pause_events
+    // tabelu ali status_json.training.activePauseEvent ostaje iz prethodnog)
+    const { getUserStatus } = await import("./helpers/supabaseAdmin");
+    const status = (await getUserStatus(TEST_USER.id)) as {
+      training: { activePauseEvent: unknown };
+    } | null;
+    if (status) {
+      status.training.activePauseEvent = null;
+      await admin
+        .from("user_status")
+        .update({ status_json: status })
+        .eq("client_id", TEST_USER.id);
+    }
   });
 
   test("start-pause (illness) → pause_events insert + user_status.activePauseEvent patch", async () => {
