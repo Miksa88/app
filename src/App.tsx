@@ -8,6 +8,7 @@ import BottomNav from "@/components/BottomNav";
 import TrainerBottomNav from "@/components/TrainerBottomNav";
 import { SkipToContent, ScrollManager } from "@/components/SkipToContent";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { HealthProvider } from "@/contexts/HealthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
@@ -69,6 +70,17 @@ const RouteGuard = ({ children }: { children: ReactNode }) => (
 );
 
 /**
+ * AuthGuard — kombinuje ErrorBoundary + ProtectedRoute.
+ * Koristi se za sve rute koje zahtevaju ulogovanog korisnika
+ * (sve osim Login i Onboarding).
+ */
+const AuthGuard = ({ children }: { children: ReactNode }) => (
+  <ProtectedRoute>
+    <ErrorBoundary>{children}</ErrorBoundary>
+  </ProtectedRoute>
+);
+
+/**
  * AnimatedRoutes — wrap oko Routes sa AnimatePresence za cross-route layoutId.
  * WS-8 v8.2 D20: omogućava UserAvatar layoutId morphing između TrainerClients liste
  * i ClientProfile hero-a. Koristi popLayout mode — staro DOM-removed iz layout-a,
@@ -80,46 +92,50 @@ const AnimatedRoutes = () => {
   return (
     <AnimatePresence mode="popLayout">
       <Routes location={location} key={location.pathname}>
+        {/* Public routes */}
         <Route path="/" element={<RouteGuard><Login /></RouteGuard>} />
         <Route path="/onboarding" element={<RouteGuard><Onboarding /></RouteGuard>} />
         <Route path="/analysis" element={<RouteGuard><AnalysisReport /></RouteGuard>} />
-        <Route path="/home" element={<RouteGuard><Home /></RouteGuard>} />
-        <Route path="/gym" element={<RouteGuard><Gym /></RouteGuard>} />
-        <Route path="/workout/active" element={<RouteGuard><ActiveWorkout /></RouteGuard>} />
-        <Route path="/workout/complete" element={<RouteGuard><PostWorkout /></RouteGuard>} />
-        <Route path="/food" element={<RouteGuard><Food /></RouteGuard>} />
-        <Route path="/chat" element={<RouteGuard><Chat /></RouteGuard>} />
-        <Route path="/profile" element={<RouteGuard><Profile /></RouteGuard>} />
-        <Route path="/progress" element={<RouteGuard><Progress /></RouteGuard>} />
-        <Route path="/milestones" element={<RouteGuard><Milestones /></RouteGuard>} />
-        <Route path="/weekly-check-in" element={<RouteGuard><WeeklyCheckIn /></RouteGuard>} />
+
+        {/* Authenticated client routes */}
+        <Route path="/home" element={<AuthGuard><Home /></AuthGuard>} />
+        <Route path="/gym" element={<AuthGuard><Gym /></AuthGuard>} />
+        <Route path="/workout/active" element={<AuthGuard><ActiveWorkout /></AuthGuard>} />
+        <Route path="/workout/complete" element={<AuthGuard><PostWorkout /></AuthGuard>} />
+        <Route path="/food" element={<AuthGuard><Food /></AuthGuard>} />
+        <Route path="/chat" element={<AuthGuard><Chat /></AuthGuard>} />
+        <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
+        <Route path="/progress" element={<AuthGuard><Progress /></AuthGuard>} />
+        <Route path="/milestones" element={<AuthGuard><Milestones /></AuthGuard>} />
+        <Route path="/weekly-check-in" element={<AuthGuard><WeeklyCheckIn /></AuthGuard>} />
+
         {/* Trainer routes */}
-        <Route path="/trainer" element={<RouteGuard><TrainerDashboard /></RouteGuard>} />
-        <Route path="/trainer/clients" element={<RouteGuard><TrainerClients /></RouteGuard>} />
-        <Route path="/trainer/client/add" element={<RouteGuard><AddClient /></RouteGuard>} />
-        <Route path="/trainer/client/:id" element={<RouteGuard><ClientProfile /></RouteGuard>} />
-        <Route path="/trainer/training" element={<RouteGuard><TrainerTraining /></RouteGuard>} />
-        <Route path="/trainer/exercise/:id" element={<RouteGuard><ExerciseDetail /></RouteGuard>} />
-        <Route path="/trainer/exercise/new" element={<RouteGuard><ExerciseDetail /></RouteGuard>} />
-        <Route path="/trainer/workout/:id" element={<RouteGuard><WorkoutEditor /></RouteGuard>} />
-        <Route path="/trainer/workout/new" element={<RouteGuard><WorkoutEditor /></RouteGuard>} />
-        <Route path="/trainer/program/:id" element={<RouteGuard><ProgramEditor /></RouteGuard>} />
-        <Route path="/trainer/program/new" element={<RouteGuard><ProgramEditor /></RouteGuard>} />
-        <Route path="/trainer/program/:id/assign" element={<RouteGuard><AssignProgram /></RouteGuard>} />
+        <Route path="/trainer" element={<AuthGuard><TrainerDashboard /></AuthGuard>} />
+        <Route path="/trainer/clients" element={<AuthGuard><TrainerClients /></AuthGuard>} />
+        <Route path="/trainer/client/add" element={<AuthGuard><AddClient /></AuthGuard>} />
+        <Route path="/trainer/client/:id" element={<AuthGuard><ClientProfile /></AuthGuard>} />
+        <Route path="/trainer/training" element={<AuthGuard><TrainerTraining /></AuthGuard>} />
+        <Route path="/trainer/exercise/:id" element={<AuthGuard><ExerciseDetail /></AuthGuard>} />
+        <Route path="/trainer/exercise/new" element={<AuthGuard><ExerciseDetail /></AuthGuard>} />
+        <Route path="/trainer/workout/:id" element={<AuthGuard><WorkoutEditor /></AuthGuard>} />
+        <Route path="/trainer/workout/new" element={<AuthGuard><WorkoutEditor /></AuthGuard>} />
+        <Route path="/trainer/program/:id" element={<AuthGuard><ProgramEditor /></AuthGuard>} />
+        <Route path="/trainer/program/new" element={<AuthGuard><ProgramEditor /></AuthGuard>} />
+        <Route path="/trainer/program/:id/assign" element={<AuthGuard><AssignProgram /></AuthGuard>} />
         {/* Nutrition routes */}
-        <Route path="/trainer/nutrition" element={<RouteGuard><TrainerNutrition /></RouteGuard>} />
-        <Route path="/trainer/nutrition-template/:id" element={<RouteGuard><NutritionTemplateEditor /></RouteGuard>} />
-        <Route path="/trainer/nutrition-template/new" element={<RouteGuard><NutritionTemplateEditor /></RouteGuard>} />
-        <Route path="/trainer/client/:id/meal-picker" element={<RouteGuard><MealPicker /></RouteGuard>} />
-        <Route path="/trainer/messages" element={<RouteGuard><TrainerMessages /></RouteGuard>} />
-        <Route path="/trainer/analytics" element={<RouteGuard><TrainerAnalytics /></RouteGuard>} />
-        <Route path="/trainer/payments" element={<RouteGuard><TrainerPayments /></RouteGuard>} />
-        <Route path="/trainer/profile" element={<RouteGuard><TrainerProfile /></RouteGuard>} />
-        <Route path="/trainer/packages" element={<RouteGuard><TrainerPackages /></RouteGuard>} />
-        <Route path="/trainer/package/:id" element={<RouteGuard><PackageEditor /></RouteGuard>} />
-        <Route path="/trainer/package/new" element={<RouteGuard><PackageEditor /></RouteGuard>} />
-        <Route path="/trainer/free-trial" element={<RouteGuard><TrainerFreeTrial /></RouteGuard>} />
-        <Route path="/subscription" element={<RouteGuard><Subscription /></RouteGuard>} />
+        <Route path="/trainer/nutrition" element={<AuthGuard><TrainerNutrition /></AuthGuard>} />
+        <Route path="/trainer/nutrition-template/:id" element={<AuthGuard><NutritionTemplateEditor /></AuthGuard>} />
+        <Route path="/trainer/nutrition-template/new" element={<AuthGuard><NutritionTemplateEditor /></AuthGuard>} />
+        <Route path="/trainer/client/:id/meal-picker" element={<AuthGuard><MealPicker /></AuthGuard>} />
+        <Route path="/trainer/messages" element={<AuthGuard><TrainerMessages /></AuthGuard>} />
+        <Route path="/trainer/analytics" element={<AuthGuard><TrainerAnalytics /></AuthGuard>} />
+        <Route path="/trainer/payments" element={<AuthGuard><TrainerPayments /></AuthGuard>} />
+        <Route path="/trainer/profile" element={<AuthGuard><TrainerProfile /></AuthGuard>} />
+        <Route path="/trainer/packages" element={<AuthGuard><TrainerPackages /></AuthGuard>} />
+        <Route path="/trainer/package/:id" element={<AuthGuard><PackageEditor /></AuthGuard>} />
+        <Route path="/trainer/package/new" element={<AuthGuard><PackageEditor /></AuthGuard>} />
+        <Route path="/trainer/free-trial" element={<AuthGuard><TrainerFreeTrial /></AuthGuard>} />
+        <Route path="/subscription" element={<AuthGuard><Subscription /></AuthGuard>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AnimatePresence>
