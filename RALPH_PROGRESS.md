@@ -797,3 +797,69 @@ Koristi `toLocalDateKey` (YYYY-MM-DD local) umesto `toISOString` jer hidracija j
   - Git commit `feat(IT-15): mesocycle lifecycle + deload automation`
 - FAZA D IT-1/4 ↓ — IT-16 (pause events) je next
 
+---
+
+## IT-16 — Pause events (start/end) + illness recovery penalty
+
+**Datum:** 2026-04-24T09:42Z
+**Status:** ready-for-qa
+**Tests delta:** 306 → 315 (+9)
+
+### Files touched
+- `src/utils/training/recoveryCalibration.ts` — dodao opcioni `illnessPenalty?: number` na `RecoveryInputs`. Primenjuje se aditivno PRE clamp-a na [0.7, 1.1]. Default `?? 0` = backward compat, 9 postojecih testova prolaze bez promena.
+- `src/utils/training/recoveryCalibration.test.ts` — dodato **4 nova case-a** (illness baseline -0.15, illness + dobro spavanje = spec §4.8 primer 0.92, illness + losa spavanja = clamp 0.7, illness=0 backward compat).
+- `src/hooks/mutations/useDailyCheckIn.ts` — posle `applyDailyCheckIn` rekompjutacije recoveryMultiplier-a, prosledi `illnessPenalty = activePauseEvent?.type === 'illness' ? -0.15 : 0`. syncEngine (no-touch zona) ostaje netaknut; penalty se aplicira u hook layer-u.
+- `src/hooks/mutations/useDailyCheckIn.test.ts` — dodato **1 nov case** ("illness pauza aktivna → recovery=0.95 sa -0.15 penalty"), activePauseEvent preserved kroz transformer.
+- `supabase/functions/start-pause/index.ts` **(new)** — POST endpoint:
+  - JWT auth + `clientId === auth.uid` guard
+  - Insert u `pause_events` sa `recovery_penalty = illness ? -0.15 : 0`, `penalty_sessions_remaining = illness ? 2 : 0` (spec 01 §4.8)
+  - Unique conflict (23505) → **409** "Vec imas aktivnu pauzu"
+  - Upsert UserStatus.training.activePauseEvent
+- `supabase/functions/start-pause/deno.json` **(new)**
+- `supabase/functions/end-pause/index.ts` **(new)** — POST endpoint:
+  - JWT auth + guard
+  - UPDATE `pause_events` SET `is_active=false, end_date=<endDate||today>` WHERE user_id AND is_active
+  - Nije nadjen aktivan red → **404** "Nema aktivne pauze"
+  - Patch UserStatus.training.activePauseEvent = null
+  - **Napomena:** `penalty_sessions_remaining` se NE resetuje — ostaje na pause_events redu i troshi se kroz process-workout-completion narednih 2 sesije
+- `supabase/functions/end-pause/deno.json` **(new)**
+- `src/hooks/mutations/useStartPause.ts` **(new)** — React Query mutation + Deps DI pattern (`runStartPause` orchestrator + `useStartPause` wrapper sa toast + invalidation)
+- `src/hooks/mutations/useStartPause.test.ts` **(new)** — 2 case-a (happy + 409 konflikt)
+- `src/hooks/mutations/useEndPause.ts` **(new)** — paralelan pattern, `endDate` opcioni
+- `src/hooks/mutations/useEndPause.test.ts` **(new)** — 2 case-a (happy + "nema aktivne pauze")
+
+### Tests delta breakdown
+- +4 u `recoveryCalibration.test.ts` (bilo 9, sada 13 u `calcRecoveryMultiplier` describe-u)
+- +1 u `useDailyCheckIn.test.ts` (bilo 4, sada 5)
+- +2 u `useStartPause.test.ts` (novi fajl)
+- +2 u `useEndPause.test.ts` (novi fajl)
+- **Ukupno +9:** 306 → 315
+
+### Baseline gate
+- `npm test` → **315 passing**, 0 failures, 40 test files
+- `npx tsc --noEmit` → **0 errors**
+- `npm run verify:tokens` → "All design tokens compliant"
+
+### Decisions / deviations
+- **syncEngine.ts (no-touch) ostaje netaknut** — umesto da illness penalty prolazi kroz `runSyncRules` (kao sto je IT-16 spec originalno sugerisao), hook layer (`useDailyCheckIn`) prosledi `illnessPenalty` direktno u `calcRecoveryMultiplier` posle `applyDailyCheckIn`. Ovo preserve-uje backward compat (9 postojecih recovery testova + 4 syncEngine testa nisu dirana) i respektuje NO-TOUCH zonu.
+- **`calcRecoveryMultiplier` postojeci pozivi** — u `src/utils/sync/syncEngine.ts` i `src/utils/training/initialProgramGenerator.ts` ostaju bez promena (opcioni param default 0 = no-op). Verifikovano kroz prolazak starih 9 recovery testova.
+- **Profile.tsx UI "Pauza" dugme — prepušteno buducoj iteraciji**. IT-16 scope je naveo UI kao opciono ("Ako je previse za scope, preskoči i dokumentuj"). Profile.tsx je 599 redova sa ugnjezdjenim sub-page routing-om; dodavanje Pause sheet-a sa radio selektorom + end-pause state bi zahtevalo ~120 redova + i18n strings + design review. Ostavljam za posebnu IT (predlog: IT-16b ili u okviru FAZA E UI rewire).
+- **Edge Functions nisu deploy-ovani** — Edge Function deploy je preko Supabase MCP i zahteva main agent intervention. Fajlovi su spremni za `supabase functions deploy start-pause` i `supabase functions deploy end-pause`.
+- **penalty_sessions_remaining countdown** — ova iteracija dodaje READ put (`activePauseEvent.type === 'illness'`) i Edge Function writer-e. **Decrement logika narednih 2 sesije nije implementirana u IT-16** — spec dependency je IT-7 (process-workout-completion). Trenutno: dok god je pauza aktivna ILI `penalty_sessions_remaining > 0`, `activePauseEvent.type === 'illness'` → -0.15. Posle `end-pause`, `activePauseEvent = null` pa penalty prestaje. Ako QA traže tacnu "2 sesije posle povratka" logiku, to je IT-7 extension (process-workout-completion decrement penalty_sessions_remaining i auto-clear kad stigne 0).
+
+### Deploy pending
+- `supabase functions deploy start-pause` (preko MCP)
+- `supabase functions deploy end-pause` (preko MCP)
+
+### Next
+- QA reviewer audit:
+  - Verifikuje da `calcRecoveryMultiplier` backward compat (9 postojecih testova prolaze sa default illnessPenalty=0)
+  - Verifikuje da `useDailyCheckIn` ne prosledjuje illnessPenalty ako `activePauseEvent` je null ili `type !== 'illness'` (travel pauza = 0 penalty po spec §4.8)
+  - Verifikuje Edge Function 409 conflict path (parcijalni UNIQUE index)
+  - Verifikuje da `end-pause` update zadrži `penalty_sessions_remaining` na originalnoj vrednosti (ne resetuje na 0)
+  - Verifikuje hook test dep override pattern (useStartPause / useEndPause)
+- Ako approved → main agent:
+  - Deploy EF kroz Supabase MCP: start-pause + end-pause
+  - Git commit `feat(IT-16): pause events + illness recovery penalty`
+- Preporuceno za IT-17+: Profile.tsx "Pauza" UI + IT-7 dopuna sa penalty_sessions_remaining decrement-om
+

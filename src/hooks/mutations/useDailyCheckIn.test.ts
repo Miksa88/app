@@ -253,6 +253,59 @@ describe("runDailyCheckIn", () => {
     expect(deps.invokeSave).not.toHaveBeenCalled();
   });
 
+  it("illness pauza aktivna — recoveryMultiplier ukljucuje -0.15 penalty (spec §4.8)", async () => {
+    // IT-16: ako activePauseEvent.type === 'illness', hook prosledi -0.15
+    // illnessPenalty u calcRecoveryMultiplier pre finalnog save-a.
+    //
+    // Baseline sleep/stress iz happy path mock-a: sleep 8, stress 1.
+    // calc bez penalty-a: 1.0 + 0.05 + 0.05 = 1.10.
+    // calc sa illness -0.15: 1.10 + (-0.15) = 0.95 (unutar [0.7, 1.1] floora).
+    const computed: ProcessDailyCheckInResponse = {
+      ok: true,
+      ma5: 60.2,
+      reliableSampleCount: 5,
+      sleepLast7DaysAvg: 8.0,
+      stressLast7DaysAvg: 1,
+      hydrationLast7DaysAvgMl: 2200,
+    };
+
+    const statusWithIllness = makeStatus({
+      training: {
+        ...makeStatus().training,
+        activePauseEvent: {
+          type: 'illness',
+          startDate: new Date('2026-04-20T00:00:00Z'),
+          penaltySessionsRemaining: 2,
+        },
+      },
+    });
+
+    const deps = makeDeps({
+      invokeProcess: vi.fn(async () => computed),
+      loadStatus: vi.fn(async () => statusWithIllness),
+      // Transformer zadrzava activePauseEvent (ne dira ga pri daily check-in-u)
+      applyCheckIn: vi.fn(async (status, checkIn) => ({
+        ...status,
+        bio: {
+          ...status.bio,
+          currentWeightMA5: checkIn.weightKg,
+          sleepLast7DaysAvg: checkIn.sleepHours,
+          stressLast7DaysAvg: checkIn.stressLevel,
+          hydrationLast7DaysAvgMl: checkIn.waterIntakeMl,
+        },
+      })),
+    });
+
+    const result = await runDailyCheckIn("client-a", makeCheckIn(), deps);
+
+    // calcRecoveryMultiplier(sleep=8, stress=1, age=30, [], illnessPenalty=-0.15)
+    //   = 1.0 + 0.05 + 0.05 + (-0.15) = 0.95 (clamp no-op, unutar floor-a)
+    expect(result.bio.recoveryMultiplier).toBeCloseTo(0.95, 2);
+
+    // activePauseEvent preserved (transformer nije dirao)
+    expect(result.training.activePauseEvent?.type).toBe('illness');
+  });
+
   it("save-user-status vraća error — mutation throw-a, ali process-EF JE pozvan (append-only writes stoje)", async () => {
     const deps = makeDeps({
       invokeSave: vi.fn(async () => {

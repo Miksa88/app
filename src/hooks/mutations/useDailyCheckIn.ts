@@ -136,11 +136,20 @@ export async function runDailyCheckIn(
   //    Formula zavisi od avg-ova (ne od dnevne tacke) — patch bez ovog koraka
   //    bi ostavio stale recovery iz transformer-a koji je radio sa mock
   //    jednodnevnim vrednostima.
+  //
+  //    IT-16: ako je aktivna illness pauza, prosledi -0.15 penalty u recovery
+  //    formulu. syncEngine je no-touch zona pa se penalty aplicira ovde, posle
+  //    applyDailyCheckIn transformera. Penalty je additivan PRE clamp-a u
+  //    calcRecoveryMultiplier (videti recoveryCalibration.ts).
+  const illnessPenalty =
+    patched.training.activePauseEvent?.type === 'illness' ? -0.15 : 0;
+
   patched.bio.recoveryMultiplier = calcRecoveryMultiplier({
     sleepHoursAvg: patched.bio.sleepLast7DaysAvg,
     stressLevel: patched.bio.stressLast7DaysAvg,
     age: patched.bio.age,
     metabolicConditions: patched.nutrition.metabolicFilter,
+    illnessPenalty,
   });
 
   // 6. Perzistuj kroz save-user-status Edge Function

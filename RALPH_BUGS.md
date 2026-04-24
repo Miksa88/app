@@ -1040,3 +1040,160 @@ Uporedio sam src vs Deno port (`diff`):
 ### Round trips on this iteration: 1/3
 
 **Verdict (summary):** IT-15 approved.
+
+---
+
+## IT-16 — 2026-04-23 (Europe/Belgrade)
+
+**Scope (2. iteracija Faze D):** pause_events mutations (start-pause + end-pause EFs + React hooks) + illness recovery penalty integracija u `calcRecoveryMultiplier` + `useDailyCheckIn`.
+**Spec refs:** 01_TRAINING_FLOW_MASTER §4.8 (Pauza modul: illness = 2 sesije × -0.15 recovery; travel = 0 penalty), 03_INTEGRATION_LAYER §3.1.
+**Files touched (verified via inspection):**
+- `src/utils/training/recoveryCalibration.ts` — opcioni `illnessPenalty?: number` param, default 0 (backward compat)
+- `src/utils/training/recoveryCalibration.test.ts` — +4 illness cases (13 total)
+- `src/hooks/mutations/useDailyCheckIn.ts` — L144–153 prosleđuje `-0.15` kad `activePauseEvent?.type === 'illness'`
+- `src/hooks/mutations/useDailyCheckIn.test.ts` — +1 illness case (5 total)
+- `supabase/functions/start-pause/index.ts` + `deno.json` (new)
+- `supabase/functions/end-pause/index.ts` + `deno.json` (new)
+- `src/hooks/mutations/useStartPause.ts` + `useStartPause.test.ts` (new, 2 cases)
+- `src/hooks/mutations/useEndPause.ts` + `useEndPause.test.ts` (new, 2 cases)
+
+### Verdict: approved
+
+### Baseline gate
+- `npm test`: 306 → 315 (+9) — green
+  - recoveryCalibration.test.ts: 13 tests passing (+4 illness)
+  - useDailyCheckIn.test.ts: 5 tests passing (+1 illness)
+  - useStartPause.test.ts: 2 tests passing (new)
+  - useEndPause.test.ts: 2 tests passing (new)
+- `npx tsc --noEmit`: exit 0, no output — green
+- `npm run verify:tokens`: `All design tokens compliant` — green
+- `npm run lint`: n/a (ne postoji u package.json scripts)
+
+### 1. `calcRecoveryMultiplier` proširenje — verified
+
+- Opcioni `illnessPenalty?: number` sa default `0` (backward compat) — postojeći 9 testova prolaze bez modifikacije, novi test (`illness penalty = 0 — backward compat`) eksplicitno verifikuje da omitted param i `0` daju isti rezultat.
+- `base += input.illnessPenalty ?? 0;` (L66) aplicira se **PRE** `clamp(base, 0.7, 1.1)` (L68) — invariant očuvan: klijentkinja ne ide ispod 0.7 ni sa penalty-em.
+- `assertRecoveryMultiplierInRange` (L71) i dalje guardira izlaz.
+- Ispravno odvojeno od cycle bonus-a (L9–13 fajla) — cycle volume modifier ostaje u `volumeCalibrator`-u.
+- Test coverage:
+  - baseline + illness → 1.02 − 0.15 = 0.87 ✓
+  - sleep 8 + stress 2 + illness → 1.07 − 0.15 = 0.92 ✓
+  - los san (4.5h) + illness → 1.0 − 0.20 − 0.15 = 0.65 → clamp 0.7 ✓
+  - `illnessPenalty: 0` === omitted (backward compat) ✓
+
+### 2. `useDailyCheckIn` illness branch — verified
+
+- L144–145: `const illnessPenalty = patched.training.activePauseEvent?.type === 'illness' ? -0.15 : 0;` — **grana koristi `.type` (ne `.pauseType`) što je konzistentno sa tipom `UserStatusTraining.activePauseEvent` (src/types/userStatus.ts:96: `type: PauseType | null`).** Dev handoff je pogrešno napisao `.pauseType` u tekstu ali kod je ispravan.
+- L147–153: `calcRecoveryMultiplier({ ..., illnessPenalty })` pravilno patch-uje `patched.bio.recoveryMultiplier` **posle** `applyDailyCheckIn` transformera, pa su 7-day avg-ovi iz EF compute-a uzeti u obzir.
+- Travel pauza (`type === 'travel'`) → `illnessPenalty = 0` — spec §4.8 compliant ("travel = rest, ne recovery cost").
+- Test illness case (L256–307): happy path sa `sleep=8, stress=1, age=30, illness` → očekivano `0.95` (1.0 + 0.05 + 0.05 − 0.15), `activePauseEvent` preserved u rezultatu — pass.
+- Transformer ne dira `activePauseEvent` (hook ga čita iz `patched` koji je copy transformer-a) — očuvana separacija: pause mutation dolazi iz start-pause/end-pause EF-a, ne iz daily check-in-a.
+
+### 3. `start-pause` Edge Function — verified
+
+- Auth: L149–163 — Bearer JWT → `anonClient.auth.getUser(jwt)` → `userId = userData.user.id`. OK.
+- Auth guard: L179–184 — `payload.clientId !== userId` → 403. OK.
+- Payload validation: L97–120 — pauseType constrained na `'illness' | 'travel'`, clientId/startDate required strings, notes opciono.
+- `toDateOnly`: L122–125 — `input.slice(0,10)` — podržava ISO i YYYY-MM-DD.
+- Insert pause_events (L194–208):
+  - `pause_type = payload.pauseType` ✓
+  - `start_date = startDateOnly` ✓
+  - `is_active = true` ✓
+  - `recovery_penalty = isIllness ? -0.15 : 0` ✓ (spec §4.8)
+  - `penalty_sessions_remaining = isIllness ? 2 : 0` ✓ (spec §4.8)
+- Unique violation handling (L214–220): postgres code `23505` → 409 sa poruci "Vec imas aktivnu pauzu. Zavrsi je pre nove." — mapira na partial UNIQUE `idx_pause_events_one_active_per_user` iz migracije `20260424120000_create_weekly_pause_water_tables.sql` (L110–111: `CREATE UNIQUE INDEX ... ON public.pause_events (user_id) WHERE is_active = TRUE`). OK.
+- UserStatus upsert (L244–269) — patch `activePauseEvent = { type, startDate, penaltySessionsRemaining, recoveryPenalty }` u `status_json`, onConflict na `client_id`, update `last_updated_at`.
+
+### 4. `end-pause` Edge Function — verified
+
+- Auth identično start-pause (Bearer → anonClient.getUser → clientId guard). OK.
+- L173: `endDate ?? today (UTC)` fallback. OK.
+- UPDATE pause_events (L176–186): `WHERE user_id=userId AND is_active=true` → sets `is_active=false, end_date=endDateOnly`. Partial UNIQUE garantuje max 1 red, pa UPDATE ... RETURNING vraća tačno 1 (ili 0 ako nema aktivne).
+- "No active pause" handling (L195–200): updateData prazan → 404 sa `{ok:false, error:"Nema aktivne pauze za zavrsiti."}`. Ne idempotent ok — dev handoff navodi idempotent OR 404 kao opciju; ovaj izbor (404) je strožiji i prihvatljiv.
+- L219–239: patch `user_status.status_json.training.activePauseEvent = null` + upsert. OK.
+- Penalty countdown (L24–27 komentar): **NE resetuje `penalty_sessions_remaining` na pause_events redu** — ostaje da se decrement kroz `process-workout-completion` (IT-7). Ovo je ispravno jer spec §4.8 kaže da penalty traje 2 sesije **posle** povratka (ne zavisi od end_date-a pause-e).
+
+### 5. Penalty decrement — KRITIČNA VERIFIKACIJA: dev handoff note je pogrešan
+
+Dev je napisao: "penalty_sessions_remaining decrement nije implementiran u IT-16 — QA: proveriti da je ovo prihvatljiv partial scope."
+
+**Stanje realnosti** (verified `src/utils/db/workoutCompletion.ts:101–119`):
+```ts
+let newActivePauseEvent = training.activePauseEvent;
+let pauseJustEnded = false;
+
+if (
+  training.activePauseEvent &&
+  training.activePauseEvent.type === 'illness' &&
+  training.activePauseEvent.penaltySessionsRemaining > 0
+) {
+  const nextRemaining = training.activePauseEvent.penaltySessionsRemaining - 1;
+  if (nextRemaining <= 0) {
+    newActivePauseEvent = null;
+    pauseJustEnded = true;
+  } else {
+    newActivePauseEvent = {
+      ...training.activePauseEvent,
+      penaltySessionsRemaining: nextRemaining,
+    };
+  }
+}
+```
+
+Decrement JE implementiran u IT-7 — `applyPostCompletionCounters` decrement-uje counter i auto-null-uje `activePauseEvent` kad stigne 0 (sa `pauseJustEnded=true` flag-om za EF da UPDATE-uje `pause_events.is_active=false`). Testovi u `workoutCompletion.test.ts` (L158–217) pokrivaju ovaj flow (illness 2→1 u jednoj sesiji, 1→0 sa pauseJustEnded=true u drugoj, travel nije dirnuta).
+
+**Zaključak:** IT-16 JE komplet — dev je pogrešio u handoff-u. Ovo samo potvrđuje da je end-to-end chain (start-pause EF → useDailyCheckIn penalty apply → workout completion decrement → auto-end) zatvoren. Nije blocker, nije čak ni Low note — samo napomena da dev ubuduće pogleda IT-7 pre nego što flag-uje "partial scope".
+
+### 6. Hooks review — verified
+
+- `useStartPause` (L93–120) i `useEndPause` (L86–113): identičan pattern — Deps DI, pure orchestrator (`runStartPause`, `runEndPause`), React Query wrapper, `queryClient.invalidateQueries({ queryKey: ['userStatus', clientId] })` onSuccess.
+- `clientId: string | null` guard: ako je null, mutationFn throw-uje pre invoke. OK.
+- Toast error handling sa `silent` opcijom (isti pattern kao `useDailyCheckIn`).
+- Testovi: happy + 409 konflikt (start), happy + "nema aktivne pauze" (end). Minimal ali dovoljno za pure orchestrator coverage.
+
+### 7. Biology invariants — verified
+
+- `illnessPenalty = -0.15` tačno po spec §4.8. ✓
+- Clamp `[0.7, 1.1]` aktivan i posle penalty-a (illness ne probija floor). ✓
+- Travel → 0 penalty, 0 sesija (spec: "rest, ne recovery cost"). ✓
+- `applyDailyCheckIn` ne dira `activePauseEvent` (verifikovano u test mock-u L287–296 — transformer samo menja bio vrednosti, activePauseEvent preserved).
+- `assertRecoveryMultiplierInRange` guard u `calcRecoveryMultiplier` (L71) ostaje netaknut — ako budućim patch-om penalty pređe -0.4+ bez clamp-a, assert bi reagovao.
+
+### 8. No-touch zone — verified
+
+- `git diff HEAD -- src/utils/sync/syncEngine.ts` — prazno (empty output). ✓ Dev potvrdio; verified.
+- `git diff HEAD -- src/utils/training/sessionResolver.ts` — prazno. ✓
+- Penalty se aplicira isključivo u hook layer-u (useDailyCheckIn), ne u syncEngine → poštuje IT-4 arhitektonsku odluku (syncEngine je pure transformer, recovery formula je u recoveryCalibration.ts).
+
+### 9. Design-system + i18n + copy — clean
+
+- Grep novih fajlova za hardcoded hex — nijedan match.
+- Grep forbidden Serbian words ("propušteno", "kasniš", "nisi uradila", "zakasnila") u `src/hooks/mutations/` — nijedan match.
+- Toast stringovi (`useStartPause.ts:116` "Pauza nije pokrenuta.", `useEndPause.ts:109` "Zavrsetak pauze nije uspeo.") — srpski hardcoded u JSX-u, **nisu kroz `t()`**. Ovo je konzistentno sa postojećim `useDailyCheckIn.ts` (L250: `"Check-in nije sačuvan"`) i `useLogMeal.ts` (isti pattern), pa nije regresija u scope-u IT-16. Flagujem kao Low za buduću konsistentnu i18n-izaciju — niti je blocker niti novouvedeno u ovoj iteraciji.
+- Zero-guilt: "Pauza nije pokrenuta" / "Zavrsetak pauze nije uspeo" — neutralne error poruke, nema krivice ili judgement-a. OK.
+- EF error poruke ("Vec imas aktivnu pauzu", "Nema aktivne pauze") — neutralne, zero-guilt. OK.
+
+### Findings
+
+**Blocker:**
+- nijedan
+
+**High:**
+- nijedan
+
+**Low (non-blocking, future work):**
+1. [`src/hooks/mutations/useStartPause.ts:116`, `useEndPause.ts:109`] Toast stringovi su hardcoded srpski (ne kroz `t()`). Isti pattern u `useDailyCheckIn.ts:250` i `useLogMeal.ts` — ni IT-16-specifično; kad se radi globalni `t()` sweep, ova dva hook-a će se pokupiti. Ne blokira jer app trenutno ne koristi i18n catalog za toast strings.
+2. [`src/hooks/mutations/useDailyCheckIn.ts:144–153`] Hardcoded `-0.15` magic number ponovljen u EF-u (`start-pause/index.ts:201, 254`) i hook-u. Spec §4.8 je jedini source of truth. Kad se doda `const ILLNESS_RECOVERY_PENALTY = -0.15` u shared konstantu (npr. `src/types/training.ts` ili `src/utils/training/constants.ts`), onda hook + EF + recoveryCalibration komentar mogu da je importuju. Trenutno sve tri tačke su sinhrone ali lako se može desiti drift u budućnosti.
+3. [Dev handoff pogrešan critical note] IT-7 je već sadržavao decrement logiku u `applyPostCompletionCounters`. Dev treba da čita postojeće IT-7 kod pre "partial scope" flag-a. Ne blokira IT-16 — samo preporuka za buduću Dev praksu.
+4. [`supabase/functions/end-pause/index.ts:173`] `todayYmd()` koristi `getUTCFullYear/Month/Date` — u Europe/Belgrade zoni (UTC+1 ili +2), klijentkinja koja završi pauzu u 00:30 lokalno → server stavlja `end_date = juče`. Nije blocker jer `end_date` se može override-ovati kroz `payload.endDate`, ali slična bolest kao u `useDailyCheckIn.toIsoDate` koji svesno koristi lokalni datum. Razmotrit za IT-20 timezone sweep.
+
+### 10. Commit readiness
+
+- Commit poruka predlog: `feat(IT-16): pause_events mutations + illness recovery penalty` ili `feat(IT-16): start/end-pause EFs + illness -0.15 hook wiring`. OK.
+- Co-Authored-By trailer obavezno.
+- Bez `--no-verify` / `--no-gpg-sign` / `--amend`.
+- Staging scope: 11 fajlova iz handoff-a + `RALPH_PROGRESS.md` + ovaj `RALPH_BUGS.md` entry. Nijedan secret. Safe za `git add` po imenu.
+
+### Round trips on this iteration: 1/3
+
+**Verdict (summary):** IT-16 approved.
