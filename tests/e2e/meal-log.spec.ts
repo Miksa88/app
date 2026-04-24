@@ -46,4 +46,66 @@ test.describe("Meal log", () => {
     );
     expect(latest?.status).toBe("logged");
   });
+
+  test("skip obrok — direct EF invoke (UI flow previše za 1 test)", async () => {
+    const { invokeEdgeFunction } = await import("./helpers/authClient");
+
+    const before = await countRows("meal_logs", TEST_USER.id);
+
+    const { error } = await invokeEdgeFunction("process-meal-log", {
+      clientId: TEST_USER.id,
+      mealId: "test-skip-1",
+      slotIndex: 1,
+      status: "skipped",
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
+
+    expect(error).toBeNull();
+    await new Promise((r) => setTimeout(r, 500));
+
+    const after = await countRows("meal_logs", TEST_USER.id);
+    expect(after - before).toBe(1);
+
+    const latest = await getLatestRow<{ status: string }>(
+      "meal_logs",
+      TEST_USER.id,
+      "logged_at",
+    );
+    expect(latest?.status).toBe("skipped");
+  });
+
+  test("replace meal — direct EF invoke sa replacement_meal_id", async () => {
+    const { invokeEdgeFunction } = await import("./helpers/authClient");
+
+    const before = await countRows("meal_logs", TEST_USER.id);
+
+    const { error } = await invokeEdgeFunction("process-meal-log", {
+      clientId: TEST_USER.id,
+      mealId: "test-original-2",
+      slotIndex: 2,
+      status: "replaced",
+      calories: 450,
+      protein: 30,
+      carbs: 40,
+      fat: 18,
+      replacementMealId: "test-replacement-2",
+    });
+
+    expect(error).toBeNull();
+    await new Promise((r) => setTimeout(r, 500));
+
+    const after = await countRows("meal_logs", TEST_USER.id);
+    expect(after - before).toBe(1);
+
+    const latest = await getLatestRow<{ status: string; replacement_meal_id: string | null }>(
+      "meal_logs",
+      TEST_USER.id,
+      "logged_at",
+    );
+    expect(latest?.status).toBe("replaced");
+    expect(latest?.replacement_meal_id).toBe("test-replacement-2");
+  });
 });
