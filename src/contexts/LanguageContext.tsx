@@ -1771,6 +1771,40 @@ const translations: Record<string, Record<Language, string>> = {
     en: "Sleep and stress say: rest. This is maintenance, not a deficit.",
     sr: "San i stres kažu: odmor. Ovo je maintenance, ne deficit.",
   },
+
+  // IT-20 follow-up — Home.tsx inline SyncBanner (kraća varijanta)
+  "home.syncBanner.illness.title": {
+    en: "Your body asks for rest",
+    sr: "Tvoje telo traži odmor",
+  },
+  "home.syncBanner.illness.subtitle": {
+    en: "Easier pace while you recover. Plan is adjusted.",
+    sr: "Blaži tempo dok se oporaviš. Plan smo prilagodili.",
+  },
+  "home.syncBanner.deload.title": {
+    en: "Deload week",
+    sr: "Deload nedelja",
+  },
+  "home.syncBanner.deload.subtitle": {
+    en: "Recovery week. Muscles grow in calm.",
+    sr: "Nedelja za oporavak. Mišići rastu u miru.",
+  },
+  "home.syncBanner.luteal.title": {
+    en: "Luteal phase: recovery first",
+    sr: "Lutealna faza: prioritet oporavak",
+  },
+  "home.syncBanner.luteal.subtitle": {
+    en: "A bit more carbs, gentler intensity. That's OK.",
+    sr: "Malo više ugljenih, blaži intenzitet. To je OK.",
+  },
+  "home.syncBanner.menstrual.title": {
+    en: "Menstrual phase",
+    sr: "Menstrualna faza",
+  },
+  "home.syncBanner.menstrual.subtitle": {
+    en: "Listen to your body. Today's weight isn't a signal.",
+    sr: "Slušaj svoje telo. Težina danas nije signal.",
+  },
 };
 
 const LanguageContext = createContext<LanguageContextType>({

@@ -154,7 +154,7 @@ const Home = () => {
   const isInDeload = status?.training.isInDeload ?? false;
   const isIllness = status?.training.activePauseEvent?.type === "illness";
   const showSyncBanner = isLuteal || isMenstrual || isInDeload || isIllness;
-  const syncBanner = getSyncBannerContent({ isLuteal, isMenstrual, isInDeload, isIllness });
+  const syncBanner = getSyncBannerContent({ isLuteal, isMenstrual, isInDeload, isIllness }, t);
 
   // IT-17: nedeljni check-in banner — ako je prošlo > 7 dana od poslednjeg.
   // Brojač se resetuje u process-weekly-check-in EF-u (redFlags.daysSinceLastWeeklyCheckIn=0).
@@ -496,36 +496,39 @@ interface SyncState {
   isIllness: boolean;
 }
 
-function getSyncBannerContent(s: SyncState): SyncBannerProps | null {
+function getSyncBannerContent(
+  s: SyncState,
+  t: (key: string) => string,
+): SyncBannerProps | null {
   if (s.isIllness) {
     return {
       icon: <AlertTriangle size={ICON_SIZE.md} aria-hidden="true" />,
-      title: "Tvoje telo traži odmor",
-      subtitle: "Blaži tempo dok se oporaviš. Plan smo prilagodili.",
+      title: t("home.syncBanner.illness.title"),
+      subtitle: t("home.syncBanner.illness.subtitle"),
       tone: 'warning',
     };
   }
   if (s.isInDeload) {
     return {
       icon: <Moon size={ICON_SIZE.md} aria-hidden="true" />,
-      title: "Deload nedelja",
-      subtitle: "Nedelja za oporavak. Mišići rastu u miru.",
+      title: t("home.syncBanner.deload.title"),
+      subtitle: t("home.syncBanner.deload.subtitle"),
       tone: 'info',
     };
   }
   if (s.isLuteal) {
     return {
       icon: <Sun size={ICON_SIZE.md} aria-hidden="true" />,
-      title: "Lutealna faza: prioritet oporavak",
-      subtitle: "Malo više ugljenih, blaži intenzitet. To je OK.",
+      title: t("home.syncBanner.luteal.title"),
+      subtitle: t("home.syncBanner.luteal.subtitle"),
       tone: 'warning',
     };
   }
   if (s.isMenstrual) {
     return {
       icon: <Moon size={ICON_SIZE.md} aria-hidden="true" />,
-      title: "Menstrualna faza",
-      subtitle: "Slušaj svoje telo. Težina danas nije signal.",
+      title: t("home.syncBanner.menstrual.title"),
+      subtitle: t("home.syncBanner.menstrual.subtitle"),
       tone: 'secondary',
     };
   }
