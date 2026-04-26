@@ -1493,6 +1493,8 @@ const translations: Record<string, Record<Language, string>> = {
   "clients.archive": { en: "Archive client", sr: "Arhiviraj klijenta" },
   "clients.deleteClient": { en: "Delete client", sr: "Obriši klijenta" },
   "clients.deleteConfirm": { en: "This will permanently delete all client data. This cannot be undone.", sr: "Ovo će trajno obrisati sve podatke klijenta. Ova akcija se ne može poništiti." },
+  "clients.notFoundTitle": { en: "Client not found", sr: "Klijent nije pronađen" },
+  "clients.notFoundBody": { en: "This client may have been removed or the link is invalid.", sr: "Klijent je možda uklonjen ili je link nevažeći." },
   "clients.overview": { en: "Overview", sr: "Pregled" },
   "clients.training": { en: "Training", sr: "Trening" },
   "clients.nutrition": { en: "Nutrition", sr: "Ishrana" },

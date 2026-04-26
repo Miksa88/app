@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion } from "framer-motion";
 import {
-  Flame, Droplets, Minus, Plus, MessageCircle, Lock,
+  Flame, Droplets, Minus, Plus, MessageCircle,
   ChevronRight, Moon, AlertTriangle, Footprints, Activity, Sun, Clock, Dumbbell, Check,
   Play, Sparkles, Drumstick, Wheat, CalendarCheck,
 } from "lucide-react";
@@ -132,10 +132,10 @@ const Home = () => {
     else haptic("selection");
   };
 
-  const displayName = String(user?.user_metadata?.first_name ?? "Sarah");
+  const displayName = String(
+    user?.user_metadata?.first_name ?? user?.email?.split("@")[0] ?? "",
+  );
   const firstName = displayName.split(" ")[0];
-
-  const [trialExpired, setTrialExpired] = useState(false);
 
   const hour = new Date().getHours();
   const greeting =
@@ -165,42 +165,6 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-24">
-      {/* Trial expired overlay */}
-      {trialExpired && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="trial-expired-title"
-          aria-describedby="trial-expired-desc"
-          className="fixed inset-0 z-50 bg-background-secondary flex flex-col items-center justify-center px-8 text-center"
-        >
-          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
-            <Lock size={36} className="text-primary" aria-hidden="true" />
-          </div>
-          <h2 id="trial-expired-title" className="text-title-1 text-foreground mb-2">{t("trial.expired")}</h2>
-          <p id="trial-expired-desc" className="text-body text-muted-foreground mb-8 max-w-xs">
-            {t("trial.expiredMessage")}
-          </p>
-          <Button
-            onClick={() => navigate("/subscription")}
-            variant="cta"
-            size="xl"
-            className="max-w-xs"
-          >
-            {t("trial.subscribe")}
-          </Button>
-          <Button
-            onClick={() => setTrialExpired(false)}
-            variant="link"
-            className="mt-4 text-muted-foreground min-h-11 hover:no-underline"
-          >
-            {t("trial.later")}
-          </Button>
-        </motion.div>
-      )}
-
       {/* ============ 1. Header — greeting + streak + chat (kao trener dashboard) ============ */}
       <div className="px-5 pt-14 pb-4 flex items-center justify-between">
         <motion.div {...fadeUp()} className="min-w-0">

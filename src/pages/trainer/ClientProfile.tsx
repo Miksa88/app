@@ -37,7 +37,23 @@ const ClientProfile = () => {
   const [showNoteInput, setShowNoteInput] = useState(false);
 
   const client = MOCK_CLIENTS.find(c => c.id === id);
-  if (!client) return null;
+  if (!client) {
+    return (
+      <div className="min-h-screen bg-background-secondary pb-24">
+        <PageHeader onBack={() => navigate("/trainer/clients")} backLabel={t("clients.title")} />
+        <motion.div {...fadeUp()} className="px-5 pt-12 flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+            <AlertTriangle size={28} className="text-muted-foreground" aria-hidden="true" />
+          </div>
+          <h1 className="text-title-2 font-bold text-foreground mb-2">{t("clients.notFoundTitle")}</h1>
+          <p className="text-body text-muted-foreground max-w-xs">{t("clients.notFoundBody")}</p>
+          <Button onClick={() => navigate("/trainer/clients")} variant="cta" size="xl" className="mt-6">
+            {t("clients.title")}
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
 
   const activities = MOCK_ACTIVITY_LOG[client.id] || [];
   const age = new Date().getFullYear() - new Date(client.dateOfBirth).getFullYear();
