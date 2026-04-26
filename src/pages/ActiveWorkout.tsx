@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import GradientButton from "@/components/GradientButton";
 import CircularProgress from "@/components/CircularProgress";
-import { ArrowLeft, Check, Play, Pause, Maximize, Minimize, X } from "lucide-react";
+import { ArrowLeft, Check, Play, Pause, Maximize, Minimize, X, ArrowRightLeft } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,7 +29,10 @@ import { useActiveWorkoutSession } from "@/hooks/useActiveWorkoutSession";
 import type { ActiveWorkoutSlot } from "@/hooks/useActiveWorkoutSession";
 import { useCompleteSet } from "@/hooks/mutations/useCompleteSet";
 import { useFinishWorkout } from "@/hooks/mutations/useFinishWorkout";
-import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
+import SwapExerciseSheet from "@/components/workout/SwapExerciseSheet";
+import type { Exercise } from "@/types/training";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,7 +85,27 @@ const ActiveWorkout = () => {
   const [videoFullscreen, setVideoFullscreen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [showSwapSheet, setShowSwapSheet] = useState(false);
+  /** Per-session exercise overrides (slot-index → swapped Exercise). Ne persistira se u DB queue. */
+  const [exerciseOverrides, setExerciseOverrides] = useState<Record<number, Exercise>>({});
+  const [profileInjuries, setProfileInjuries] = useState<string[]>([]);
   const activeSetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("injuries")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (!cancelled && data?.injuries) {
+        setProfileInjuries(data.injuries);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [clientId]);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
   const slots = useMemo<ActiveWorkoutSlot[]>(() => session?.slots ?? [], [session]);
@@ -422,8 +445,21 @@ const ActiveWorkout = () => {
               <span className="text-caption-1 bg-primary/10 px-2.5 py-1 rounded-lg text-primary font-medium">
                 {slot.muscleGroup.replace(/_/g, " ")}
               </span>
+              <motion.button
+                whileTap={{ scale: TAP_SCALE.icon }}
+                onClick={() => setShowSwapSheet(true)}
+                className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-caption-1 text-foreground font-medium min-h-9"
+                aria-label={t("workout.swapExercise")}
+              >
+                <ArrowRightLeft size={14} aria-hidden="true" />
+                {t("workout.swapExercise")}
+              </motion.button>
             </div>
-            <h1 className="text-title-1 text-foreground mb-1">{slot.exerciseName}</h1>
+            <h1 className="text-title-1 text-foreground mb-1">
+              {exerciseOverrides[exerciseIdx]
+                ? (exerciseOverrides[exerciseIdx].name)
+                : slot.exerciseName}
+            </h1>
             <p className="text-subhead text-muted-foreground mb-2">
               {sets.filter((s) => s.done).length}/{sets.length} {t("gym.sets")} · {t("workout.target")}{" "}
               {slot.targetReps ?? `${slot.repRange[0]}-${slot.repRange[1]}`} {t("workout.reps")}
@@ -638,6 +674,23 @@ const ActiveWorkout = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {slot && (
+        <SwapExerciseSheet
+          open={showSwapSheet}
+          onOpenChange={setShowSwapSheet}
+          movementPattern={slot.movementPattern}
+          muscleGroup={slot.muscleGroup}
+          currentExerciseId={
+            exerciseOverrides[exerciseIdx]?.id ?? slot.chosenExerciseId ?? null
+          }
+          injuries={profileInjuries}
+          onPick={(ex) => {
+            setExerciseOverrides((prev) => ({ ...prev, [exerciseIdx]: ex }));
+            haptic("medium");
+          }}
+        />
+      )}
     </div>
   );
 };
