@@ -321,6 +321,57 @@ export type Database = {
           },
         ]
       }
+      messages: {
+        Row: {
+          id: string
+          client_id: string
+          trainer_id: string
+          sender_role: string
+          body: string
+          read_at_by_client: string | null
+          read_at_by_trainer: string | null
+          attachment_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          trainer_id: string
+          sender_role: string
+          body: string
+          read_at_by_client?: string | null
+          read_at_by_trainer?: string | null
+          attachment_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          trainer_id?: string
+          sender_role?: string
+          body?: string
+          read_at_by_client?: string | null
+          read_at_by_trainer?: string | null
+          attachment_url?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meal_logs: {
         Row: {
           calories_actual: number
