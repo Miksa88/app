@@ -81,16 +81,26 @@ const AuthGuard = ({ children }: { children: ReactNode }) => (
 );
 
 /**
- * AnimatedRoutes — wrap oko Routes sa AnimatePresence za cross-route layoutId.
- * WS-8 v8.2 D20: omogućava UserAvatar layoutId morphing između TrainerClients liste
- * i ClientProfile hero-a. Koristi popLayout mode — staro DOM-removed iz layout-a,
- * ali briefly visible za morph animaciju.
+ * AnimatedRoutes — wrap oko Routes sa AnimatePresence za page transitions.
+ *
+ * **Mode policy (Mihajlo, 2026-04-26):**
+ * `mode="wait"` — stara stranica izađe potpuno pre nego što se pojavi nova.
+ * Razlog promene sa `popLayout` na `wait`:
+ *   - `popLayout` je pretvarao izlazeći route u position:absolute, što je
+ *     slamalo sticky header (PageHeader) — back dugme padalo bi na dno
+ *     ekrana tokom morph faze (vidljivo u ClientProfile → back glitch).
+ *   - `layoutId` cross-route morphing (UserAvatar) je nice-to-have ali pravi
+ *     vizuelne glitchove na većini ruta. Bolje: konzistentna fade tranzicija
+ *     bez morph efekata.
+ *
+ * Stranice koje žele exit animation: dodaju `exit` varijantu na svoj root
+ * motion.div (videti fadeUp() helper u src/lib/motion.ts).
  * WS-8.5 D27: svaki Route obavljen sa <RouteGuard> za per-route ErrorBoundary.
  */
 const AnimatedRoutes = () => {
   const location = useLocation();
   return (
-    <AnimatePresence mode="popLayout">
+    <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         {/* Public routes */}
         <Route path="/" element={<RouteGuard><Login /></RouteGuard>} />
