@@ -33,14 +33,12 @@ const TrainerDashboard = () => {
       ?? "",
   );
 
+  // TODO: učitati iz trener-config tabele kad backend bude (IT-28).
+  // Beta: default vrednosti, dropdown editable na /trainer/free-trial.
   const [trialSettings] = useState({
     duration: 7,
     includesWorkouts: true,
     includesNutrition: true,
-    includesChat: false,
-    includesProgress: true,
-    trialProgramName: "Beginner Full Body",
-    trialMealPlanName: "Balanced 2000kcal",
   });
 
   const activeCount = counters?.totalClients ?? 0;
