@@ -136,7 +136,9 @@ const Home = () => {
   };
 
   const displayName = String(
-    user?.user_metadata?.first_name ?? user?.email?.split("@")[0] ?? "",
+    user?.user_metadata?.first_name
+      ?? user?.email?.split("@")[0].split("+")[0]
+      ?? "",
   );
   const firstName = displayName.split(" ")[0];
 

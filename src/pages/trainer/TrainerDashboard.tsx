@@ -28,7 +28,9 @@ const TrainerDashboard = () => {
   const haptic = useHaptic();
 
   const trainerFirstName = String(
-    user?.user_metadata?.first_name ?? user?.email?.split("@")[0] ?? "",
+    user?.user_metadata?.first_name
+      ?? user?.email?.split("@")[0].split("+")[0]
+      ?? "",
   );
 
   const [trialSettings] = useState({

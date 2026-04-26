@@ -39,7 +39,7 @@ const Profile = () => {
 
   const displayName = user?.user_metadata?.first_name
     ? `${user.user_metadata.first_name}${user.user_metadata.last_name ? ` ${user.user_metadata.last_name}` : ""}`
-    : user?.email?.split("@")[0] ?? "";
+    : user?.email?.split("@")[0].split("+")[0] ?? "";
   const displayEmail = user?.email ?? "";
 
   const [goals, setGoals] = useState(["Muscle gain", "Glute growth"]);
