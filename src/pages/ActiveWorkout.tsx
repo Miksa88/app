@@ -430,9 +430,39 @@ const ActiveWorkout = () => {
               {slot.targetRIR !== undefined ? ` · ${t("workout.rir")} ${slot.targetRIR}` : ""}
             </p>
             {slot.targetWeight !== undefined && slot.targetWeight !== null && (
-              <p className="text-footnote text-muted-foreground mb-5">
-                {t("workout.target")}: {slot.targetWeight}kg
-              </p>
+              <div className="mb-5 flex items-center flex-wrap gap-2">
+                <p className="text-footnote text-muted-foreground">
+                  {t("workout.target")}: {slot.targetWeight}kg
+                </p>
+                {slot.previousMaxWeight !== null && (() => {
+                  const delta = slot.targetWeight - slot.previousMaxWeight;
+                  if (delta > 0) {
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/15 text-success text-caption-2 font-bold tabular-nums"
+                        aria-label={`+${delta}kg ${t("workout.vsPrevious")}`}
+                      >
+                        ↑ +{delta}kg {t("workout.vsPrevious")}
+                      </span>
+                    );
+                  }
+                  if (delta < 0) {
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info/15 text-info text-caption-2 font-bold tabular-nums"
+                        aria-label={`${delta}kg ${t("workout.vsPrevious")}`}
+                      >
+                        ↓ {delta}kg {t("workout.vsPrevious")}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-caption-2 font-medium">
+                      = {t("workout.matchPrevious")}
+                    </span>
+                  );
+                })()}
+              </div>
             )}
 
             <div className="space-y-3">

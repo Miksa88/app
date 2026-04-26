@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, type LucideProps } from "lucide-react";
+import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, Plane, type LucideProps } from "lucide-react";
 import type { ComponentType } from "react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -26,6 +26,7 @@ import { PrivacyBadge } from "@/components/ui/privacy-badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useHaptic } from "@/hooks/useHaptic";
+import QuickPauseSheet from "@/components/home/QuickPauseSheet";
 
 type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis";
 
@@ -56,6 +57,7 @@ const Profile = () => {
     workout: true, meals: true, water: false, progress: true, chat: true
   });
   const [confirmAction, setConfirmAction] = useState<"logout" | "delete" | null>(null);
+  const [showPauseSheet, setShowPauseSheet] = useState(false);
 
   const toggleGoal = (g: string) => setGoals((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
   const toggleAllergy = (a: string) => setAllergies((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
@@ -191,6 +193,25 @@ const Profile = () => {
             </div>
             <h2 className="text-headline text-foreground">{displayName || t("profile.title")}</h2>
             <p className="text-footnote text-muted-foreground">{displayEmail}</p>
+          </div>
+          <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" />
+        </motion.button>
+
+        {/* Quick pause action — putovanje/bolest */}
+        <motion.button
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={() => setShowPauseSheet(true)}
+          className="w-full bg-card rounded-2xl card-shadow p-4 flex items-center gap-4 text-left"
+          aria-label={t("profile.quickPause")}
+        >
+          <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center shrink-0">
+            <Plane size={20} className="text-secondary" aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-body font-semibold text-foreground">{t("profile.quickPause")}</p>
+            <p className="text-caption-1 text-muted-foreground mt-0.5">{t("profile.quickPauseSub")}</p>
           </div>
           <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" />
         </motion.button>
@@ -589,6 +610,8 @@ const Profile = () => {
           </motion.div>
         }
       </AnimatePresence>
+
+      <QuickPauseSheet open={showPauseSheet} onOpenChange={setShowPauseSheet} />
 
       {/* Destructive confirmation dialogs (WS-3) */}
       <AlertDialog open={confirmAction === "logout"} onOpenChange={(o) => !o && setConfirmAction(null)}>

@@ -158,6 +158,10 @@ export interface ActiveWorkoutSlot extends ExerciseSlot {
   exerciseNameSr: string;
   /** Rest period (default 60s ako slot ne specificira) */
   resolvedRest: number;
+  /** Najveca tezina iz prethodne sesije za istu vezbu — null ako nema istorije */
+  previousMaxWeight: number | null;
+  /** ISO datum prethodne sesije sa istom vezbom — za "Pre 5 dana" hint */
+  previousSessionDate: string | null;
 }
 
 export interface ActiveWorkoutSessionData {
@@ -291,12 +295,34 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
         const uuid = slot.chosenExerciseId !== undefined
           ? uuidById.get(slot.chosenExerciseId) ?? null
           : null;
+
+        // Previous-max derivation: najveca weight_kg iz exerciseHistoryMap
+        // (već DESC sortiran po completed_at). Filter po istom datumu prethodne
+        // sesije — ne želimo da pomešamo istoriju iz više sesija u jedan max.
+        let previousMaxWeight: number | null = null;
+        let previousSessionDate: string | null = null;
+        if (slot.chosenExerciseId !== undefined) {
+          const history = exerciseHistoryMap.get(slot.chosenExerciseId) ?? [];
+          if (history.length > 0) {
+            const latestDate = history[0].completed_at.split("T")[0];
+            const lastSessionSets = history.filter(
+              (h) => h.completed_at.split("T")[0] === latestDate,
+            );
+            if (lastSessionSets.length > 0) {
+              previousMaxWeight = Math.max(...lastSessionSets.map((s) => s.weight_kg));
+              previousSessionDate = latestDate;
+            }
+          }
+        }
+
         return {
           ...slot,
           exerciseUuid: uuid,
           exerciseName: exercise?.name ?? humanizeMuscleGroup(slot.muscleGroup),
           exerciseNameSr: exercise?.nameSr ?? humanizeMuscleGroup(slot.muscleGroup),
           resolvedRest: slot.targetRest ?? defaultRest(slot.priority),
+          previousMaxWeight,
+          previousSessionDate,
         };
       });
 

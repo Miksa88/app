@@ -54,6 +54,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { SectionLabel } from "@/components/ui/section-label";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
+import ExtraMealSheet, { ExtraMealTrigger } from "@/components/food/ExtraMealSheet";
 
 // Meal images mapping — fallback mapa za slike lokalno dostupne u assets/meals
 import greekYogurt from "@/assets/meals/greek-yogurt.jpg";
@@ -183,6 +184,7 @@ const Food = () => {
   const [mealStatus, setMealStatus] = useState<Record<string, MealStatus>>({});
   const [selectedMeal, setSelectedMeal] = useState<GeneratedMeal | null>(null);
   const [showReplaceSheet, setShowReplaceSheet] = useState<string | null>(null);
+  const [showExtraMealSheet, setShowExtraMealSheet] = useState(false);
   const [replaceSearch, setReplaceSearch] = useState("");
   const [trialExpired] = useState(false);
 
@@ -366,6 +368,11 @@ const Food = () => {
       <div className="px-5 mt-2">
         <motion.div {...fadeUp(0.12)}>
           <SectionLabel>{t("food.todaysMeals")}</SectionLabel>
+        </motion.div>
+
+        {/* Off-plan meal log trigger */}
+        <motion.div {...fadeUp(0.13)} className="mb-3">
+          <ExtraMealTrigger onClick={() => setShowExtraMealSheet(true)} />
         </motion.div>
 
         <div className="space-y-3">
@@ -642,6 +649,11 @@ const Food = () => {
           </div>
         </div>
       </BottomSheet>
+
+      <ExtraMealSheet
+        open={showExtraMealSheet}
+        onOpenChange={setShowExtraMealSheet}
+      />
     </div>
   );
 };
