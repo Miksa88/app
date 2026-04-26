@@ -43,25 +43,52 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
 
     setSubmitting(true);
 
-    const { data, error } = await supabase.auth.signUp({
+    // 1. Real Supabase signUp
+    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+    });
+
+    if (signUpErr) {
+      setSubmitting(false);
+      toast.error(signUpErr.message);
+      return;
+    }
+    if (!signUpData.user) {
+      setSubmitting(false);
+      toast.error(t("signup.errorGeneric") || "Kreiranje naloga nije uspelo");
+      return;
+    }
+
+    // 2. Auto-confirm email (beta bypass — email confirmation toggle u Supabase
+    //    Auth Settings ostaje ON za production, ali za beta odmah confirm-ujemo
+    //    kroz Edge Function da user ne mora da klikne email link).
+    //    EF anti-takeover: auto-confirm radi samo za signup mlađi od 60s.
+    try {
+      await supabase.functions.invoke("auto-confirm-signup", {
+        body: { userId: signUpData.user.id },
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[SignUpSheet] auto-confirm-signup failed:", e);
+      // Nastavlja se — ako fail, signIn ispod će fail sa email_not_confirmed,
+      // toast će obavestiti user-a.
+    }
+
+    // 3. Sign in odmah da session bude aktivna pre AnalysisReport-a
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
 
     setSubmitting(false);
 
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    if (!data.user) {
-      toast.error(t("signup.errorGeneric") || "Kreiranje naloga nije uspelo");
+    if (signInErr) {
+      toast.error(signInErr.message);
       return;
     }
 
-    // Uspeh — prosledi dalje (AuthContext će detektovati novu sesiju kroz
-    // onAuthStateChange i useAuth().clientId će postati pravi UUID,
-    // što AnalysisReport.completeOnboarding koristi za profile insert).
+    // Session je aktivna; AuthContext.onAuthStateChange will populate clientId.
     onComplete("email", email);
   };
 
