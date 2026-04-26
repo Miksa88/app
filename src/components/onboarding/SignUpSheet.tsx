@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ICON_SIZE } from "@/lib/design-tokens";
-import { IOS_SPRING } from "@/lib/motion";
+import { IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import { toast } from "sonner";
@@ -145,7 +145,7 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
             >
               {/* Apple button */}
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ scale: TAP_SCALE.primary }}
                 onClick={() => onComplete("apple")}
                 className="w-full flex items-center justify-center gap-3 bg-foreground text-background font-semibold py-4 rounded-[14px] text-body ios-row-h"
               >
@@ -157,7 +157,7 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
 
               {/* Google button */}
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ scale: TAP_SCALE.primary }}
                 onClick={() => onComplete("google")}
                 className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground ios-row-h"
               >
@@ -172,7 +172,7 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
 
               {/* Email link */}
               <motion.button
-                whileTap={{ scale: 0.97 }}
+                whileTap={{ scale: TAP_SCALE.primary }}
                 onClick={() => setShowEmailForm(true)}
                 className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground ios-row-h"
               >

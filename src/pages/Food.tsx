@@ -24,7 +24,7 @@
 import { useMemo, useState, type ComponentType } from "react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion, AnimatePresence } from "framer-motion";
-import { fadeUp, IOS_SPRING } from "@/lib/motion";
+import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import {
   Check, X, ArrowRightLeft, Search, Lock,
   Sunrise, Sun, Moon, Apple, Zap, Dumbbell, UtensilsCrossed, GlassWater,
@@ -379,7 +379,7 @@ const Food = () => {
               <motion.button
                 key={meal.slot}
                 {...fadeUp(0.15 + i * 0.04)}
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ scale: TAP_SCALE.secondary }}
                 onClick={() => status === 'pending' && setSelectedMeal(meal)}
                 className={`w-full bg-card rounded-2xl card-shadow overflow-hidden flex items-center text-left transition-all ${
                   status === 'eaten' ? "border-l-4 border-success" :

@@ -29,7 +29,7 @@ import { useActiveWorkoutSession } from "@/hooks/useActiveWorkoutSession";
 import type { ActiveWorkoutSlot } from "@/hooks/useActiveWorkoutSession";
 import { useCompleteSet } from "@/hooks/mutations/useCompleteSet";
 import { useFinishWorkout } from "@/hooks/mutations/useFinishWorkout";
-import { MOTION_DURATION } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -471,7 +471,7 @@ const ActiveWorkout = () => {
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: MOTION_DURATION.base, ease: "easeOut" }}
+                          transition={{ duration: MOTION_DURATION.base, ease: MOTION_EASE.easeOut }}
                         >
                           <div className="px-4 pb-4 pt-1">
                             <div className="grid grid-cols-2 gap-3 mb-4">

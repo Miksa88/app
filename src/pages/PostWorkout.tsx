@@ -23,7 +23,7 @@ import { Flame, Clock, Dumbbell, Star, PartyPopper } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { ConfettiCelebration } from "@/components/ConfettiCelebration";
-import { MOTION_DURATION, IOS_SPRING } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE, IOS_SPRING } from "@/lib/motion";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProgressRow {
@@ -112,7 +112,7 @@ const PostWorkout = () => {
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: MOTION_DURATION.slow, ease: "easeOut" }}
+        transition={{ duration: MOTION_DURATION.slow, ease: MOTION_EASE.easeOut }}
         className="text-center z-10"
       >
         <motion.div

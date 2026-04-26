@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { fadeUp, MOTION_DURATION } from "@/lib/motion";
+import { fadeUp, MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
 import { ArrowLeft, Flame, ChevronRight, Dumbbell, UtensilsCrossed, AlertTriangle, Ban, Cake, Briefcase, Clock, Brain, Moon, Frown, CheckCircle2, MessageSquare, Camera, Activity, Award, Target, Ruler, Scale as ScaleIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { MOCK_CLIENTS, MOCK_ACTIVITY_LOG, MOCK_CLIENT_NOTES } from "@/data/trainerMockData";
@@ -135,7 +135,7 @@ const ClientProfile = () => {
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.round((client.programWeek / client.programTotalWeeks) * 100)}%` }}
-                  transition={{ duration: MOTION_DURATION.xSlow, delay: 0.2, ease: [0.25, 1, 0.5, 1] }}
+                  transition={{ duration: MOTION_DURATION.xSlow, delay: 0.2, ease: MOTION_EASE.outQuart }}
                   className="h-full rounded-full bg-white"
                 />
               </div>

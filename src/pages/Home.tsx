@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useNextSession } from "@/hooks/useNextSession";
 import { useWeeklyCalendar } from "@/hooks/useWeeklyCalendar";
-import { fadeUp, MOTION_DURATION , IOS_SPRING} from "@/lib/motion";
+import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE, IOS_SPRING } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionLabel } from "@/components/ui/section-label";
@@ -388,7 +388,7 @@ const Home = () => {
             {Array.from({ length: Math.min(waterGoal, 16) }).map((_, i) => (
               <motion.button
                 key={i}
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: TAP_SCALE.micro }}
                 onClick={() => setWaterTo(i + 1)}
                 className={`flex-1 h-11 rounded-lg transition-base min-h-11 ${
                   i < waterGlasses
@@ -409,7 +409,7 @@ const Home = () => {
           {/* Minus (rollback optimistic) · ml / target prikaz · Plus */}
           <div className="flex items-center justify-center gap-6">
             <motion.button
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: TAP_SCALE.iconStrong }}
               onClick={removeWater}
               disabled={waterGlasses === 0}
               className="w-11 h-11 rounded-full bg-muted flex items-center justify-center min-w-11 min-h-11 disabled:opacity-30"
@@ -428,7 +428,7 @@ const Home = () => {
             </div>
 
             <motion.button
-              whileTap={{ scale: 0.9 }}
+              whileTap={{ scale: TAP_SCALE.iconStrong }}
               onClick={addWater}
               disabled={!clientId || waterGlasses >= waterGoal || logWaterGlass.isPending}
               className="w-11 h-11 rounded-full bg-info flex items-center justify-center min-w-11 min-h-11 disabled:opacity-30"
@@ -852,7 +852,7 @@ const RingMetric = ({ ringColor, value, goal, icon, label, display }: RingMetric
             strokeDasharray={RING_CIRC}
             initial={{ strokeDashoffset: RING_CIRC }}
             animate={{ strokeDashoffset: dashOffset }}
-            transition={{ duration: MOTION_DURATION.xSlow, ease: [0.25, 1, 0.5, 1] }}
+            transition={{ duration: MOTION_DURATION.xSlow, ease: MOTION_EASE.outQuart }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
@@ -901,7 +901,7 @@ const FuelingSection = ({ kcalCurrent, kcalGoal, fuelPct, protein, carbs, fat }:
       <motion.div
         initial={{ width: 0 }}
         animate={{ width: `${fuelPct}%` }}
-        transition={{ duration: MOTION_DURATION.xSlow, ease: [0.25, 1, 0.5, 1] }}
+        transition={{ duration: MOTION_DURATION.xSlow, ease: MOTION_EASE.outQuart }}
         className="h-full rounded-full gradient-primary"
       />
     </div>
@@ -997,7 +997,7 @@ const MacroRing = ({
             strokeDasharray={MACRO_CIRC}
             initial={{ strokeDashoffset: MACRO_CIRC }}
             animate={{ strokeDashoffset: dashOffset }}
-            transition={{ duration: MOTION_DURATION.xSlow, ease: [0.25, 1, 0.5, 1] }}
+            transition={{ duration: MOTION_DURATION.xSlow, ease: MOTION_EASE.outQuart }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">

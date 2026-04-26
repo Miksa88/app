@@ -6,7 +6,7 @@ import {
   ArrowRight, Check, Sparkles, Dumbbell, UtensilsCrossed, Target,
   MessageSquare, Database,
 } from "lucide-react";
-import { MOTION_DURATION } from "@/lib/motion";
+import { fadeUp, TAP_SCALE, MOTION_EASE } from "@/lib/motion";
 import { MotionCard } from "@/components/ui/motion-card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
@@ -29,13 +29,6 @@ import type {
 // primary tint (4%) background. Trial info je fine-print ispod dugmeta,
 // ne u boxu sa kalendarskom ikonom.
 // ============================================================================
-
-const ease = [0.25, 1, 0.5, 1] as const;
-const fade = (delay: number) => ({
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: MOTION_DURATION.slow, delay, ease },
-});
 
 const AnalysisReport = () => {
   const navigate = useNavigate();
@@ -166,20 +159,20 @@ const AnalysisReport = () => {
         <div className="w-full max-w-md mx-auto flex flex-col flex-1">
 
           {/* ============ Header — suptilan icon + naslov ============ */}
-          <motion.div {...fade(0)} className="flex flex-col items-center text-center">
+          <motion.div {...fadeUp(0)} className="flex flex-col items-center text-center">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <Sparkles size={24} className="text-primary" strokeWidth={2} aria-hidden="true" />
             </div>
             <h1 className="text-large-title font-bold text-foreground tracking-tight leading-tight">
               {t("analysis.planReady")}
             </h1>
-            <motion.p {...fade(0.1)} className="text-body text-muted-foreground mt-2 max-w-[300px]">
+            <motion.p {...fadeUp(0.1)} className="text-body text-muted-foreground mt-2 max-w-[300px]">
               {subtitle}
             </motion.p>
           </motion.div>
 
           {/* ============ Plan Summary — TIHI card sa gradient accent strip ============ */}
-          <motion.div {...fade(0.2)} className="mt-8">
+          <motion.div {...fadeUp(0.2)} className="mt-8">
             <div className="relative bg-card rounded-3xl overflow-hidden card-shadow">
               {/* Gradient accent strip — jedino brand obeležje */}
               <div className="absolute top-0 left-0 right-0 h-[3px] gradient-primary" aria-hidden="true" />
@@ -208,7 +201,7 @@ const AnalysisReport = () => {
           </motion.div>
 
           {/* ============ Feature list ============ */}
-          <MotionCard {...fade(0.35)} className="mt-5 overflow-hidden">
+          <MotionCard {...fadeUp(0.35)} className="mt-5 overflow-hidden">
             {features.map((feat, i) => {
               const Icon = feat.icon;
               return (
@@ -231,9 +224,9 @@ const AnalysisReport = () => {
           <div className="flex-1 min-h-10" />
 
           {/* ============ CTA — jedini akcent na ekranu ============ */}
-          <motion.div {...fade(0.5)} className="mt-8">
+          <motion.div {...fadeUp(0.5)} className="mt-8">
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: TAP_SCALE.primary }}
               onClick={handleStartTrial}
               disabled={submitting}
               className="w-full h-[56px] rounded-2xl gradient-primary text-primary-foreground text-body font-semibold shadow-fab flex items-center justify-center gap-2 disabled:opacity-60"
@@ -242,7 +235,7 @@ const AnalysisReport = () => {
                 <>
                   <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    transition={{ duration: 1, repeat: Infinity, ease: MOTION_EASE.linear }}
                     className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
                     aria-hidden="true"
                   />

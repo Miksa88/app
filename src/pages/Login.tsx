@@ -9,7 +9,7 @@ import iphoneMockup from "@/assets/iphone-mockup.png";
 import { Eye, EyeOff, X, Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
-import { MOTION_DURATION, staggerContainer, staggerItem, IOS_SPRING } from "@/lib/motion";
+import { MOTION_DURATION, staggerContainer, staggerItem, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { supabase } from "@/integrations/supabase/client";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -186,7 +186,7 @@ const Login = () => {
                   >
                     {/* Apple button - original black like Apple's guidelines */}
                     <motion.button
-                      whileTap={{ scale: 0.97 }}
+                      whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => toast.info(t("login.oauthComingSoon") || "OAuth uskoro — za sada koristi email")}
                       className="w-full flex items-center justify-center gap-3 bg-foreground text-background font-semibold py-4 rounded-[14px] text-body"
                     >
@@ -198,7 +198,7 @@ const Login = () => {
 
                     {/* Google button */}
                     <motion.button
-                      whileTap={{ scale: 0.97 }}
+                      whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => toast.info(t("login.oauthComingSoon") || "OAuth uskoro — za sada koristi email")}
                       className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground"
                     >
@@ -213,7 +213,7 @@ const Login = () => {
 
                     {/* Email button */}
                     <motion.button
-                      whileTap={{ scale: 0.97 }}
+                      whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => setShowEmailForm(true)}
                       className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground"
                     >

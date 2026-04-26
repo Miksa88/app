@@ -1250,3 +1250,108 @@ a94daa7 chore(diagnostika): Faza 1 reportovi + Ralph plan
 ---
 
 **RALPH LOOP END** — FAZA A+B+C+D+E kompletna, 22/22 iteracija, 24 commit-a.
+
+---
+
+## ANIMATION-MIGRATION — Mass migracija hardkodiranih animation values u motion.ts tokens
+
+**Timestamp:** 2026-04-23 (post-Ralph cleanup)
+**Agent:** dev-implementer
+**Cilj:** Eliminacija hardcoded easing arrays / scales / string easing u korist `MOTION_EASE`, `TAP_SCALE`, `MOTION_DURATION`, `IOS_SPRING` konstanti iz `src/lib/motion.ts`.
+
+### Files touched (28)
+
+**Priority 1 (`[0.25, 1, 0.5, 1]` → `MOTION_EASE.outQuart`):**
+- `src/pages/Home.tsx` (3 instances + water buttons + glass dots)
+- `src/pages/trainer/TrainerDashboard.tsx` (2)
+- `src/pages/trainer/ClientProfile.tsx` (1)
+- `src/components/queue/FuelingStatusBar.tsx` (1)
+- `src/components/queue/WeeklyCalendar.tsx` (1)
+- `src/components/onboarding/ExperienceStep.tsx` (1)
+- `src/components/onboarding/FrequencyStep.tsx` (1)
+- `src/pages/AnalysisReport.tsx` — uklonjen lokalni `fade()` helper, replaced sa `fadeUp` import (5 callsites)
+
+**Priority 2 (`[0.32, 0.72, 0, 1]` → `MOTION_EASE.iosDefault`):**
+- `src/pages/trainer/ProgramEditor.tsx` (4)
+- `src/pages/trainer/WorkoutEditor.tsx` (2)
+
+**Priority 3 (`scale: 0.97` → `TAP_SCALE.primary`):**
+- `src/pages/Subscription.tsx` (2)
+- `src/pages/Login.tsx` (3)
+- `src/pages/AnalysisReport.tsx` (1)
+- `src/components/onboarding/GoalStep.tsx` (1)
+- `src/components/onboarding/LimitationsStep.tsx` (1)
+- `src/components/trainer/ProgramTargeting.tsx` (2 — limitation row + SelectableCard)
+- `src/pages/trainer/ProgramEditor.tsx` (1 — TypeCard)
+- `src/pages/trainer/AddClient.tsx` (1)
+- `src/components/onboarding/SignUpSheet.tsx` (3 — Apple, Google, Email)
+
+**Priority 4 (`scale: 0.98` → `TAP_SCALE.secondary` — list items):**
+- `src/pages/trainer/ProgramEditor.tsx` (1 — workout picker row)
+- `src/pages/Food.tsx` (1)
+- `src/pages/trainer/TrainerMessages.tsx` (1)
+- `src/pages/trainer/TrainerClients.tsx` (1)
+- `src/pages/trainer/TrainerAnalytics.tsx` (1)
+- `src/pages/trainer/TrainerTraining.tsx` (6 — replace_all)
+- `src/pages/trainer/ExercisePicker.tsx` (1)
+- `src/pages/trainer/TrainerNutrition.tsx` (1)
+- `src/pages/trainer/MealPicker.tsx` (1)
+- `src/pages/trainer/TrainerPackages.tsx` (1)
+- `src/pages/trainer/AssignProgram.tsx` (1)
+- `src/components/queue/RedFlagsSection.tsx` (1)
+- `src/components/trainer/ClientNutritionPlan.tsx` (4 — addMeal, macroPreset, switchTemplate, addMealSlot)
+
+**Priority 5 (`scale: 0.95` → `TAP_SCALE.secondary`):**
+- `src/pages/Milestones.tsx` (1)
+- `src/components/onboarding/AllergiesStep.tsx` (1)
+- `src/pages/trainer/TrainerDashboard.tsx` (1 — recent client card)
+
+**Priority 6 (`scale: 0.9` → `TAP_SCALE.iconStrong`):**
+- `src/pages/Home.tsx` (2 — water +/-)
+- `src/components/trainer/ClientNutritionPlan.tsx` (2 — portion +/-)
+- `src/components/trainer/ProgramTargeting.tsx` (1 — frequency num)
+
+**Priority 7 (`scale: 0.85` → `TAP_SCALE.micro`):**
+- `src/pages/Home.tsx` (1 — glass dots)
+- `src/components/onboarding/SleepStep.tsx` (1 — moon stars)
+
+**Priority 8 (Spring physics → `IOS_SPRING.snappy`):**
+- `src/pages/trainer/ProgramEditor.tsx` (1 — TypeCard `stiffness:400, damping:28` → snappy)
+
+**Priority 9 (`duration: 0.2` → `MOTION_DURATION.fast`):**
+- `src/pages/trainer/WorkoutEditor.tsx` (1 — chevron rotate)
+
+**Priority 10 (string easings → `MOTION_EASE.*`):**
+- `src/pages/PostWorkout.tsx` (1)
+- `src/pages/ActiveWorkout.tsx` (1)
+- `src/components/PlanInsightCard.tsx` (1)
+- `src/components/onboarding/StressStep.tsx` (1)
+- `src/components/CycleTracker.tsx` (2)
+- `src/components/trainer/ProgramTargeting.tsx` (1 — accordion)
+- `src/components/onboarding/ProcessingScreen.tsx` (1 — `'linear'` → `MOTION_EASE.linear`)
+- `src/pages/Onboarding.tsx` (2 — progress bar easeOut + step transition easeInOut)
+- `src/pages/AnalysisReport.tsx` (1 — spinner linear)
+- `src/pages/trainer/AddClient.tsx` (1 — spinner linear)
+- `src/pages/trainer/TrainerAnalytics.tsx` (1 — completion bar)
+- `src/components/queue/QueueStrip.tsx` (1 — pulsing easeInOut)
+- `src/components/queue/SyncEventBanner.tsx` (1)
+
+### Total replacements
+~75 hardcoded values migrated to centralized motion tokens.
+
+### Decisions / deviations
+- **0.98 → secondary (0.95)**: Auditor je pojasnio "list items koji su veliki → secondary". Sve liste (workouts, programs, clients, meals, message convos, packages, ClientNutritionPlan sheets) → `TAP_SCALE.secondary`. Vidno tightnije press feedback (0.95 vs 0.98) ali konzistentno.
+- **0.97 → primary** za primary CTA-ove i selectable cards (auth flows, package CTAs, trial start, goal/limitation chips).
+- **AnalysisReport.tsx**: lokalna `fade(delay)` helper funkcija uklonjena — svi callsites (5 instanci na linijama 169, 176, 182, 211, 234) zamenjeni `fadeUp(delay)` iz `@/lib/motion`. Razlika u easing-u je suptilna (`outQuart` u staroj fade vs `easeOut` u fadeUp); reduce-motion compliance bolji u fadeUp.
+- **Skipped (van scope)**: 0.94, 0.985, 0.96, 0.93, 0.92 instance — auditor lista samo standard tier (.85/.9/.95/.97/.98). Ostavljeni kao-jesu da se izbegne arbitrary mapping; ako Mihajlo želi, sledeća iteracija može ih sve normalizovati.
+
+### Acceptance
+- [x] `npm test` — 337 passed (337) — istih 337 testova zelena
+- [x] `npx tsc --noEmit` exit 0
+- [x] `npm run verify:tokens` "All design tokens compliant"
+- [x] Sve hardcoded `[0.25, 1, 0.5, 1]` i `[0.32, 0.72, 0, 1]` instance eliminisane (verified via Grep)
+
+### Notes for QA
+- Vizuelno zone of caution: 0.98 → 0.95 promena daje tightnije press feedback na list items (Trainer pages, ClientNutritionPlan sheets). Treba kratku vizuelnu proveru da li je to želeni feel ili treba "preserve original" tier (npr. dodati `TAP_SCALE.subtle = 0.98` u motion.ts).
+- ProgramTargeting.tsx accordion: `ease: "easeOut"` → `MOTION_EASE.easeOut` — semantički isti, samo prošao kroz tipe konstantu.
+- IT_TYPE: cleanup/refactor — bez biology/UX side-effects. Sync rules netaknuti, calorie floor netaknuti, MA5/luteal logic netaknuti.

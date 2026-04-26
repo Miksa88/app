@@ -17,7 +17,7 @@ import { X } from 'lucide-react';
 import { useSyncEvents, type SyncBanner, type SyncBannerType } from '@/hooks/useSyncEvents';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { MOTION_DURATION } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
 
 type TranslateFn = (key: string) => string;
 
@@ -110,7 +110,7 @@ const BannerCard = ({ banner, onDismiss, t }: BannerCardProps) => (
     initial={{ opacity: 0, y: -10, height: 0 }}
     animate={{ opacity: 1, y: 0, height: 'auto' }}
     exit={{ opacity: 0, y: -10, height: 0 }}
-    transition={{ duration: MOTION_DURATION.fast, ease: 'easeOut' }}
+    transition={{ duration: MOTION_DURATION.fast, ease: MOTION_EASE.easeOut }}
     className={`relative rounded-2xl border p-3 pr-10 backdrop-blur-sm card-shadow ${SEVERITY_STYLE[banner.severity]}`}
     role="alert"
   >
