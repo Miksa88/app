@@ -45,19 +45,37 @@ export async function getAuthenticatedClient(): Promise<SupabaseClient> {
   return client;
 }
 
-/** Direktno poziva EF sa ulogovanim JWT-om; vraća parsiran JSON response. */
+/**
+ * Direktno poziva EF sa ulogovanim JWT-om; vraća parsiran JSON response.
+ *
+ * Retry logika: Supabase EF-ovi imaju cold start latency (do 5s). Prvi poziv
+ * posle perioda mirovanja često vraća 503 ili network error pre nego što
+ * runtime ne pokrene container. Retryjemo 2 puta sa 1s/2s backoff-om za
+ * 503/network errore — 4xx (auth/validation) ne retryjemo.
+ */
 export async function invokeEdgeFunction<T = unknown>(
   name: string,
   body: unknown,
 ): Promise<{ status: number; data: T | null; error: string | null }> {
   const client = await getAuthenticatedClient();
-  const { data, error } = await client.functions.invoke(name, { body });
-  if (error) {
-    return {
-      status: (error as { status?: number }).status ?? 500,
-      data: null,
-      error: error.message ?? String(error),
-    };
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [0, 1000, 2000];
+
+  let lastError: { status: number; error: string } = { status: 500, error: "no attempts" };
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+    }
+    const { data, error } = await client.functions.invoke(name, { body });
+    if (!error) {
+      return { status: 200, data: data as T, error: null };
+    }
+    const status = (error as { status?: number }).status ?? 500;
+    const message = error.message ?? String(error);
+    lastError = { status, error: message };
+    // Retryuj samo 503 (cold start) i mrežne greške; 4xx odmah vrati.
+    const isRetryable = status >= 500 || /fetch|network|timeout/i.test(message);
+    if (!isRetryable) break;
   }
-  return { status: 200, data: data as T, error: null };
+  return { status: lastError.status, data: null, error: lastError.error };
 }

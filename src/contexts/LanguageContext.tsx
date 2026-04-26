@@ -548,12 +548,17 @@ const translations: Record<string, Record<Language, string>> = {
 
   // Trainer Messages
   "trainerMsg.title": { en: "Messages", sr: "Poruke" },
+  "trainerMsg.emptyTitle": { en: "No conversations yet", sr: "Još nema razgovora" },
+  "trainerMsg.emptyBody": { en: "Once your clients start chatting, their conversations will appear here.", sr: "Kad klijentkinje krenu da pišu, razgovori će se pojaviti ovde." },
+  "trainerMsg.viewClients": { en: "View clients", sr: "Vidi klijentkinje" },
   "trainerMsg.searchConversations": { en: "Search conversations...", sr: "Pretraži razgovore..." },
   "trainerMsg.online": { en: "Online", sr: "Na mreži" },
   "trainerMsg.typeMessage": { en: "Type a message...", sr: "Napiši poruku..." },
 
   // Trainer Analytics
   "analytics.title": { en: "Analytics", sr: "Analitika" },
+  "analytics.lutealPhase": { en: "Luteal phase", sr: "Lutealna faza" },
+  "analytics.noClientsYet": { en: "No clients to analyze yet", sr: "Još nema klijentkinja za analizu" },
   "analytics.subtitle": { en: "Track your clients' progress", sr: "Prati napredak svojih klijenata" },
   "analytics.thisWeek": { en: "This Week", sr: "Ova nedelja" },
   "analytics.thisMonth": { en: "This Month", sr: "Ovaj mesec" },
@@ -568,6 +573,9 @@ const translations: Record<string, Record<Language, string>> = {
 
   // Trainer Payments
   "payments.title": { en: "Payments", sr: "Plaćanja" },
+  "payments.emptyTitle": { en: "Payments coming soon", sr: "Plaćanja uskoro" },
+  "payments.emptyBody": { en: "Stripe integration is on the way. For now, manage payments directly with your clients.", sr: "Stripe integracija je u izradi. Za sada koordiniši plaćanja direktno sa klijentkinjama." },
+  "payments.contactClients": { en: "Contact clients", sr: "Kontaktiraj klijentkinje" },
   "payments.subtitle": { en: "Manage client subscriptions", sr: "Upravljaj pretplatama klijenata" },
   "payments.monthlyRevenue": { en: "Monthly Revenue", sr: "Mesečni prihod" },
   "payments.active": { en: "Active", sr: "Aktivno" },
