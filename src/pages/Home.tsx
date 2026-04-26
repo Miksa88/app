@@ -26,6 +26,10 @@ import { DailyCheckInSheet } from "@/components/checkin/DailyCheckInSheet";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { useHydration } from "@/hooks/useHydration";
 import { useLogWaterGlass, DEFAULT_GLASS_ML } from "@/hooks/mutations/useLogWaterGlass";
+import WhyTodayPanel from "@/components/home/WhyTodayPanel";
+import ProgressOutlookCard from "@/components/home/ProgressOutlookCard";
+import { useMealPlan } from "@/hooks/useMealPlan";
+import { FOOD_DATABASE } from "@/data/foodDatabase";
 import type { Partition } from "@/types/training";
 
 // ============================================================================
@@ -51,12 +55,13 @@ import type { Partition } from "@/types/training";
 
 const Home = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { clientId, user } = useAuth();
   const { status } = useUserStatus(clientId);
   const { session: nextSession } = useNextSession(clientId);
   const { view: weeklyView } = useWeeklyCalendar(clientId);
   const { totals: dailyTotals } = useDailyTotals(clientId);
+  const { plan: mealPlan } = useMealPlan();
 
   const [unreadCount] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
@@ -253,12 +258,15 @@ const Home = () => {
       </div>
 
       <div className="px-5 space-y-4 pb-[100px]">
-        {/* ============ 1. Sync Banner (conditional) ============ */}
+        {/* ============ 1. Sync Banner (hero — jedan najvažniji rule) ============ */}
         {showSyncBanner && syncBanner && (
           <motion.div {...fadeUp(0.1)}>
             <SyncBanner {...syncBanner} />
           </motion.div>
         )}
+
+        {/* ============ 1b. Why-today panel (expand za sve aktivne rule) ============ */}
+        <WhyTodayPanel status={status ?? null} delay={0.115} />
 
         {/* ============ 1a. Weekly check-in banner (IT-17) — > 7 dana ============ */}
         {showWeeklyCheckInBanner && (
@@ -367,21 +375,65 @@ const Home = () => {
           </Card>
         </motion.div>
 
-        {/* ============ 6b. Plan jela 7 dana + shopping list ============ */}
+        {/* ============ 6a. Progress outlook — kada je realan napredak ============ */}
+        <ProgressOutlookCard
+          targetMode={status?.nutrition.targetMode ?? null}
+          currentWeightKg={status?.bio.currentWeightMA5 ?? null}
+          delay={0.27}
+        />
+
+        {/* ============ 6b. Plan jela 7 dana + shopping list (sa preview-om za sutra) ============ */}
         <motion.div {...fadeUp(0.28)}>
           <button
             onClick={() => navigate("/meal-plan")}
-            className="w-full bg-card rounded-2xl card-shadow p-5 flex items-center gap-4 text-left"
+            className="w-full bg-card rounded-2xl card-shadow p-5 text-left"
             aria-label={t("home.mealPlanCta")}
           >
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-              <CalendarDays size={ICON_SIZE.lg} className="text-primary" aria-hidden="true" />
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <CalendarDays size={ICON_SIZE.lg} className="text-primary" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-headline text-foreground">{t("home.mealPlanTitle")}</p>
+                <p className="text-footnote text-muted-foreground mt-0.5">{t("home.mealPlanSub")}</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-headline text-foreground">{t("home.mealPlanTitle")}</p>
-              <p className="text-footnote text-muted-foreground mt-0.5">{t("home.mealPlanSub")}</p>
-            </div>
-            <ChevronRight size={16} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
+            {mealPlan && (() => {
+              // Sutrašnji obroci — JS day: 1=Mon..0=Sun. Naš index: 0=Mon..6=Sun.
+              const todayJsDay = new Date().getDay();
+              const todayIdx = todayJsDay === 0 ? 6 : todayJsDay - 1;
+              const tomorrowIdx = (todayIdx + 1) % 7;
+              const tomorrowSlots = mealPlan.slots
+                .filter(s => s.dayIndex === tomorrowIdx)
+                .sort((a, b) => a.slotIndex - b.slotIndex)
+                .slice(0, 3);
+              if (tomorrowSlots.length === 0) return null;
+              return (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-caption-1 text-muted-foreground uppercase tracking-wider font-semibold mb-2">
+                    {t("home.mealPlanTomorrow")}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {tomorrowSlots.map(slot => {
+                      const food = FOOD_DATABASE.find(f => f.id === slot.foodId);
+                      if (!food) return null;
+                      return (
+                        <li key={`${slot.dayIndex}-${slot.slotIndex}`} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
+                          <span className="text-footnote text-foreground truncate flex-1">
+                            {language === "sr" ? food.nameSr : food.nameEn}
+                          </span>
+                          <span className="text-caption-1 text-muted-foreground tabular-nums shrink-0">
+                            {slot.calories}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })()}
           </button>
         </motion.div>
 
