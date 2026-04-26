@@ -1372,6 +1372,8 @@ const translations: Record<string, Record<Language, string>> = {
   "training.videoSelected": { en: "Video selected", sr: "Video izabran" },
   "training.videoTypeError": { en: "Please select a video file", sr: "Izaberi video fajl" },
   "training.videoSizeError": { en: "Video too large (max 100MB)", sr: "Video je prevelik (max 100MB)" },
+  "training.uploading": { en: "Uploading…", sr: "Otpremanje…" },
+  "training.videoUploaded": { en: "Video uploaded", sr: "Video otpremljen" },
   "training.exerciseName": { en: "Name", sr: "Naziv" },
   "training.exerciseNamePlaceholder": { en: "e.g. Barbell Squat", sr: "npr. Čučanj sa šipkom" },
   "training.instructions": { en: "Instructions", sr: "Instrukcije" },

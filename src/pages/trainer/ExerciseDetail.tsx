@@ -4,10 +4,17 @@ import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Upload, Trash2, Video } from "lucide-react";
+import { Upload, Trash2, Video, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { EXERCISE_LIBRARY } from "@/data/trainerMockData";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  uploadExerciseVideo,
+  persistExerciseVideoUrl,
+  pathFromPublicUrl,
+  deleteExerciseVideo,
+} from "@/services/exerciseVideoService";
 
 const EQUIPMENT_OPTIONS = ["Barbell", "Dumbbell", "Machine", "Cable Machine", "Bodyweight", "Kettlebell", "Bench", "Rack"];
 const FOCUS_OPTIONS = ["Noge", "Grudi", "Leđa", "Ramena", "Ruke", "Core", "Kardio", "Full Body"];
@@ -19,8 +26,11 @@ const ExerciseDetail = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { toast } = useToast();
+  const { clientId: trainerId } = useAuth();
   const isNew = id === "new" || !id;
+  // ID iz URL-a može biti broj (legacy MOCK_LIBRARY) ili UUID iz baze
   const existing = !isNew ? EXERCISE_LIBRARY.find((e) => e.id === parseInt(id!)) : null;
+  const isPersistedExercise = !isNew && id && id.length > 10 && !Number.isInteger(Number(id));
 
   const [name, setName] = useState(existing?.name || "");
   const [instructions, setInstructions] = useState(existing?.instructions || "");
@@ -29,10 +39,13 @@ const ExerciseDetail = () => {
   const [level, setLevel] = useState(existing?.difficulty || "beginner");
   const [type, setType] = useState("Strength");
 
-  // Video upload — local preview za beta. TODO: wire to Supabase Storage bucket.
+  // Video upload — Supabase Storage (real persistence) + lokalni blob preview
+  // dok se ne završi upload. Ako vežba nije persistirana u DB-u (legacy MOCK
+  // library sa numeric ID), fallback na lokalni blob bez upload-a.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(existing?.videoUrl || null);
   const [videoFileName, setVideoFileName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Otpusti blob URL na unmount da ne curi memory.
   useEffect(() => {
@@ -45,7 +58,7 @@ const ExerciseDetail = () => {
     fileInputRef.current?.click();
   };
 
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("video/")) {
@@ -58,18 +71,54 @@ const ExerciseDetail = () => {
       return;
     }
     if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
-    const url = URL.createObjectURL(file);
-    setVideoUrl(url);
+    const localUrl = URL.createObjectURL(file);
+    setVideoUrl(localUrl);
     setVideoFileName(file.name);
-    toast({ title: t("training.videoSelected") });
-    // Resetuj input vrednost da se isti fajl može ponovo izabrati.
     e.target.value = "";
+
+    // Ako vežba postoji u DB (UUID id), upload na Supabase Storage + persist URL
+    if (isPersistedExercise && id && trainerId) {
+      setUploading(true);
+      try {
+        const { publicUrl } = await uploadExerciseVideo({
+          trainerId,
+          exerciseId: id,
+          file,
+        });
+        await persistExerciseVideoUrl(id, publicUrl);
+        URL.revokeObjectURL(localUrl);
+        setVideoUrl(publicUrl);
+        toast({ title: t("training.videoUploaded") });
+      } catch (err) {
+        toast({
+          title: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        });
+      } finally {
+        setUploading(false);
+      }
+    } else {
+      // Legacy MOCK exercise — local blob, neće preživeti reload
+      toast({ title: t("training.videoSelected") });
+    }
   };
 
-  const handleRemoveVideo = () => {
+  const handleRemoveVideo = async () => {
+    const oldUrl = videoUrl;
     if (videoUrl && videoUrl.startsWith("blob:")) URL.revokeObjectURL(videoUrl);
     setVideoUrl(null);
     setVideoFileName(null);
+
+    // Ako je persistirano, briši iz storage-a + iz exercises tabele
+    if (isPersistedExercise && id && oldUrl && !oldUrl.startsWith("blob:")) {
+      try {
+        const path = pathFromPublicUrl(oldUrl);
+        if (path) await deleteExerciseVideo(path);
+        await persistExerciseVideoUrl(id, null);
+      } catch {
+        // silent — ako ne uspe brisanje, korisnik neće videti grešku
+      }
+    }
   };
 
   const handleSave = () => {
@@ -132,6 +181,16 @@ const ExerciseDetail = () => {
               >
                 <track kind="captions" />
               </video>
+              {uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <div className="bg-card/90 rounded-2xl px-4 py-3 flex items-center gap-2">
+                    <Loader2 size={16} className="text-primary animate-spin" aria-hidden="true" />
+                    <span className="text-caption-1 font-semibold text-foreground">
+                      {t("training.uploading")}
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   <Video size={16} className="text-muted-foreground shrink-0" aria-hidden="true" />
