@@ -29,6 +29,7 @@ import { useLogWaterGlass, DEFAULT_GLASS_ML } from "@/hooks/mutations/useLogWate
 import WhyTodayPanel from "@/components/home/WhyTodayPanel";
 import ProgressOutlookCard from "@/components/home/ProgressOutlookCard";
 import GoalEventCard from "@/components/home/GoalEventCard";
+import PromoteBanner from "@/components/home/PromoteBanner";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { FOOD_DATABASE } from "@/data/foodDatabase";
 import type { Partition } from "@/types/training";
@@ -268,6 +269,9 @@ const Home = () => {
 
         {/* ============ 1b. Why-today panel (expand za sve aktivne rule) ============ */}
         <WhyTodayPanel status={status ?? null} delay={0.115} />
+
+        {/* ============ 1c. Promote banner (8+ uzastopnih top-of-rep sesija) ============ */}
+        <PromoteBanner delay={0.12} />
 
         {/* ============ 1a. Weekly check-in banner (IT-17) — > 7 dana ============ */}
         {showWeeklyCheckInBanner && (

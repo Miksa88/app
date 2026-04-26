@@ -13,6 +13,9 @@ import { ClientUserStatusPanel } from "@/components/queue/ClientUserStatusPanel"
 import { SyncRulesOverrideSection } from "@/components/trainer/SyncRulesOverrideSection";
 import { PageHeader } from "@/components/PageHeader";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import TierPromoteSheet from "@/components/trainer/TierPromoteSheet";
+import TierBadge from "@/components/profile/TierBadge";
+import type { PackageTier } from "@/services/packageService";
 import { TabControl } from "@/components/ui/tab-control";
 import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
@@ -36,6 +39,23 @@ const ClientProfile = () => {
   const [notes, setNotes] = useState(MOCK_CLIENT_NOTES[id || ''] || []);
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showTierSheet, setShowTierSheet] = useState(false);
+  const [clientTier, setClientTier] = useState<PackageTier | null>(null);
+
+  // Učitaj tier iz profiles
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("assigned_tier")
+        .eq("id", id)
+        .maybeSingle();
+      if (!cancelled && data?.assigned_tier) setClientTier(data.assigned_tier);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   const mockClient = MOCK_CLIENTS.find(c => c.id === id);
   const [supabaseClient, setSupabaseClient] = useState<ClientData | null>(null);
@@ -202,6 +222,19 @@ const ClientProfile = () => {
                     {sc.label}
                   </span>
                   <span className="text-caption-1 opacity-85">{typeLabel}</span>
+                  <button
+                    onClick={() => setShowTierSheet(true)}
+                    aria-label={t("tier.promote")}
+                    className="ml-auto"
+                  >
+                    {clientTier ? (
+                      <TierBadge tier={clientTier} />
+                    ) : (
+                      <span className="text-caption-2 font-bold px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
+                        + tier
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
               {client.streak > 0 && (
@@ -712,6 +745,16 @@ const ClientProfile = () => {
           </div>
         )}
       </div>
+
+      {id && (
+        <TierPromoteSheet
+          open={showTierSheet}
+          onOpenChange={setShowTierSheet}
+          clientId={id}
+          currentTier={clientTier}
+          onPromoted={(t) => setClientTier(t)}
+        />
+      )}
     </div>
   );
 };
