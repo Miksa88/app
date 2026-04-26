@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   Flame, Droplets, Minus, Plus, MessageCircle,
   ChevronRight, Moon, AlertTriangle, Footprints, Activity, Sun, Clock, Dumbbell, Check,
-  Play, Sparkles, Drumstick, Wheat, CalendarCheck,
+  Play, Sparkles, Drumstick, Wheat, CalendarCheck, CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -365,6 +365,24 @@ const Home = () => {
               fat={{ current: fatCurrent, goal: fatGoal }}
             />
           </Card>
+        </motion.div>
+
+        {/* ============ 6b. Plan jela 7 dana + shopping list ============ */}
+        <motion.div {...fadeUp(0.28)}>
+          <button
+            onClick={() => navigate("/meal-plan")}
+            className="w-full bg-card rounded-2xl card-shadow p-5 flex items-center gap-4 text-left"
+            aria-label={t("home.mealPlanCta")}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+              <CalendarDays size={ICON_SIZE.lg} className="text-primary" aria-hidden="true" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-headline text-foreground">{t("home.mealPlanTitle")}</p>
+              <p className="text-footnote text-muted-foreground mt-0.5">{t("home.mealPlanSub")}</p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
+          </button>
         </motion.div>
 
         {/* ============ 7. Unos vode (IT-14) ============ */}

@@ -31,6 +31,8 @@ const Subscription = lazy(() => import("./pages/Subscription"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AnalysisReport = lazy(() => import("./pages/AnalysisReport"));
 const WeeklyCheckIn = lazy(() => import("./pages/WeeklyCheckIn"));
+const MealPlanPage = lazy(() => import("./pages/MealPlan"));
+const ShoppingPage = lazy(() => import("./pages/Shopping"));
 
 // Trainer routes — zasebni chunk
 const TrainerDashboard = lazy(() => import("./pages/trainer/TrainerDashboard"));
@@ -118,6 +120,8 @@ const AnimatedRoutes = () => {
         <Route path="/progress" element={<AuthGuard><Progress /></AuthGuard>} />
         <Route path="/milestones" element={<AuthGuard><Milestones /></AuthGuard>} />
         <Route path="/weekly-check-in" element={<AuthGuard><WeeklyCheckIn /></AuthGuard>} />
+        <Route path="/meal-plan" element={<AuthGuard><MealPlanPage /></AuthGuard>} />
+        <Route path="/shopping" element={<AuthGuard><ShoppingPage /></AuthGuard>} />
 
         {/* Trainer routes */}
         <Route path="/trainer" element={<AuthGuard><TrainerDashboard /></AuthGuard>} />
