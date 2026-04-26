@@ -27,6 +27,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useHaptic } from "@/hooks/useHaptic";
 import QuickPauseSheet from "@/components/home/QuickPauseSheet";
+import TierBadge from "@/components/profile/TierBadge";
+import type { PackageTier } from "@/services/packageService";
 
 type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis";
 
@@ -58,6 +60,23 @@ const Profile = () => {
   });
   const [confirmAction, setConfirmAction] = useState<"logout" | "delete" | null>(null);
   const [showPauseSheet, setShowPauseSheet] = useState(false);
+  const [tier, setTier] = useState<PackageTier | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("assigned_tier")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!cancelled && data?.assigned_tier) {
+        setTier(data.assigned_tier);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const toggleGoal = (g: string) => setGoals((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
   const toggleAllergy = (a: string) => setAllergies((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
@@ -187,9 +206,13 @@ const Profile = () => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <span className="inline-flex items-center gap-1 text-caption-2 text-primary font-semibold">
-                <Crown size={ICON_SIZE.xs} aria-hidden="true" /> Premium
-              </span>
+              {tier ? (
+                <TierBadge tier={tier} />
+              ) : (
+                <span className="inline-flex items-center gap-1 text-caption-2 text-muted-foreground font-medium">
+                  <Crown size={ICON_SIZE.xs} aria-hidden="true" /> Beta
+                </span>
+              )}
             </div>
             <h2 className="text-headline text-foreground">{displayName || t("profile.title")}</h2>
             <p className="text-footnote text-muted-foreground">{displayEmail}</p>
