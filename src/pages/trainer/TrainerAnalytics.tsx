@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MotionCard } from "@/components/ui/motion-card";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
-import { Users, AlertTriangle, Activity, Moon } from "lucide-react";
+import { Users, AlertTriangle, Activity, Moon, Crown, Sparkles, Zap, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StatCard } from "@/components/ui/stat-card";
@@ -13,6 +13,7 @@ import { TabControl } from "@/components/ui/tab-control";
 import { useTrainerDashboard } from "@/hooks/useTrainerDashboard";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { getFunnelStats, type FunnelStats } from "@/services/autoPilotService";
 
 // TODO: dodaj week-over-week aggregaciju iz workout/meal log audita u IT-27.
 // Beta: prikazujemo trenutne agregirane brojeve iz user_status (real),
@@ -24,6 +25,20 @@ const TrainerAnalytics = () => {
   const [period, setPeriod] = useState<"week" | "month" | "all">("week");
   const { counters } = useTrainerDashboard();
   const { clients } = useTrainerClients();
+  const [funnel, setFunnel] = useState<FunnelStats | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stats = await getFunnelStats();
+        if (!cancelled) setFunnel(stats);
+      } catch {
+        // silent
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const totalClients = counters?.totalClients ?? 0;
   const atRiskCount = counters?.atRiskCount ?? 0;
@@ -88,6 +103,58 @@ const TrainerAnalytics = () => {
             value={String(lutealCount)}
           />
         </motion.div>
+
+        {/* Funnel stats — tier breakdown + 30-day deltas */}
+        {funnel && (
+          <motion.div {...fadeUp(0.13)}>
+            <SectionLabel>{t("funnel.title")}</SectionLabel>
+            <MotionCard className="p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <div className="w-9 h-9 rounded-xl bg-info/10 flex items-center justify-center mx-auto mb-1">
+                    <Zap size={14} className="text-info" aria-hidden="true" />
+                  </div>
+                  <p className="text-title-3 font-bold text-foreground tabular-nums">{funnel.totals.entry}</p>
+                  <p className="text-caption-2 text-muted-foreground">{t("tier.entry")}</p>
+                </div>
+                <div className="text-center border-x border-border">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-1">
+                    <Sparkles size={14} className="text-primary" aria-hidden="true" />
+                  </div>
+                  <p className="text-title-3 font-bold text-foreground tabular-nums">{funnel.totals.mid}</p>
+                  <p className="text-caption-2 text-muted-foreground">{t("tier.mid")}</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-9 h-9 rounded-xl bg-warning/15 flex items-center justify-center mx-auto mb-1">
+                    <Crown size={14} className="text-warning" aria-hidden="true" />
+                  </div>
+                  <p className="text-title-3 font-bold text-foreground tabular-nums">{funnel.totals.high}</p>
+                  <p className="text-caption-2 text-muted-foreground">{t("tier.high")}</p>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-border grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center gap-1 text-caption-1 text-muted-foreground">
+                    <TrendingUp size={12} aria-hidden="true" />
+                    {t("funnel.newClients")}
+                  </div>
+                  <p className="text-headline font-bold text-foreground tabular-nums mt-0.5">
+                    +{funnel.newClientsRecent}
+                  </p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1 text-caption-1 text-muted-foreground">
+                    <Crown size={12} aria-hidden="true" />
+                    {t("funnel.highRecent")}
+                  </div>
+                  <p className="text-headline font-bold text-foreground tabular-nums mt-0.5">
+                    +{funnel.highRecent}
+                  </p>
+                </div>
+              </div>
+            </MotionCard>
+          </motion.div>
+        )}
 
         {/* Per-client lista — pravi klijenti iz Supabase */}
         {clients.length > 0 ? (

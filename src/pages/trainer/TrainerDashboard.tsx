@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTrainerDashboard } from "@/hooks/useTrainerDashboard";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
+import AutoPilotFeed from "@/components/trainer/AutoPilotFeed";
 import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { StatCard } from "@/components/ui/stat-card";
@@ -199,6 +200,9 @@ const TrainerDashboard = () => {
             </button>
           </motion.div>
         )}
+
+        {/* ============ Auto-pilot feed — plateau alerts + missing videos ============ */}
+        <AutoPilotFeed delay={0.21} />
 
         {/* ============ Focus mode toggle — pokaži samo at-risk/deload klijentkinje ============ */}
         {clients.length > 0 && (
