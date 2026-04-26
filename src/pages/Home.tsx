@@ -28,6 +28,7 @@ import { useHydration } from "@/hooks/useHydration";
 import { useLogWaterGlass, DEFAULT_GLASS_ML } from "@/hooks/mutations/useLogWaterGlass";
 import WhyTodayPanel from "@/components/home/WhyTodayPanel";
 import ProgressOutlookCard from "@/components/home/ProgressOutlookCard";
+import GoalEventCard from "@/components/home/GoalEventCard";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { FOOD_DATABASE } from "@/data/foodDatabase";
 import type { Partition } from "@/types/training";
@@ -381,6 +382,9 @@ const Home = () => {
           currentWeightKg={status?.bio.currentWeightMA5 ?? null}
           delay={0.27}
         />
+
+        {/* ============ 6a2. Goal event countdown (svadba/letovanje/...) ============ */}
+        <GoalEventCard delay={0.275} />
 
         {/* ============ 6b. Plan jela 7 dana + shopping list (sa preview-om za sutra) ============ */}
         <motion.div {...fadeUp(0.28)}>

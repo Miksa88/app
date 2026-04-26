@@ -43,7 +43,11 @@ const TrainerDashboard = () => {
 
   const activeCount = counters?.totalClients ?? 0;
   const redFlagCount = counters?.atRiskCount ?? 0;
-  const recentClients = clients.slice(0, 6);
+  const [focusMode, setFocusMode] = useState<boolean>(false);
+  const visibleClients = focusMode
+    ? clients.filter(c => c.isAtRisk || c.isInDeload)
+    : clients;
+  const recentClients = visibleClients.slice(0, 6);
   const atRiskNames = atRiskClients
     .slice(0, 3)
     .map(c => c.firstName ?? c.lastName ?? "—")
@@ -196,6 +200,35 @@ const TrainerDashboard = () => {
           </motion.div>
         )}
 
+        {/* ============ Focus mode toggle — pokaži samo at-risk/deload klijentkinje ============ */}
+        {clients.length > 0 && (
+          <motion.div {...fadeUp(0.25)}>
+            <button
+              onClick={() => setFocusMode(v => !v)}
+              role="switch"
+              aria-checked={focusMode}
+              className="w-full bg-card rounded-2xl card-shadow p-4 flex items-center gap-3 text-left min-h-14"
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                focusMode ? "bg-primary/15" : "bg-muted"
+              }`}>
+                <Sparkles size={18} className={focusMode ? "text-primary" : "text-muted-foreground"} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-foreground">
+                  {focusMode ? t("trainer.focusOn") : t("trainer.focusOff")}
+                </p>
+                <p className="text-caption-1 text-muted-foreground mt-0.5">
+                  {focusMode ? t("trainer.focusOnDesc") : t("trainer.focusOffDesc")}
+                </p>
+              </div>
+              <div className={`w-12 h-7 rounded-full p-0.5 transition-colors duration-base shrink-0 ${focusMode ? "bg-primary" : "bg-muted"}`} aria-hidden="true">
+                <div className={`w-6 h-6 rounded-full bg-white shadow-sm transition-transform ${focusMode ? "translate-x-5" : "translate-x-0"}`} />
+              </div>
+            </button>
+          </motion.div>
+        )}
+
         {/* ============ Recent Clients — horizontalni carousel ============ */}
         {recentClients.length > 0 && (
           <motion.div {...fadeUp(0.28)}>
@@ -209,7 +242,7 @@ const TrainerDashboard = () => {
                 </button>
               }
             >
-              Klijentkinje
+              {focusMode ? t("trainer.priorityClients") : t("trainer.allClients")}
             </SectionLabel>
             <div className="flex gap-3 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
               {recentClients.map((client, i) => {
