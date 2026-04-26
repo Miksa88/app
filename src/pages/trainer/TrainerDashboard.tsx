@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  Users, Dumbbell, UtensilsCrossed, MessageCircle, TrendingUp, Gift, CreditCard,
-  ChevronRight, Package, Activity, AlertTriangle, Sparkles, Flame, ArrowUpRight,
+  Users, Dumbbell, TrendingUp, Gift, CreditCard,
+  ChevronRight, Package, Activity, AlertTriangle, Sparkles, ArrowUpRight,
 } from "lucide-react";
 import { MOCK_PACKAGES } from "@/data/packagesMockData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { MOCK_CLIENTS } from "@/data/trainerMockData";
+import { useTrainerDashboard } from "@/hooks/useTrainerDashboard";
+import { useTrainerClients } from "@/hooks/useTrainerClients";
 import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { StatCard } from "@/components/ui/stat-card";
@@ -22,6 +23,8 @@ const TrainerDashboard = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { user } = useAuth();
+  const { counters, atRiskClients } = useTrainerDashboard();
+  const { clients } = useTrainerClients();
   const haptic = useHaptic();
 
   const trainerFirstName = String(
@@ -38,14 +41,13 @@ const TrainerDashboard = () => {
     trialMealPlanName: "Balanced 2000kcal",
   });
 
-  // Mock agregacije — zamenjujemo wire-up-om u Iter 3b (kad budemo spremni)
-  const activeCount = MOCK_CLIENTS.filter(c => c.status === 'active' || c.status === 'trial').length;
-  const trialCount = MOCK_CLIENTS.filter(c => c.status === 'trial').length;
-  const recentClients = MOCK_CLIENTS.slice(0, 6);
-  const redFlagCount = 2;        // mock
-  const todayWorkouts = 6;
-  const todayCheckins = 3;
-  const todayMessages = 8;
+  const activeCount = counters?.totalClients ?? 0;
+  const redFlagCount = counters?.atRiskCount ?? 0;
+  const recentClients = clients.slice(0, 6);
+  const atRiskNames = atRiskClients
+    .slice(0, 3)
+    .map(c => c.firstName ?? c.lastName ?? "—")
+    .join(" · ");
 
   const trialIncludesSummary = [
     trialSettings.includesWorkouts ? t("nav.gym") : "",
@@ -130,7 +132,7 @@ const TrainerDashboard = () => {
           </div>
         </motion.div>
 
-        {/* ============ Today's KPIs — 4 stat cards sa Apple Health-like mini chart ============ */}
+        {/* ============ Today's KPIs — agregirani brojevi iz user_status ============ */}
         <motion.div {...fadeUp(0.18)}>
           <SectionLabel>Danas</SectionLabel>
           <div className="grid grid-cols-2 gap-3">
@@ -139,43 +141,37 @@ const TrainerDashboard = () => {
               icon={<Users size={ICON_SIZE.md} />}
               iconBg="bg-primary/10"
               iconColor="text-primary"
-              label="Aktivno"
+              label="Klijentkinje"
               value={String(activeCount)}
-              trend="+2"
-              trendDirection="up"
+            />
+            <StatCard
+              layout="apple-health"
+              icon={<AlertTriangle size={ICON_SIZE.md} />}
+              iconBg="bg-destructive/10"
+              iconColor="text-destructive"
+              label="Na oprezu"
+              value={String(redFlagCount)}
+            />
+            <StatCard
+              layout="apple-health"
+              icon={<Activity size={ICON_SIZE.md} />}
+              iconBg="bg-info/10"
+              iconColor="text-info"
+              label="Deload"
+              value={String(counters?.deloadCount ?? 0)}
             />
             <StatCard
               layout="apple-health"
               icon={<Dumbbell size={ICON_SIZE.md} />}
               iconBg="bg-warning/10"
               iconColor="text-warning"
-              label="Treninzi"
-              value={String(todayWorkouts)}
-              subtitle="4 završeno"
-            />
-            <StatCard
-              layout="apple-health"
-              icon={<Activity size={ICON_SIZE.md} />}
-              iconBg="bg-success/10"
-              iconColor="text-success"
-              label="Check-ins"
-              value={String(todayCheckins)}
-              subtitle="1 na red"
-            />
-            <StatCard
-              layout="apple-health"
-              icon={<MessageCircle size={ICON_SIZE.md} />}
-              iconBg="bg-info/10"
-              iconColor="text-info"
-              label="Poruke"
-              value={String(todayMessages)}
-              trend={`${3} neprocitane`}
-              trendDirection={todayMessages > 0 ? "up" : undefined}
+              label="Lutealna faza"
+              value={String(counters?.cyclePhaseCounts.luteal ?? 0)}
             />
           </div>
         </motion.div>
 
-        {/* ============ Red Flags — ako ih ima ============ */}
+        {/* ============ Red Flags — prikazuje stvarna imena iz atRiskClients ============ */}
         {redFlagCount > 0 && (
           <motion.div {...fadeUp(0.22)}>
             <button
@@ -189,64 +185,69 @@ const TrainerDashboard = () => {
                 <p className="text-body font-semibold text-foreground">
                   {redFlagCount} klijentkinja na oprezu
                 </p>
-                <p className="text-footnote text-muted-foreground mt-0.5 truncate">
-                  Sarah · Anna — potrebna je intervencija
-                </p>
+                {atRiskNames && (
+                  <p className="text-footnote text-muted-foreground mt-0.5 truncate">
+                    {atRiskNames} — potrebna je intervencija
+                  </p>
+                )}
               </div>
               <ChevronRight size={ICON_SIZE.md} className="text-muted-foreground/50 shrink-0" aria-hidden="true" />
             </button>
           </motion.div>
         )}
 
-        {/* ============ Recent Clients — horizontalni carousel avatar-a ============ */}
-        <motion.div {...fadeUp(0.28)}>
-          <SectionLabel
-            action={
-              <button
-                onClick={() => navigate("/trainer/clients")}
-                className="text-caption-1 text-primary font-semibold"
-              >
-                Sve →
-              </button>
-            }
-          >
-            Nedavno aktivne
-          </SectionLabel>
-          <div className="flex gap-3 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
-            {recentClients.map((client, i) => (
-              <motion.button
-                key={client.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: MOTION_DURATION.base, delay: 0.3 + i * 0.04, ease: MOTION_EASE.outQuart }}
-                whileTap={{ scale: TAP_SCALE.secondary }}
-                onClick={() => navigate(`/trainer/client/${client.id}`)}
-                className="shrink-0 w-[88px] bg-card rounded-2xl card-shadow p-3 flex flex-col items-center gap-2"
-              >
-                <UserAvatar
-                  name={client.name}
-                  size="md"
-                  status={
-                    client.status === 'active'
-                      ? 'active'
-                      : client.status === 'trial'
-                      ? 'trial'
-                      : 'offline'
-                  }
-                />
-                <div className="text-center min-w-0 w-full">
-                  <p className="text-caption-1 font-semibold text-foreground truncate">
-                    {client.name.split(' ')[0]}
-                  </p>
-                  <p className="text-caption-2 text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5">
-                    <Flame size={ICON_SIZE.sm} aria-hidden="true" />
-                    {client.streak}d
-                  </p>
-                </div>
-              </motion.button>
-            ))}
-          </div>
-        </motion.div>
+        {/* ============ Recent Clients — horizontalni carousel ============ */}
+        {recentClients.length > 0 && (
+          <motion.div {...fadeUp(0.28)}>
+            <SectionLabel
+              action={
+                <button
+                  onClick={() => navigate("/trainer/clients")}
+                  className="text-caption-1 text-primary font-semibold"
+                >
+                  Sve →
+                </button>
+              }
+            >
+              Klijentkinje
+            </SectionLabel>
+            <div className="flex gap-3 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
+              {recentClients.map((client, i) => {
+                const fullName = [client.firstName, client.lastName].filter(Boolean).join(" ").trim()
+                  || client.email?.split("@")[0]
+                  || "Client";
+                return (
+                  <motion.button
+                    key={client.clientId}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: MOTION_DURATION.base, delay: 0.3 + i * 0.04, ease: MOTION_EASE.outQuart }}
+                    whileTap={{ scale: TAP_SCALE.secondary }}
+                    onClick={() => navigate(`/trainer/client/${client.clientId}`)}
+                    className="shrink-0 w-[88px] bg-card rounded-2xl card-shadow p-3 flex flex-col items-center gap-2"
+                  >
+                    <UserAvatar
+                      name={fullName}
+                      imageUrl={client.avatarUrl ?? undefined}
+                      size="md"
+                      status={client.isAtRisk ? "trial" : "active"}
+                    />
+                    <div className="text-center min-w-0 w-full">
+                      <p className="text-caption-1 font-semibold text-foreground truncate">
+                        {fullName.split(" ")[0]}
+                      </p>
+                      {client.cyclePhase && (
+                        <p className="text-caption-2 text-muted-foreground mt-0.5 truncate">
+                          {client.cyclePhase}
+                        </p>
+                      )}
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* ============ Manage sekcija — glavne navigacione kartice ============ */}
         <motion.div {...fadeUp(0.34)}>

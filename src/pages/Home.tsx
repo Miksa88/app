@@ -99,7 +99,8 @@ const Home = () => {
       : status?.bio.cyclePhase !== null && status?.bio.cyclePhase !== undefined;
 
   // Streak milestone celebration — WS-8 G10
-  const currentStreak = 14;
+  // TODO: derivati iz status.training (consecutive logged days) kad backend bude spreman
+  const currentStreak = 0;
   const { milestone, dismissMilestone } = useStreakMilestones(currentStreak);
 
   const addWater = () => {
@@ -182,14 +183,16 @@ const Home = () => {
         </motion.div>
 
         <motion.div {...fadeUp(0.08)} className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => navigate("/milestones")}
-            className="flex items-center gap-1 bg-card px-3 py-2 rounded-full card-shadow min-h-11"
-            aria-label={t("a11y.milestones")}
-          >
-            <Flame size={16} className="text-warning" aria-hidden="true" />
-            <span className="text-subhead font-semibold text-foreground">14</span>
-          </button>
+          {currentStreak > 0 && (
+            <button
+              onClick={() => navigate("/milestones")}
+              className="flex items-center gap-1 bg-card px-3 py-2 rounded-full card-shadow min-h-11"
+              aria-label={t("a11y.milestones")}
+            >
+              <Flame size={16} className="text-warning" aria-hidden="true" />
+              <span className="text-subhead font-semibold text-foreground">{currentStreak}</span>
+            </button>
+          )}
           <button
             onClick={() => navigate("/chat")}
             className="relative w-11 h-11 rounded-full gradient-primary flex items-center justify-center shadow-fab"

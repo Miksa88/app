@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Star, Calendar, Heart, Globe, User, Settings, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Activity, Flame, Footprints, HeartPulse, Bed, type LucideProps } from "lucide-react";
+import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, type LucideProps } from "lucide-react";
 import type { ComponentType } from "react";
 import { useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -59,10 +59,12 @@ const Profile = () => {
   const toggleGoal = (g: string) => setGoals((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
   const toggleAllergy = (a: string) => setAllergies((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
 
-  const subscription = {
-    plan: "Standard", price: 49.99, icon: Star, startDate: "2025-01-15", nextBilling: "2026-03-15", status: "active" as const,
-    features: ["sub.personalizedPlan", "sub.allExercises", "sub.progressTracking", "sub.mealPlan", "sub.trainerChat", "sub.weeklyCheckin", "sub.monthlyVideo"]
-  };
+  // TODO: zameniti pravim subscription query-jem (Stripe / Supabase) u IT-25.
+  // Za beta — niko nema aktivnu pretplatu, "Manage" ulazi u plan landing.
+  const subscriptionFeatures = [
+    "sub.personalizedPlan", "sub.allExercises", "sub.progressTracking",
+    "sub.mealPlan", "sub.trainerChat", "sub.weeklyCheckin", "sub.monthlyVideo",
+  ];
 
   const [personalDetails, setPersonalDetails] = useState({
     goalWeight: 60, currentWeight: 62, height: 168, dateOfBirth: "5/5/2001", gender: t("personal.female"), dailyStepGoal: 10000
@@ -79,7 +81,7 @@ const Profile = () => {
 
   // Grouped sections like Cal.ai
   const accountItems = [
-    { icon: Crown, label: t("profile.subscription"), sub: `${subscription.plan} — €${subscription.price}/mo`, page: "subscription" as SettingsPage },
+    { icon: Crown, label: t("profile.subscription"), sub: t("subscription.manage"), page: "subscription" as SettingsPage },
     { icon: Palette, label: t("profile.appearance"), sub: theme === "system" ? t("appearance.system") : theme === "dark" ? t("appearance.dark") : t("appearance.light"), page: "appearance" as SettingsPage },
     { icon: Globe, label: t("profile.language"), sub: language === "sr" ? "Srpski" : "English", page: "language" as SettingsPage },
   ];
@@ -368,34 +370,10 @@ const Profile = () => {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <h2 className="text-title-2 text-foreground mb-2">{t("subscription.title")}</h2>
                   <p className="text-subhead text-muted-foreground mb-6">{t("subscription.subtitle")}</p>
-                  <Card className="p-5 border-2 border-primary mb-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
-                          <subscription.icon size={24} className="text-primary-foreground" />
-                        </div>
-                        <div>
-                          <p className="text-title-3 font-bold text-foreground">{subscription.plan}</p>
-                          <p className="text-subhead text-muted-foreground">
-                            <span className="text-title-3 text-foreground font-bold">€{subscription.price}</span>/{t("subscription.month")}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="bg-success/15 text-success text-caption-1 font-semibold px-3 py-1 rounded-full">{t("subscription.active")}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-footnote text-muted-foreground">
-                      <Calendar size={ICON_SIZE.xs} />
-                      <span>{t("subscription.activeSince")} {new Date(subscription.startDate).toLocaleDateString(language === "sr" ? "sr-Latn" : "en-US")}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-footnote text-muted-foreground mt-1">
-                      <Calendar size={ICON_SIZE.xs} />
-                      <span>{t("subscription.nextPayment")}: {new Date(subscription.nextBilling).toLocaleDateString(language === "sr" ? "sr-Latn" : "en-US")}</span>
-                    </div>
-                  </Card>
                   <Card className="p-5 mb-4">
                     <SectionLabel className="!px-0">{t("subscription.included")}</SectionLabel>
                     <div className="space-y-3">
-                      {subscription.features.map((f) => (
+                      {subscriptionFeatures.map((f) => (
                         <div key={f} className="flex items-center gap-3">
                           <div className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center shrink-0">
                             <Check size={ICON_SIZE.xs} className="text-primary-foreground" />

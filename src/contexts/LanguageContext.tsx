@@ -93,6 +93,7 @@ const translations: Record<string, Record<Language, string>> = {
   "subscription.nextPayment": { en: "Next payment", sr: "Sledeće plaćanje" },
   "subscription.included": { en: "What's included", sr: "Šta je uključeno" },
   "subscription.changePlan": { en: "Change plan", sr: "Promeni plan" },
+  "subscription.manage": { en: "Manage subscription", sr: "Upravljaj pretplatom" },
   "subscription.cancel": { en: "Cancel subscription", sr: "Otkaži pretplatu" },
   "subscription.month": { en: "month", sr: "mesec" },
 
@@ -1495,6 +1496,9 @@ const translations: Record<string, Record<Language, string>> = {
   "clients.deleteConfirm": { en: "This will permanently delete all client data. This cannot be undone.", sr: "Ovo će trajno obrisati sve podatke klijenta. Ova akcija se ne može poništiti." },
   "clients.notFoundTitle": { en: "Client not found", sr: "Klijent nije pronađen" },
   "clients.notFoundBody": { en: "This client may have been removed or the link is invalid.", sr: "Klijent je možda uklonjen ili je link nevažeći." },
+  "clients.atRisk": { en: "At risk", sr: "Na oprezu" },
+  "clients.emptyTitle": { en: "No clients yet", sr: "Još nema klijentkinja" },
+  "clients.emptyBody": { en: "Add your first client to start tracking their progress.", sr: "Dodaj prvu klijentkinju da bi pratila njen napredak." },
   "clients.overview": { en: "Overview", sr: "Pregled" },
   "clients.training": { en: "Training", sr: "Trening" },
   "clients.nutrition": { en: "Nutrition", sr: "Ishrana" },
