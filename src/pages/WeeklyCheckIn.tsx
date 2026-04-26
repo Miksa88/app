@@ -222,7 +222,7 @@ export default function WeeklyCheckIn() {
   // Render
   // ============================================================================
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate(-1)} />
 
       <div className="px-5 pt-2">

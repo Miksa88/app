@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, type LucideProps } from "lucide-react";
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useHealth } from "@/contexts/HealthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft } from "lucide-react";
 import { SectionLabel } from "@/components/ui/section-label";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
@@ -66,10 +67,54 @@ const Profile = () => {
     "sub.mealPlan", "sub.trainerChat", "sub.weeklyCheckin", "sub.monthlyVideo",
   ];
 
-  const [personalDetails, setPersonalDetails] = useState({
-    goalWeight: 60, currentWeight: 62, height: 168, dateOfBirth: "5/5/2001", gender: t("personal.female"), dailyStepGoal: 10000
+  const [personalDetails, setPersonalDetails] = useState<{
+    goalWeight: number | "";
+    currentWeight: number | "";
+    height: number | "";
+    dateOfBirth: string;
+    gender: string;
+    dailyStepGoal: number;
+  }>({
+    goalWeight: "",
+    currentWeight: "",
+    height: "",
+    dateOfBirth: "",
+    gender: t("personal.female"),
+    dailyStepGoal: 10000,
   });
   const [editingField, setEditingField] = useState<string | null>(null);
+
+  // Učitaj profile iz Supabase profiles tabele
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("current_weight, height, date_of_birth")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      setPersonalDetails((prev) => ({
+        ...prev,
+        currentWeight: data.current_weight ?? "",
+        height: data.height ?? "",
+        dateOfBirth: data.date_of_birth
+          ? new Date(data.date_of_birth).toLocaleDateString(language === "sr" ? "sr-RS" : "en-GB")
+          : "",
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, language]);
+
+  const persistProfileField = async (key: string, value: number | string): Promise<void> => {
+    if (!user?.id) return;
+    const update: Record<string, number | string | null> = {};
+    if (key === "currentWeight") update.current_weight = typeof value === "number" ? value : null;
+    else if (key === "height") update.height = typeof value === "number" ? value : null;
+    else return; // dateOfBirth/gender/dailyStepGoal stay local for now
+    await supabase.from("profiles").update(update).eq("id", user.id);
+  };
   const [editValue, setEditValue] = useState("");
 
   const { healthConnected, setHealthConnected } = useHealth();
@@ -125,7 +170,7 @@ const Profile = () => {
   const renderSectionHeader = (title: string) => <SectionLabel>{title}</SectionLabel>;
 
   return (
-    <motion.div {...fadeUp()} className={`min-h-screen bg-background-secondary pb-24 relative ${activePage ? "overflow-hidden h-screen" : ""}`}>
+    <motion.div {...fadeUp()} className={`min-h-screen bg-background-secondary pb-32 relative ${activePage ? "overflow-hidden h-screen" : ""}`}>
       <div className="px-5 pt-14 pb-2">
         <h1 className="text-large-title text-foreground">{t("profile.title")}</h1>
       </div>
@@ -218,7 +263,7 @@ const Profile = () => {
               </button>
             </div>
 
-            <div className="px-5 pb-24">
+            <div className="px-5 pb-32">
               {/* PERSONAL DETAILS */}
               {activePage === "personal" &&
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -260,7 +305,9 @@ const Profile = () => {
                                     className="bg-muted rounded-lg px-3 py-2 text-body text-foreground font-semibold text-right focus:outline-none focus:ring-2 focus:ring-primary w-24 min-h-11"
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
-                                        setPersonalDetails(prev => ({ ...prev, [key]: type === "number" ? Number(editValue) : editValue }));
+                                        const nextVal = type === "number" ? Number(editValue) : editValue;
+                                        setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
+                                        void persistProfileField(key, nextVal);
                                         setEditingField(null);
                                         haptic("medium");
                                       }
@@ -268,14 +315,20 @@ const Profile = () => {
                                   />
                                 )}
                                 {suffix && <span className="text-footnote text-muted-foreground">{suffix}</span>}
-                                <button onClick={() => { setPersonalDetails(prev => ({ ...prev, [key]: type === "number" ? Number(editValue) : editValue })); setEditingField(null); haptic("medium"); }}
+                                <button onClick={() => {
+                                  const nextVal = type === "number" ? Number(editValue) : editValue;
+                                  setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
+                                  void persistProfileField(key, nextVal);
+                                  setEditingField(null);
+                                  haptic("medium");
+                                }}
                                   className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-full bg-primary/10">
                                   <Check size={16} className="text-primary" />
                                 </button>
                               </>
                             ) : (
                               <>
-                                <span className="text-body text-foreground font-semibold">{value} {suffix}</span>
+                                <span className="text-body text-foreground font-semibold">{value === "" ? "—" : value} {value !== "" && suffix}</span>
                                 <button onClick={() => { setEditingField(key); setEditValue(String(value)); }}
                                   className="text-muted-foreground/50 min-w-[32px] min-h-[32px] flex items-center justify-center">
                                   <Pencil size={16} />

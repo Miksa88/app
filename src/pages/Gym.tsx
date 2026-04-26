@@ -48,7 +48,7 @@ const Gym = () => {
 
   if (trialExpired) {
     return (
-      <div className="min-h-screen bg-background-secondary flex flex-col items-center justify-center px-8 text-center pb-24">
+      <div className="min-h-screen bg-background-secondary flex flex-col items-center justify-center px-8 text-center pb-32">
         <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
           <Lock size={28} className="text-muted-foreground/50" />
         </div>
@@ -79,7 +79,7 @@ const Gym = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       {/* Header */}
       <div className="px-5 pt-14 pb-2">
         <motion.h1 {...fadeUp()} className="text-large-title text-foreground">

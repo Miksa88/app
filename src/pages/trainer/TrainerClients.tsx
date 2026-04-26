@@ -97,7 +97,7 @@ const TrainerClients = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       <div className="px-5 pt-14 pb-2 bg-background-secondary">
         <motion.div {...fadeUp()} className="flex items-center justify-between mb-5">
           <h1 className="text-large-title text-foreground">{t("clients.title")}</h1>

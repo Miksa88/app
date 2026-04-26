@@ -242,6 +242,8 @@ const translations: Record<string, Record<Language, string>> = {
   "progress.yourJourney": { en: "Your Journey", sr: "Tvoj put" },
   "progress.workouts": { en: "Workouts", sr: "Treninzi" },
   "progress.streak": { en: "Streak", sr: "Niz" },
+  "progress.totalPlanned": { en: "Planned", sr: "Planirano" },
+  "progress.photosEmpty": { en: "No photos yet", sr: "Još nema fotografija" },
   "progress.bestStreak": { en: "Best Streak", sr: "Najbolji niz" },
   "progress.volume": { en: "Volume", sr: "Volumen" },
   "progress.weeklyActivity": { en: "Weekly Progress", sr: "Nedeljni napredak" },

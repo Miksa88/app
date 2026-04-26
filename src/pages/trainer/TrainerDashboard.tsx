@@ -60,7 +60,7 @@ const TrainerDashboard = () => {
   const greeting = hour < 12 ? "Dobro jutro" : hour < 18 ? "Dobar dan" : "Dobro veče";
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       {/* ============ Header sa velikim naslov-om ============ */}
       <div className="px-5 pt-14 pb-4">
         <motion.div {...fadeUp()} className="flex items-center justify-between">

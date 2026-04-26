@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useNextSession } from "@/hooks/useNextSession";
 import { useWeeklyCalendar } from "@/hooks/useWeeklyCalendar";
+import { useDailyTotals } from "@/hooks/useDailyTotals";
 import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE, IOS_SPRING } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StatCard } from "@/components/ui/stat-card";
@@ -55,8 +56,9 @@ const Home = () => {
   const { status } = useUserStatus(clientId);
   const { session: nextSession } = useNextSession(clientId);
   const { view: weeklyView } = useWeeklyCalendar(clientId);
+  const { totals: dailyTotals } = useDailyTotals(clientId);
 
-  const [unreadCount] = useState(3);
+  const [unreadCount] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const haptic = useHaptic();
 
@@ -144,6 +146,43 @@ const Home = () => {
     : hour < 18 ? "Dobar dan"
     : "Dobro veče";
 
+  // ============================================================================
+  // Fueling + bio derivati iz UserStatus + meal_logs (real, ne hardcoded)
+  // ============================================================================
+  const calorieGoal = status?.nutrition.currentCalorieTarget ?? 0;
+  const calorieCurrent = Math.round(dailyTotals?.caloriesConsumed ?? 0);
+  const fuelPct = calorieGoal > 0 ? Math.round((calorieCurrent / calorieGoal) * 100) : 0;
+  const proteinGoal = Math.round(status?.nutrition.macros.proteinG ?? 0);
+  const carbsGoal = Math.round(status?.nutrition.macros.carbsG ?? 0);
+  const fatGoal = Math.round(status?.nutrition.macros.fatG ?? 0);
+  const proteinCurrent = Math.round(dailyTotals?.proteinConsumed ?? 0);
+  const carbsCurrent = Math.round(dailyTotals?.carbsConsumed ?? 0);
+  const fatCurrent = Math.round(dailyTotals?.fatConsumed ?? 0);
+
+  const sleepHours = status?.bio.sleepLast7DaysAvg ?? null;
+  const sleepLabel = sleepHours === null
+    ? "—"
+    : sleepHours >= 7
+    ? "Dobro"
+    : sleepHours >= 6
+    ? "Srednje"
+    : "Nedovoljno";
+  const stressLevel = status?.bio.stressLast7DaysAvg ?? null;
+  const stressLabel = stressLevel === null
+    ? "—"
+    : stressLevel <= 2
+    ? "Nizak"
+    : stressLevel <= 3.5
+    ? "Srednji"
+    : "Visok";
+  const stressSubtitle = stressLevel === null
+    ? ""
+    : stressLevel <= 2
+    ? "Spremna si"
+    : stressLevel <= 3.5
+    ? "Pažljivo"
+    : "Treba pauza";
+
   const todayCell = weeklyView?.days.find(d => d.isToday);
   const isTodayTraining = todayCell?.kind.type === "training";
   const todaySession = todayCell?.kind.type === "training" ? todayCell.kind.session : null;
@@ -165,7 +204,7 @@ const Home = () => {
     (status?.redFlags.daysSinceLastWeeklyCheckIn ?? 0) > 7;
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       {/* ============ 1. Header — greeting + streak + chat (kao trener dashboard) ============ */}
       <div className="px-5 pt-14 pb-4 flex items-center justify-between">
         <motion.div {...fadeUp()} className="min-w-0">
@@ -286,8 +325,8 @@ const Home = () => {
           <SectionLabel>Tvoje stanje</SectionLabel>
           <Card className="p-5 mt-2">
             <BioFeedbackRings
-              steps={{ current: 6400, goal: 10000 }}
-              activity={{ current: 28, goal: 45 }}
+              steps={{ current: 0, goal: 10000 }}
+              activity={{ current: 0, goal: 45 }}
               hydration={{ current: waterMlDisplay, goal: hydration.targetMl }}
             />
           </Card>
@@ -298,16 +337,16 @@ const Home = () => {
               iconBg="bg-info/10"
               iconColor="text-info"
               label="San"
-              value="7.5h"
-              subtitle="Dobro"
+              value={sleepHours === null ? "—" : `${sleepHours.toFixed(1)}h`}
+              subtitle={sleepLabel}
             />
             <StatCard
               icon={<Activity size={ICON_SIZE.md} />}
               iconBg="bg-success/10"
               iconColor="text-success"
               label="Stres"
-              value="Nizak"
-              subtitle="Spremna si"
+              value={stressLabel}
+              subtitle={stressSubtitle}
             />
           </div>
         </motion.div>
@@ -316,12 +355,12 @@ const Home = () => {
         <motion.div {...fadeUp(0.26)}>
           <Card className="p-5">
             <FuelingSection
-              kcalCurrent={1302}
-              kcalGoal={2100}
-              fuelPct={62}
-              protein={{ current: 92, goal: 140 }}
-              carbs={{ current: 140, goal: 220 }}
-              fat={{ current: 42, goal: 65 }}
+              kcalCurrent={calorieCurrent}
+              kcalGoal={calorieGoal}
+              fuelPct={fuelPct}
+              protein={{ current: proteinCurrent, goal: proteinGoal }}
+              carbs={{ current: carbsCurrent, goal: carbsGoal }}
+              fat={{ current: fatCurrent, goal: fatGoal }}
             />
           </Card>
         </motion.div>

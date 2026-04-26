@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate } from "react-router-dom";
@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import { fadeUp, MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
 import { ArrowLeft, Flame, ChevronRight, Dumbbell, UtensilsCrossed, AlertTriangle, Ban, Cake, Briefcase, Clock, Brain, Moon, Frown, CheckCircle2, MessageSquare, Camera, Activity, Award, Target, Ruler, Scale as ScaleIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { MOCK_CLIENTS, MOCK_ACTIVITY_LOG, MOCK_CLIENT_NOTES } from "@/data/trainerMockData";
+import { MOCK_CLIENTS, MOCK_ACTIVITY_LOG, MOCK_CLIENT_NOTES, type ClientData } from "@/data/trainerMockData";
+import { supabase } from "@/integrations/supabase/client";
 import ClientNutritionPlan from "@/components/trainer/ClientNutritionPlan";
 import { ClientUserStatusPanel } from "@/components/queue/ClientUserStatusPanel";
 import { SyncRulesOverrideSection } from "@/components/trainer/SyncRulesOverrideSection";
@@ -36,10 +37,87 @@ const ClientProfile = () => {
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
 
-  const client = MOCK_CLIENTS.find(c => c.id === id);
+  const mockClient = MOCK_CLIENTS.find(c => c.id === id);
+  const [supabaseClient, setSupabaseClient] = useState<ClientData | null>(null);
+  const [isResolving, setIsResolving] = useState<boolean>(!mockClient && !!id);
+
+  useEffect(() => {
+    if (mockClient || !id) {
+      setIsResolving(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, email, avatar_url, current_weight, height, date_of_birth, allergies, food_dislikes, injuries, sleep_hours_avg, stress_level, job_type, work_schedule, primary_goal, metabolic_conditions")
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) {
+        const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ").trim()
+          || data.email?.split("@")[0]
+          || "Client";
+        setSupabaseClient({
+          id: data.id,
+          name: fullName,
+          email: data.email ?? "",
+          avatar: data.avatar_url,
+          status: "active",
+          type: "online",
+          startDate: new Date().toISOString().split("T")[0],
+          endDate: null,
+          pausedAt: null,
+          programWeek: 0,
+          programTotalWeeks: 12,
+          trialDaysTotal: 7,
+          trialDaysRemaining: 0,
+          dateOfBirth: data.date_of_birth ?? "2000-01-01",
+          weight: data.current_weight ?? 0,
+          height: data.height ?? 0,
+          goals: data.primary_goal ? [data.primary_goal] : [],
+          injuries: Array.isArray(data.injuries) ? data.injuries.join(", ") : "",
+          allergies: data.allergies ?? [],
+          foodDislikes: data.food_dislikes ?? [],
+          metabolicProfile: data.metabolic_conditions ?? [],
+          sleepQuality: data.sleep_hours_avg ?? 0,
+          stressLevel: data.stress_level ?? 0,
+          jobType: data.job_type ?? "",
+          workSchedule: data.work_schedule ?? "",
+          trainingExperience: "",
+          workoutFrequency: 0,
+          assignedProgramId: null,
+          assignedNutritionTemplateId: null,
+          streak: 0,
+          level: "1",
+          totalWorkoutsCompleted: 0,
+          lastActiveAt: new Date().toISOString(),
+          lastCheckInAt: null,
+          progress: 0,
+        });
+      }
+      setIsResolving(false);
+    })();
+    return () => { cancelled = true; };
+  }, [id, mockClient]);
+
+  const client = mockClient ?? supabaseClient;
+
+  if (isResolving) {
+    return (
+      <div className="min-h-screen bg-background-secondary pb-32">
+        <PageHeader onBack={() => navigate("/trainer/clients")} backLabel={t("clients.title")} />
+        <div className="flex flex-col items-center pt-16">
+          <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
+          <p className="text-caption-1 text-muted-foreground mt-3">{t("common.loading")}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!client) {
     return (
-      <div className="min-h-screen bg-background-secondary pb-24">
+      <div className="min-h-screen bg-background-secondary pb-32">
         <PageHeader onBack={() => navigate("/trainer/clients")} backLabel={t("clients.title")} />
         <motion.div {...fadeUp()} className="px-5 pt-12 flex flex-col items-center text-center">
           <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
@@ -85,7 +163,7 @@ const ClientProfile = () => {
   const typeLabel = client.type === 'online' ? t("clients.online") : client.type === 'in_person' ? t("clients.inPerson") : t("clients.hybrid");
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-24">
+    <div className="min-h-screen bg-background-secondary pb-32">
       {/* iOS-native shell: PageHeader sa contextual "Clients" back label — breadcrumbs uklonjen (WS-8.5 D23) */}
       {/* Identity page — samo sticky Liquid Glass back. Ime je u hero kartici ispod. */}
       <PageHeader onBack={() => navigate("/trainer/clients")} backLabel={t("clients.title")} />
