@@ -279,6 +279,8 @@ const translations: Record<string, Record<Language, string>> = {
   "chat.sendMessage": { en: "Send message", sr: "Pošalji poruku" },
   "chat.attachFile": { en: "Attach file", sr: "Priloži fajl" },
   "chat.repliesWithin": { en: "Replies within 24h", sr: "Odgovara u roku od 24h" },
+  "chat.emptyTitle": { en: "Start a conversation", sr: "Započni razgovor" },
+  "chat.emptyBody": { en: "Send a message to your trainer about your progress, questions, or goals.", sr: "Pošalji poruku treneru o napretku, pitanjima ili ciljevima." },
 
   // Cycle Tracker
   "cycle.menstruation": { en: "Menstruation", sr: "Menstruacija" },
@@ -1206,6 +1208,13 @@ const translations: Record<string, Record<Language, string>> = {
   // Exercise detail
   "training.defaultExerciseBanner": { en: "Default exercise — your changes apply only to your library", sr: "Podrazumevana vežba — izmene važe samo za tvoju biblioteku" },
   "training.uploadVideo": { en: "Upload Video", sr: "Otpremi video" },
+  "training.uploadVideoHint": { en: "Tap to choose from gallery (max 100MB)", sr: "Tapni da izabereš iz galerije (max 100MB)" },
+  "training.replaceVideo": { en: "Replace", sr: "Zameni" },
+  "training.removeVideo": { en: "Remove video", sr: "Ukloni video" },
+  "training.videoAttached": { en: "Video attached", sr: "Video priložen" },
+  "training.videoSelected": { en: "Video selected", sr: "Video izabran" },
+  "training.videoTypeError": { en: "Please select a video file", sr: "Izaberi video fajl" },
+  "training.videoSizeError": { en: "Video too large (max 100MB)", sr: "Video je prevelik (max 100MB)" },
   "training.exerciseName": { en: "Name", sr: "Naziv" },
   "training.exerciseNamePlaceholder": { en: "e.g. Barbell Squat", sr: "npr. Čučanj sa šipkom" },
   "training.instructions": { en: "Instructions", sr: "Instrukcije" },
@@ -1610,6 +1619,10 @@ const translations: Record<string, Record<Language, string>> = {
   "subscription.choosePlan": { en: "Choose Plan", sr: "Izaberite plan" },
   "subscription.bookCall": { en: "Book a Free Discovery Call", sr: "Zakažite besplatan poziv" },
   "subscription.contactTrainer": { en: "Contact your trainer to discuss VIP coaching", sr: "Kontaktirajte trenera za VIP coaching" },
+  "subscription.comingSoonBody": { en: "Subscription tiers are launching soon. For now, message your trainer directly to continue.", sr: "Pretplate uskoro stižu. Za sad piši treneru direktno ako želiš da nastaviš." },
+  "subscription.betaTitle": { en: "Beta access", sr: "Beta pristup" },
+  "subscription.betaTagline": { en: "Free during beta", sr: "Besplatno tokom beta-e" },
+  "subscription.betaDescription": { en: "You're using the early access version. All features are unlocked. Subscription billing will activate when we exit beta.", sr: "Koristiš ranu verziju aplikacije. Sve funkcije su otključane. Pretplate će se aktivirati kad izađemo iz beta-e." },
   "subscription.confirmTitle": { en: "Subscribe to", sr: "Pretplata na" },
   "subscription.confirmDesc": { en: "for", sr: "za" },
   "subscription.total": { en: "total", sr: "ukupno" },
