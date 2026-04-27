@@ -176,7 +176,7 @@ const WhyTodayPanel = ({ status, delay = 0 }: WhyTodayPanelProps) => {
           className="w-full px-4 py-3 flex items-center gap-3 min-h-14 text-left"
         >
           <div className={`w-10 h-10 rounded-xl ${rules[0].iconBg} flex items-center justify-center shrink-0`}>
-            <FirstIcon size={18} className={rules[0].iconColor} aria-hidden="true" />
+            <FirstIcon size={ICON_SIZE.md} className={rules[0].iconColor} aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-body font-semibold text-foreground">
@@ -193,7 +193,7 @@ const WhyTodayPanel = ({ status, delay = 0 }: WhyTodayPanelProps) => {
             transition={{ duration: MOTION_DURATION.fast }}
             className="shrink-0"
           >
-            <ChevronDown size={18} className="text-muted-foreground/60" aria-hidden="true" />
+            <ChevronDown size={ICON_SIZE.md} className="text-muted-foreground/60" aria-hidden="true" />
           </motion.div>
         </button>
 
@@ -229,7 +229,7 @@ const WhyTodayPanel = ({ status, delay = 0 }: WhyTodayPanelProps) => {
                   );
                 })}
                 <div className="px-4 py-3 bg-primary/5 flex items-center gap-2">
-                  <Sparkles size={14} className="text-primary shrink-0" aria-hidden="true" />
+                  <Sparkles size={ICON_SIZE.xs} className="text-primary shrink-0" aria-hidden="true" />
                   <p className="text-caption-1 text-muted-foreground">
                     {t("whyToday.footer")}
                   </p>

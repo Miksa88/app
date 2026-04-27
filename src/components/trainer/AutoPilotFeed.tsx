@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { TrendingDown, Video, AlertTriangle, ChevronRight } from "lucide-react";
+import { ICON_SIZE } from "@/lib/design-tokens";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -55,7 +56,7 @@ const AutoPilotFeed = ({ delay = 0 }: Props) => {
       {plateauAlerts.length > 0 && (
         <Card className="overflow-hidden">
           <div className="px-4 py-3 bg-warning/5 border-b border-warning/20 flex items-center gap-2">
-            <TrendingDown size={16} className="text-warning" aria-hidden="true" />
+            <TrendingDown size={ICON_SIZE.sm} className="text-warning" aria-hidden="true" />
             <p className="text-callout font-semibold text-foreground">
               {plateauAlerts.length} {t("plateau.title")}
             </p>
@@ -71,7 +72,7 @@ const AutoPilotFeed = ({ delay = 0 }: Props) => {
                   className="w-full px-4 py-3 flex items-center gap-3 text-left border-b border-border/50 last:border-0 min-h-14"
                 >
                   <div className="w-9 h-9 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
-                    <AlertTriangle size={14} className="text-warning" aria-hidden="true" />
+                    <AlertTriangle size={ICON_SIZE.xs} className="text-warning" aria-hidden="true" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-body font-semibold text-foreground truncate">{fullName}</p>
@@ -79,7 +80,7 @@ const AutoPilotFeed = ({ delay = 0 }: Props) => {
                       {alert.weeksObserved} {t("plateau.weeks")}
                     </p>
                   </div>
-                  <ChevronRight size={14} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                  <ChevronRight size={ICON_SIZE.xs} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
                 </motion.button>
               );
             })}
@@ -90,7 +91,7 @@ const AutoPilotFeed = ({ delay = 0 }: Props) => {
       {missingVideos.length > 0 && (
         <Card className="overflow-hidden">
           <div className="px-4 py-3 bg-info/5 border-b border-info/20 flex items-center gap-2">
-            <Video size={16} className="text-info" aria-hidden="true" />
+            <Video size={ICON_SIZE.sm} className="text-info" aria-hidden="true" />
             <p className="text-callout font-semibold text-foreground">
               {missingVideos.length} {t("missingVideo.title")}
             </p>
@@ -104,10 +105,10 @@ const AutoPilotFeed = ({ delay = 0 }: Props) => {
                 className="w-full px-4 py-3 flex items-center gap-3 text-left border-b border-border/50 last:border-0 min-h-14"
               >
                 <div className="w-9 h-9 rounded-full bg-info/10 flex items-center justify-center shrink-0">
-                  <Video size={14} className="text-info" aria-hidden="true" />
+                  <Video size={ICON_SIZE.xs} className="text-info" aria-hidden="true" />
                 </div>
                 <p className="text-body text-foreground flex-1 truncate">{ex.name}</p>
-                <ChevronRight size={14} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                <ChevronRight size={ICON_SIZE.xs} className="text-muted-foreground/40 shrink-0" aria-hidden="true" />
               </motion.button>
             ))}
           </div>

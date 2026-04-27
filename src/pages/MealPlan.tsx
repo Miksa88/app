@@ -96,7 +96,7 @@ const MealPlanPage = () => {
         <PageHeader onBack={() => navigate("/home")} backLabel={t("nav.home")} />
         <motion.div {...fadeUp()} className="px-5 pt-12 flex flex-col items-center text-center">
           <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-            <Sparkles size={28} className="text-muted-foreground" aria-hidden="true" />
+            <Sparkles size={ICON_SIZE.xl} className="text-muted-foreground" aria-hidden="true" />
           </div>
           <h1 className="text-title-2 font-bold text-foreground mb-2">{t("mealPlan.noPlanTitle")}</h1>
           <p className="text-body text-muted-foreground max-w-xs mb-6">{t("mealPlan.noPlanBody")}</p>
@@ -133,7 +133,7 @@ const MealPlanPage = () => {
                 aria-label={t("mealPlan.regenerate")}
                 className="text-primary p-2 rounded-full bg-primary/10 hover:bg-primary/15 min-w-11 min-h-11 flex items-center justify-center"
               >
-                <RefreshCw size={18} aria-hidden="true" />
+                <RefreshCw size={ICON_SIZE.md} aria-hidden="true" />
               </button>
             </div>
             <div className="flex items-center justify-between text-caption-1">
@@ -259,7 +259,7 @@ const MealPlanPage = () => {
                                       : "bg-card border border-border text-foreground"
                                   }`}
                                 >
-                                  {isConfirmed && <Check size={14} aria-hidden="true" />}
+                                  {isConfirmed && <Check size={ICON_SIZE.xs} aria-hidden="true" />}
                                   {isConfirmed ? t("mealPlan.confirmed") : t("mealPlan.confirm")}
                                 </motion.button>
                                 <motion.button
@@ -267,7 +267,7 @@ const MealPlanPage = () => {
                                   onClick={() => setSwapSlotIdx(slotIdx)}
                                   className="inline-flex items-center justify-center gap-1.5 rounded-xl py-2 px-4 bg-card border border-border text-foreground text-caption-1 font-semibold min-h-11"
                                 >
-                                  <RefreshCw size={14} aria-hidden="true" />
+                                  <RefreshCw size={ICON_SIZE.xs} aria-hidden="true" />
                                   {t("mealPlan.swap")}
                                 </motion.button>
                               </div>

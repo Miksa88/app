@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Sparkles, Check, X } from "lucide-react";
+import { ICON_SIZE } from "@/lib/design-tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,7 +95,7 @@ const PromoteBanner = ({ delay = 0 }: Props) => {
             </button>
             <div className="flex items-start gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                <Sparkles size={18} aria-hidden="true" />
+                <Sparkles size={ICON_SIZE.md} aria-hidden="true" />
               </div>
               <div className="flex-1">
                 <p className="text-headline font-bold">{t("promote.title")}</p>

@@ -93,21 +93,21 @@ const TrainerPackages = () => {
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
               <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center mx-auto mb-1">
-                <Zap size={18} className="text-info" aria-hidden="true" />
+                <Zap size={ICON_SIZE.md} className="text-info" aria-hidden="true" />
               </div>
               <p className="text-title-2 font-bold text-foreground tabular-nums">{tierCount("entry")}</p>
               <p className="text-caption-2 text-muted-foreground mt-0.5">{t("tier.entry")}</p>
             </div>
             <div className="text-center">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-1">
-                <Sparkles size={18} className="text-primary" aria-hidden="true" />
+                <Sparkles size={ICON_SIZE.md} className="text-primary" aria-hidden="true" />
               </div>
               <p className="text-title-2 font-bold text-foreground tabular-nums">{tierCount("mid")}</p>
               <p className="text-caption-2 text-muted-foreground mt-0.5">{t("tier.mid")}</p>
             </div>
             <div className="text-center">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center mx-auto mb-1">
-                <Crown size={18} className="text-white" aria-hidden="true" />
+                <Crown size={ICON_SIZE.md} className="text-white" aria-hidden="true" />
               </div>
               <p className="text-title-2 font-bold text-foreground tabular-nums">{tierCount("high")}</p>
               <p className="text-caption-2 text-muted-foreground mt-0.5">{t("tier.high")}</p>
@@ -123,7 +123,7 @@ const TrainerPackages = () => {
         ) : packages.length === 0 ? (
           <motion.div {...fadeUp(0.08)} className="flex flex-col items-center text-center pt-8">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-              <Layers size={28} className="text-primary" aria-hidden="true" />
+              <Layers size={ICON_SIZE.xl} className="text-primary" aria-hidden="true" />
             </div>
             <p className="text-body text-foreground font-semibold mb-2">{t("trainerPackages.empty")}</p>
             <Button

@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ICON_SIZE } from "@/lib/design-tokens";
 import { fadeUp } from "@/lib/motion";
 import type { CalorieTargetMode } from "@/types/nutrition";
 
@@ -119,7 +120,7 @@ const ProgressOutlookCard = ({
       <Card className="p-4">
         <div className="flex items-center gap-3 mb-3">
           <div className={`w-10 h-10 rounded-xl ${copy.iconBg} flex items-center justify-center shrink-0`}>
-            <Icon size={18} className={copy.iconColor} aria-hidden="true" />
+            <Icon size={ICON_SIZE.md} className={copy.iconColor} aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-caption-1 text-muted-foreground uppercase tracking-wider font-semibold">

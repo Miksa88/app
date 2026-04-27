@@ -83,7 +83,7 @@ const ShoppingPage = () => {
         <PageHeader onBack={() => navigate("/meal-plan")} backLabel={t("mealPlan.title")} />
         <motion.div {...fadeUp()} className="px-5 pt-12 flex flex-col items-center text-center">
           <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-            <ShoppingBasket size={28} className="text-muted-foreground" aria-hidden="true" />
+            <ShoppingBasket size={ICON_SIZE.xl} className="text-muted-foreground" aria-hidden="true" />
           </div>
           <h1 className="text-title-2 font-bold text-foreground mb-2">{t("shopping.emptyTitle")}</h1>
           <p className="text-body text-muted-foreground max-w-xs mb-6">{t("shopping.emptyBody")}</p>
@@ -107,7 +107,7 @@ const ShoppingPage = () => {
           ? "bg-success border-2 border-success"
           : "bg-card border-2 border-muted-foreground/30"
       }`}>
-        {item.haveAtHome && <Check size={14} className="text-success-foreground" strokeWidth={3} aria-hidden="true" />}
+        {item.haveAtHome && <Check size={ICON_SIZE.xs} className="text-success-foreground" strokeWidth={3} aria-hidden="true" />}
       </div>
       <div className="flex-1 min-w-0">
         <p className={`text-body ${item.haveAtHome ? "line-through text-muted-foreground" : "text-foreground"}`}>
