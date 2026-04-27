@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
-import { Check, ChevronDown, ChevronRight, RefreshCw, ShoppingBasket, Sparkles } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, RefreshCw, ShoppingBasket, Sparkles, ThumbsDown } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import { computeDayRollups, findSwapAlternatives, type MealPlanSlot } from "@/ut
 import { FOOD_DATABASE } from "@/data/foodDatabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { addFoodDislike } from "@/services/dislikeService";
+import { toast } from "sonner";
 
 const DAY_LABELS_SR = ["Ponedeljak", "Utorak", "Sreda", "Četvrtak", "Petak", "Subota", "Nedelja"];
 const DAY_LABELS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -76,7 +78,20 @@ const MealPlanPage = () => {
     setSwapSlotIdx(null);
   };
 
-  // Persist food_dislikes when user swaps frequently? For now just close sheet.
+  const handleDontShowAgain = async (foodId: string) => {
+    if (!clientId) return;
+    const food = FOOD_DATABASE.find(f => f.id === foodId);
+    if (!food) return;
+    try {
+      await addFoodDislike(clientId, food.nameEn);
+      toast.success(t("mealPlan.dislikeAdded"));
+      setSwapSlotIdx(null);
+      // Auto-regenerate da novi plan ne sadrži ovu hranu
+      await regenerate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   if (isLoading) {
     return (
@@ -308,6 +323,31 @@ const MealPlanPage = () => {
               <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-4" />
               <h3 className="text-title-3 font-bold text-foreground mb-1">{t("mealPlan.pickAlternative")}</h3>
               <p className="text-caption-1 text-muted-foreground mb-4">{slotLabels[swapSlot.slotType]}</p>
+
+              {/* "Ne volim ovo" — flagovi current food da se trajno isključi */}
+              {(() => {
+                const currentFood = FOOD_DATABASE.find(f => f.id === swapSlot.foodId);
+                if (!currentFood) return null;
+                return (
+                  <motion.button
+                    whileTap={{ scale: TAP_SCALE.secondary }}
+                    onClick={() => void handleDontShowAgain(currentFood.id)}
+                    className="w-full mb-4 px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20 text-left flex items-center gap-3 min-h-12"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                      <ThumbsDown size={ICON_SIZE.sm} className="text-destructive" aria-hidden="true" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-callout font-semibold text-destructive">
+                        {t("mealPlan.dontShowAgain")}
+                      </p>
+                      <p className="text-caption-1 text-muted-foreground truncate mt-0.5">
+                        {language === "sr" ? currentFood.nameSr : currentFood.nameEn}
+                      </p>
+                    </div>
+                  </motion.button>
+                );
+              })()}
 
               <div className="space-y-2">
                 {swapAlternatives.map(food => (

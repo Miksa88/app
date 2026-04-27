@@ -28,7 +28,7 @@ import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import {
   Check, X, ArrowRightLeft, Search, Lock,
   Sunrise, Sun, Moon, Apple, Zap, Dumbbell, UtensilsCrossed, GlassWater,
-  Drumstick, Wheat, Droplets,
+  Drumstick, Wheat, Droplets, ThumbsDown,
   type LucideProps,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +55,8 @@ import { SectionLabel } from "@/components/ui/section-label";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import ExtraMealSheet, { ExtraMealTrigger } from "@/components/food/ExtraMealSheet";
+import { addFoodDislike } from "@/services/dislikeService";
+import { toast } from "sonner";
 
 // Meal images mapping — fallback mapa za slike lokalno dostupne u assets/meals
 import greekYogurt from "@/assets/meals/greek-yogurt.jpg";
@@ -250,6 +252,20 @@ const Food = () => {
   const handleReplaceOpen = (slot: string) => {
     setSelectedMeal(null);
     setShowReplaceSheet(slot);
+  };
+
+  const handleDontShowAgainFood = async (meal: GeneratedMeal) => {
+    if (!clientId) return;
+    try {
+      // Pokušaj da nađeš pravi food item iz pool-a; fallback na meal.name
+      const dbFood = dbFoodForMeal(meal);
+      const dislike = dbFood?.nameEn ?? meal.name;
+      await addFoodDislike(clientId, dislike);
+      toast.success(t("food.dislikeAddedFood"));
+      setSelectedMeal(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const handleReplaceConfirm = (replacement: FoodItem) => {
@@ -602,6 +618,16 @@ const Food = () => {
                     <X size={ICON_SIZE.md} aria-hidden="true" />
                   </button>
                 </div>
+
+                {/* "Ne volim ovo" — trajno isključi iz pool-a */}
+                <button
+                  onClick={() => void handleDontShowAgainFood(selectedMeal)}
+                  className="w-full mt-3 px-4 py-3 rounded-2xl bg-muted/40 text-muted-foreground text-callout font-medium flex items-center justify-center gap-2 min-h-12 hover:bg-muted/60 transition-colors"
+                  aria-label={t("food.dontShowMealAgain")}
+                >
+                  <ThumbsDown size={ICON_SIZE.sm} aria-hidden="true" />
+                  {t("food.dontShowMealAgain")}
+                </button>
               </div>
             </motion.div>
           </motion.div>
