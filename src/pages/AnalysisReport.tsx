@@ -63,10 +63,9 @@ const AnalysisReport = () => {
       if (!resolvedClientId) {
         // eslint-disable-next-line no-console
         console.warn('[AnalysisReport] Sesija nije dostupna posle 5s — verovatno email confirmation pending.');
-        toast.error(
-          t("analysis.errorNoSession") ||
-            "Proveri svoj email da potvrdiš nalog, pa pokušaj ponovo.",
-        );
+        const fallback = "Proveri svoj email da potvrdiš nalog, pa pokušaj ponovo.";
+        const friendly = t("analysis.errorNoSession");
+        toast.error(friendly && friendly !== "analysis.errorNoSession" ? friendly : fallback);
         setSubmitting(false);
         return;
       }
@@ -113,9 +112,13 @@ const AnalysisReport = () => {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[Onboarding] completeOnboarding failed:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const fallback = "Kreiranje plana nije uspelo. Probaj ponovo ili kontaktiraj podršku.";
+      const friendly = t("analysis.errorGeneric");
       toast.error(
-        t("analysis.errorGeneric") ||
-          "Kreiranje plana nije uspelo. Probaj ponovo ili kontaktiraj podršku.",
+        // i18n key vraća sebe samog kad nema prevoda — koristi fallback ako tako vrati
+        friendly && friendly !== "analysis.errorGeneric" ? friendly : fallback,
+        { description: errMsg },
       );
       // NE navigate na /home — ostavi user na /analysis sa toast-om umesto
       // silent bounce kroz ProtectedRoute → /

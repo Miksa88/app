@@ -217,6 +217,8 @@ const translations: Record<string, Record<Language, string>> = {
   "mealPlan.dislikeAdded": { en: "Got it — won't suggest this again.", sr: "Razumem — neću više predlagati ovo." },
   "food.dontShowMealAgain": { en: "Don't show me this again", sr: "Ne prikazuj mi više ovo" },
   "food.dislikeAddedFood": { en: "Got it — removed from your meal pool.", sr: "Razumem — uklonjeno iz tvog pool-a." },
+  "analysis.errorGeneric": { en: "Couldn't create your plan. Please try again or contact support.", sr: "Kreiranje plana nije uspelo. Probaj ponovo ili kontaktiraj podršku." },
+  "analysis.errorNoSession": { en: "Confirm your email to verify the account, then try again.", sr: "Proveri svoj email da potvrdiš nalog, pa pokušaj ponovo." },
   "home.glasses": { en: "glasses", sr: "čaša" },
   "home.waterGlasses": { en: "glasses", sr: "čaša" },
   "home.waterAddGlass": { en: "+1 glass", sr: "+1 čaša" },
