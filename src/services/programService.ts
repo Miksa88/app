@@ -103,3 +103,47 @@ export async function archiveProgram(id: string): Promise<void> {
     .eq("id", id);
   if (error) throw new Error(`archiveProgram: ${error.message}`);
 }
+
+// ============================================================================
+// W-8: Assign program to client(s) via client_template_assignments
+// ============================================================================
+
+export async function assignProgramToClients(
+  programId: string,
+  clientIds: string[],
+): Promise<{ updated: number; missing: string[] }> {
+  if (clientIds.length === 0) return { updated: 0, missing: [] };
+
+  // Postojeći redovi (klijent je prošao onboarding)
+  const { data: existing, error: existingErr } = await supabase
+    .from("client_template_assignments")
+    .select("client_id")
+    .in("client_id", clientIds);
+  if (existingErr) throw new Error(`assignProgramToClients(check): ${existingErr.message}`);
+
+  const existingIds = new Set((existing ?? []).map(r => r.client_id));
+  const missing = clientIds.filter(id => !existingIds.has(id));
+  const updatable = clientIds.filter(id => existingIds.has(id));
+
+  if (updatable.length === 0) return { updated: 0, missing };
+
+  const { error: updateErr } = await supabase
+    .from("client_template_assignments")
+    .update({ assigned_program_id: programId })
+    .in("client_id", updatable);
+  if (updateErr) throw new Error(`assignProgramToClients(update): ${updateErr.message}`);
+
+  return { updated: updatable.length, missing };
+}
+
+export async function listProgramAssignmentsForClient(
+  clientId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("client_template_assignments")
+    .select("assigned_program_id")
+    .eq("client_id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(`listProgramAssignmentsForClient: ${error.message}`);
+  return data?.assigned_program_id ?? null;
+}

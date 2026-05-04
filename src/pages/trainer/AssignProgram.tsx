@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { useProgram } from "@/hooks/usePrograms";
+import { useProgram, useAssignProgramToClients } from "@/hooks/usePrograms";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
 
 const AssignProgram = () => {
@@ -18,6 +18,7 @@ const AssignProgram = () => {
   const { toast } = useToast();
   const { data: program } = useProgram(id ?? null);
   const { clients } = useTrainerClients();
+  const assignMutation = useAssignProgramToClients();
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -38,10 +39,29 @@ const AssignProgram = () => {
     setSelected(next);
   };
 
-  const handleAssign = () => {
-    if (selected.size === 0) return;
-    toast({ title: t("training.programAssigned").replace("{count}", String(selected.size)) });
-    navigate(-1);
+  const handleAssign = async () => {
+    if (selected.size === 0 || !id) return;
+    try {
+      const result = await assignMutation.mutateAsync({
+        programId: id,
+        clientIds: Array.from(selected),
+      });
+      toast({
+        title: t("training.programAssigned").replace("{count}", String(result.updated)),
+      });
+      if (result.missing.length > 0) {
+        toast({
+          title: `${result.missing.length} client(s) skipped — no template assignment yet`,
+          variant: "destructive",
+        });
+      }
+      navigate(-1);
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Assignment failed",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!program) return null;

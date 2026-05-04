@@ -9,6 +9,7 @@ import {
   getProgramById,
   upsertProgram,
   archiveProgram,
+  assignProgramToClients,
   type ProgramRecord,
   type UpsertProgramInput,
 } from "@/services/programService";
@@ -59,6 +60,21 @@ export function useArchiveProgram() {
   return useMutation<void, Error, string>({
     mutationFn: archiveProgram,
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+    },
+  });
+}
+
+export function useAssignProgramToClients() {
+  const qc = useQueryClient();
+  return useMutation<
+    { updated: number; missing: string[] },
+    Error,
+    { programId: string; clientIds: string[] }
+  >({
+    mutationFn: ({ programId, clientIds }) => assignProgramToClients(programId, clientIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["trainerClients"] });
       qc.invalidateQueries({ queryKey: KEY });
     },
   });
