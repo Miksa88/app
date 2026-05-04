@@ -34,19 +34,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserStatus } from '@/hooks/useUserStatus';
 import { useMesocycleQueue } from '@/hooks/useMesocycleQueue';
+import { useProfileLevel } from '@/hooks/useProfileLevel';
 import type { QueuedSession, Partition } from '@/types/training';
 
-// TODO: derivati iz profiles.level (postoji u DB) kad bude wire-up
-const LEVELS = [
-  { level: 1, name: 'Level 1', unlocked: true, current: true },
-  { level: 2, name: 'Level 2', unlocked: false },
-  { level: 3, name: 'Level 3', unlocked: false },
-  { level: 4, name: 'Level 4', unlocked: false },
-  { level: 5, name: 'Level 5', unlocked: false },
-  { level: 6, name: 'Level 6', unlocked: false },
-  { level: 7, name: 'Level 7', unlocked: false },
-  { level: 8, name: 'Level 8', unlocked: false },
-] as const;
+const TOTAL_LEVELS = 8;
 
 type ActiveTab = 'completed' | 'adaptation';
 
@@ -56,10 +47,28 @@ const Progress = () => {
   const { clientId } = useAuth();
   const { status } = useUserStatus(clientId);
   const { queue } = useMesocycleQueue(clientId);
+  const { data: profileLevel = 1 } = useProfileLevel(clientId);
   const [activeTab, setActiveTab] = useState<ActiveTab>('completed');
-  // TODO: levelProgress treba derivati iz mezociklus pozicije (queue.sessionPointer / total)
-  const levelProgress = 0;
-  const currentLevelNumber = LEVELS.find(l => l.current)?.level ?? 1;
+
+  const currentLevelNumber = Math.max(1, Math.min(TOTAL_LEVELS, profileLevel));
+  const LEVELS = useMemo(
+    () => Array.from({ length: TOTAL_LEVELS }, (_, i) => {
+      const lvl = i + 1;
+      return {
+        level: lvl,
+        name: `Level ${lvl}`,
+        unlocked: lvl <= currentLevelNumber,
+        current: lvl === currentLevelNumber,
+      };
+    }),
+    [currentLevelNumber],
+  );
+
+  // levelProgress = mezociklus napredak unutar trenutnog levela
+  // (sessionPointer / sessions.length × 100 dok je u istom mezo)
+  const levelProgress = queue && queue.sessions.length > 0
+    ? Math.round((queue.sessionPointer / queue.sessions.length) * 100)
+    : 0;
 
   // Completed sessions iz queue-a, sortirane DESC po completedAt
   const completedSessions = useMemo<QueuedSession[]>(() => {

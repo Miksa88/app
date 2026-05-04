@@ -18,6 +18,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { SectionLabel } from "@/components/ui/section-label";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useStreakMilestones } from "@/hooks/useStreakMilestones";
+import { useStreak } from "@/hooks/useStreak";
 import { AchievementOverlay } from "@/components/AchievementOverlay";
 import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
@@ -108,8 +109,8 @@ const Home = () => {
       : status?.bio.cyclePhase !== null && status?.bio.cyclePhase !== undefined;
 
   // Streak milestone celebration — WS-8 G10
-  // TODO: derivati iz status.training (consecutive logged days) kad backend bude spreman
-  const currentStreak = 0;
+  // Streak = consecutive days sa daily_check_ins; W-5 wire-up.
+  const { data: currentStreak = 0 } = useStreak(clientId);
   const { milestone, dismissMilestone } = useStreakMilestones(currentStreak);
 
   const addWater = () => {

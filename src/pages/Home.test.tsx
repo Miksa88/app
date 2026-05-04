@@ -58,6 +58,11 @@ vi.mock("@/hooks/useStreakMilestones", () => ({
   useStreakMilestones: () => ({ milestone: null, dismissMilestone: () => {} }),
 }));
 
+// useStreak (W-5) — query hook bi inače zahtevao QueryClientProvider
+vi.mock("@/hooks/useStreak", () => ({
+  useStreak: () => ({ data: 0, isLoading: false, error: null }),
+}));
+
 // Weekly calendar — fallback empty (Home komponenta ima fallbackWeekDays)
 vi.mock("@/hooks/useWeeklyCalendar", () => ({
   useWeeklyCalendar: () => ({ view: null, isLoading: false }),
