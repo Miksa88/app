@@ -10,6 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTrainerDashboard } from "@/hooks/useTrainerDashboard";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
 import { usePackages } from "@/hooks/usePackages";
+import { usePrograms } from "@/hooks/usePrograms";
+import { useNutritionTemplates } from "@/hooks/useNutritionTemplates";
 import AutoPilotFeed from "@/components/trainer/AutoPilotFeed";
 import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
@@ -27,6 +29,8 @@ const TrainerDashboard = () => {
   const { counters, atRiskClients } = useTrainerDashboard();
   const { clients } = useTrainerClients();
   const { data: packages = [] } = usePackages();
+  const { data: programs = [] } = usePrograms();
+  const { data: nutritionTemplates = [] } = useNutritionTemplates();
   const haptic = useHaptic();
 
   const trainerFirstName = String(
@@ -35,13 +39,14 @@ const TrainerDashboard = () => {
       ?? "",
   );
 
-  // TODO: učitati iz trener-config tabele kad backend bude (IT-28).
-  // Beta: default vrednosti, dropdown editable na /trainer/free-trial.
-  const [trialSettings] = useState({
+  // Trial settings derived iz trenutnog stanja: includes-flags = ima li
+  // trener bar 1 program/nutrition template. Duration default 7 dana
+  // (uređuje se na /trainer/free-trial; persist je sledeća iteracija).
+  const trialSettings = {
     duration: 7,
-    includesWorkouts: true,
-    includesNutrition: true,
-  });
+    includesWorkouts: programs.length > 0,
+    includesNutrition: nutritionTemplates.length > 0,
+  };
 
   const activeCount = counters?.totalClients ?? 0;
   const redFlagCount = counters?.atRiskCount ?? 0;
