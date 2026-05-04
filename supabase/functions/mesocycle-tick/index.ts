@@ -59,7 +59,9 @@ declare const Deno: {
   env: { get: (key: string) => string | undefined };
 };
 
-const MESOCYCLE_WEEKS = 4;
+// Model B (Mihajlo/Ivana, 2026-05-04): 4 load + 1 deload = 5 nedelja po ciklusu.
+// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178.
+const MESOCYCLE_WEEKS = 5;
 
 // ----------------------------------------------------------------------------
 // Types — opaque shape koji citamo iz status_json JSONB-a

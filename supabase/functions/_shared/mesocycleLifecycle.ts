@@ -81,7 +81,9 @@ export interface MesocycleQueue {
   completedAt: string | Date | null;
 }
 
-const DEFAULT_MESOCYCLE_WEEKS = 4;
+// Model B: 4 load + 1 deload = 5 nedelja po ciklusu.
+// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178.
+const DEFAULT_MESOCYCLE_WEEKS = 5;
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 // ----------------------------------------------------------------------------
@@ -190,7 +192,7 @@ function buildMesocycleQueue(input: BuildQueueInputs): MesocycleQueue {
 // ----------------------------------------------------------------------------
 
 export type DeloadReason =
-  | 'week_4_of_mesocycle'
+  | 'week_5_of_mesocycle'
   | 'not_yet'
   | 'lean_bulk_no_deload';
 
@@ -209,7 +211,7 @@ export function shouldStartDeload(
   }
 
   if (currentMicrocycleIndex === mesocycleWeeks - 1) {
-    return { shouldStart: true, reason: 'week_4_of_mesocycle' };
+    return { shouldStart: true, reason: 'week_5_of_mesocycle' };
   }
 
   return { shouldStart: false, reason: 'not_yet' };

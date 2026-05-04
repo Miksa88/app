@@ -7,7 +7,8 @@
 // Dva glavna zadatka:
 //
 //   1. `shouldStartDeload` — "Da li trenutna mikrociklus treba da bude deload?"
-//      4-nedeljni mezociklus: poslednja (4.) nedelja = deload.
+//      5-nedeljni mezociklus: 4 nedelje load + 1 nedelja deload (spec §6.1
+//      line 1178: "4 nedelje + 1 deload = 5 nedelja po ciklusu").
 //      Lean bulk režim PRESKAĆE deload (kontinuirani rast u bulk fazi).
 //
 //   2. `handleMesocycleEnd` — "Queue je iscrpljen (pointer >= sessions.length),
@@ -31,19 +32,21 @@ import type {
 import type { CalorieTargetMode } from '@/types/nutrition';
 import { buildMesocycleQueue } from './queueBuilder';
 
-const DEFAULT_MESOCYCLE_WEEKS = 4;
+// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178: "4 nedelje + 1 deload = 5".
+// Model B (Mihajlo/Ivana, 2026-05-04): 4 load nedelje (RIR 3→2→1→0+) + 5. nedelja deload.
+const DEFAULT_MESOCYCLE_WEEKS = 5;
 
 // ============================================================================
 // shouldStartDeload
 // ============================================================================
 //
 // Vraća `shouldStart: true` kada je trenutni mikrociklus poslednji u
-// mezociklusu (0-based: week 4 u 4-nedeljnom ciklusu => index 3).
+// mezociklusu (0-based: week 5 u 5-nedeljnom ciklusu => index 4).
 // Lean bulk preskače deload — spec kaže "klijentkinja na bulk-u treba kalorije
 // i u deloadu ostaje kalorijski isto".
 
 export type DeloadReason =
-  | 'week_4_of_mesocycle'
+  | 'week_5_of_mesocycle'
   | 'not_yet'
   | 'lean_bulk_no_deload';
 
@@ -53,7 +56,7 @@ export interface ShouldStartDeloadResult {
 }
 
 export function shouldStartDeload(
-  currentMicrocycleIndex: number,   // 0-based (0, 1, 2, 3)
+  currentMicrocycleIndex: number,   // 0-based (0, 1, 2, 3, 4)
   mesocycleWeeks: number = DEFAULT_MESOCYCLE_WEEKS,
   targetMode: CalorieTargetMode = 'deficit',
 ): ShouldStartDeloadResult {
@@ -63,7 +66,7 @@ export function shouldStartDeload(
 
   // Poslednji mikrociklus (0-based): index === weeks-1
   if (currentMicrocycleIndex === mesocycleWeeks - 1) {
-    return { shouldStart: true, reason: 'week_4_of_mesocycle' };
+    return { shouldStart: true, reason: 'week_5_of_mesocycle' };
   }
 
   return { shouldStart: false, reason: 'not_yet' };
