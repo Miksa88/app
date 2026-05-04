@@ -728,6 +728,7 @@ export type Database = {
           sleep_hours_avg: number | null
           stress_level: number | null
           training_days: number | null
+          trial_settings: Json | null
           updated_at: string
           work_schedule: string | null
         }
@@ -764,6 +765,7 @@ export type Database = {
           sleep_hours_avg?: number | null
           stress_level?: number | null
           training_days?: number | null
+          trial_settings?: Json | null
           updated_at?: string
           work_schedule?: string | null
         }
@@ -800,6 +802,7 @@ export type Database = {
           sleep_hours_avg?: number | null
           stress_level?: number | null
           training_days?: number | null
+          trial_settings?: Json | null
           updated_at?: string
           work_schedule?: string | null
         }
