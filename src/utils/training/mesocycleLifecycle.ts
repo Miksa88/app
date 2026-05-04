@@ -134,3 +134,16 @@ export function handleMesocycleEnd(
 
   return { newQueue, mesocycleJustEnded: true };
 }
+
+// ============================================================================
+// hasMesocycleEnded — convenience helper
+// ============================================================================
+//
+// Mali pure boolean koji EF (mesocycle-tick) i bilo koji UI consumer mogu da
+// koriste umesto da rucno porede `pointer` i `length`. Mirror onoga sto stoji
+// u `supabase/functions/_shared/mesocycleLifecycle.ts` (Deno port) tako da
+// _shared file zaista ostane verbatim port `src/`-a.
+
+export function hasMesocycleEnded(queue: MesocycleQueue): boolean {
+  return queue.sessionPointer >= queue.sessions.length;
+}

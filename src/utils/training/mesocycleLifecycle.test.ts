@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   shouldStartDeload,
   handleMesocycleEnd,
+  hasMesocycleEnded,
   type MesocycleEndProfile,
 } from './mesocycleLifecycle';
 import { buildMesocycleQueue } from './queueBuilder';
@@ -111,5 +112,19 @@ describe('handleMesocycleEnd', () => {
 
     // Pointer je resetovan
     expect(result.newQueue.sessionPointer).toBe(0);
+  });
+});
+
+describe('hasMesocycleEnded', () => {
+  it('vraća false kad je pointer ispod length-a', () => {
+    const queue = buildBaseQueue();
+    expect(queue.sessions.length).toBe(16);
+    expect(hasMesocycleEnded({ ...queue, sessionPointer: 0 })).toBe(false);
+    expect(hasMesocycleEnded({ ...queue, sessionPointer: 15 })).toBe(false);
+  });
+
+  it('vraća true kad je pointer == length (queue iscrpljen)', () => {
+    const queue = buildBaseQueue();
+    expect(hasMesocycleEnded({ ...queue, sessionPointer: queue.sessions.length })).toBe(true);
   });
 });
