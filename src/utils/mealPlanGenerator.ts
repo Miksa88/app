@@ -399,6 +399,25 @@ export function generateMealPlan(
     const bestMatch = findBestMatch(slotFoods, targetCal, targetProtein, slotConfig.minProtein);
 
     if (!bestMatch) {
+      // Defense in depth: ako je availableFoods prazan (caller je trebao da
+      // bail-uje pre poziva), preskoči slot umesto da padnemo u undefined.
+      if (availableFoods.length === 0) {
+        return {
+          slot: slotConfig.slot as GeneratedMeal['slot'],
+          slotLabel: slotConfig.label,
+          mealId: '',
+          name: '',
+          calories: targetCal,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          fiber: 0,
+          portionMultiplier: 1,
+          glycemicIndex: 'medium' as const,
+          isPostWorkout,
+          synergyNotes: [],
+        };
+      }
       return createMealFromFood(availableFoods[0], slotConfig, targetCal, isPostWorkout);
     }
 

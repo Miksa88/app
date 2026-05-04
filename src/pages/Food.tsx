@@ -192,9 +192,11 @@ const Food = () => {
 
   // ── Real-time plan generation ────────────────────────────────────────────
   // Derive ClientProfile iz UserStatus + generate plan sa real food pool.
-  // Ako je DB pool prazan, plan se preskače (ne lomimo UI).
+  // Ako je DB pool prazan (loading ili RLS), preskačemo generaciju —
+  // generateMealPlan zahteva non-empty foodDatabase (inače crash u
+  // createMealFromFood kad availableFoods[0] nije definisan).
   const { plan, foodPool, isIRClient } = useMemo(() => {
-    if (!status) {
+    if (!status || dbFoods.length === 0) {
       return { plan: null as GeneratedMealPlan | null, foodPool: [] as FoodItem[], isIRClient: false };
     }
 
