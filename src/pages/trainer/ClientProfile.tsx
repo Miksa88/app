@@ -6,8 +6,9 @@ import { motion } from "framer-motion";
 import { fadeUp, MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
 import { ArrowLeft, Flame, ChevronRight, Dumbbell, UtensilsCrossed, AlertTriangle, Ban, Cake, Briefcase, Clock, Brain, Moon, Frown, CheckCircle2, MessageSquare, Camera, Activity, Award, Target, Ruler, Scale as ScaleIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { MOCK_CLIENTS, MOCK_ACTIVITY_LOG, MOCK_CLIENT_NOTES, type ClientData } from "@/data/trainerMockData";
+import type { ClientData } from "@/data/trainerMockData";
 import { supabase } from "@/integrations/supabase/client";
+import { useClientActivity } from "@/hooks/useClientActivity";
 import ClientNutritionPlan from "@/components/trainer/ClientNutritionPlan";
 import { ClientUserStatusPanel } from "@/components/queue/ClientUserStatusPanel";
 import { SyncRulesOverrideSection } from "@/components/trainer/SyncRulesOverrideSection";
@@ -36,7 +37,9 @@ const ClientProfile = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [notes, setNotes] = useState(MOCK_CLIENT_NOTES[id || ''] || []);
+  // Notes su trenutno samo lokalne (brišu se na reload). client_notes tabela
+  // je W-3-extension (treba migracija).
+  const [notes, setNotes] = useState<Array<{ id: string; text: string; date: string }>>([]);
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showTierSheet, setShowTierSheet] = useState(false);
@@ -57,12 +60,11 @@ const ClientProfile = () => {
     return () => { cancelled = true; };
   }, [id]);
 
-  const mockClient = MOCK_CLIENTS.find(c => c.id === id);
   const [supabaseClient, setSupabaseClient] = useState<ClientData | null>(null);
-  const [isResolving, setIsResolving] = useState<boolean>(!mockClient && !!id);
+  const [isResolving, setIsResolving] = useState<boolean>(!!id);
 
   useEffect(() => {
-    if (mockClient || !id) {
+    if (!id) {
       setIsResolving(false);
       return;
     }
@@ -119,9 +121,10 @@ const ClientProfile = () => {
       setIsResolving(false);
     })();
     return () => { cancelled = true; };
-  }, [id, mockClient]);
+  }, [id]);
 
-  const client = mockClient ?? supabaseClient;
+  const client = supabaseClient;
+  const { data: activityEntries = [] } = useClientActivity(id ?? null);
 
   if (isResolving) {
     return (
@@ -153,7 +156,7 @@ const ClientProfile = () => {
     );
   }
 
-  const activities = MOCK_ACTIVITY_LOG[client.id] || [];
+  const activities = activityEntries;
   const age = new Date().getFullYear() - new Date(client.dateOfBirth).getFullYear();
 
   const tabLabels: Record<Tab, string> = {
