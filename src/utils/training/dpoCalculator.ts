@@ -58,7 +58,9 @@ const ISOLATION_INITIAL_KG = 5;
 const COMPOUND_BILATERAL_RATIO = { beginner: 0.5, intermediate: 0.7 } as const;
 const COMPOUND_UNILATERAL_RATIO = 0.3;
 
-const MINI_DELOAD_MULTIPLIER = 0.9;
+// Spec 01 §5 Korak 6 line 1108: MINI_DELOAD = -20% težine.
+// (Bilo 0.9 / -10% — silent drift; usklađeno sa spec-om 2026-05-04.)
+const MINI_DELOAD_MULTIPLIER = 0.8;
 const MINI_DELOAD_RFB_MULTIPLIER = 0.8;
 
 function estimateInitialWeight(
