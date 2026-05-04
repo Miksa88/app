@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Upload, Trash2, Video, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { EXERCISE_LIBRARY } from "@/data/trainerMockData";
+import { useExercise } from "@/hooks/useExercises";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -28,24 +28,43 @@ const ExerciseDetail = () => {
   const { toast } = useToast();
   const { clientId: trainerId } = useAuth();
   const isNew = id === "new" || !id;
-  // ID iz URL-a može biti broj (legacy MOCK_LIBRARY) ili UUID iz baze
-  const existing = !isNew ? EXERCISE_LIBRARY.find((e) => e.id === parseInt(id!)) : null;
+  // ID iz URL-a može biti broj (hashed UUID int) ili UUID string iz baze.
+  // useExercise hook prima oba formata i traži po hashUuidToInt mapiranju.
+  const { data: existing } = useExercise(!isNew ? id : null);
   const isPersistedExercise = !isNew && id && id.length > 10 && !Number.isInteger(Number(id));
 
-  const [name, setName] = useState(existing?.name || "");
-  const [instructions, setInstructions] = useState(existing?.instructions || "");
-  const [equipment, setEquipment] = useState(existing?.equipment?.[0] || "");
-  const [focus, setFocus] = useState(existing?.category || "");
-  const [level, setLevel] = useState(existing?.difficulty || "beginner");
+  const [name, setName] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [focus, setFocus] = useState("");
+  const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced">("beginner");
   const [type, setType] = useState("Strength");
 
   // Video upload — Supabase Storage (real persistence) + lokalni blob preview
   // dok se ne završi upload. Ako vežba nije persistirana u DB-u (legacy MOCK
   // library sa numeric ID), fallback na lokalni blob bez upload-a.
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(existing?.videoUrl || null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFileName, setVideoFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Hidrirati form kada `existing` dođe iz async query-ja (W-1 wire-up).
+  // Guard da ne pregazi user edit-e kasnije: hidriramo samo dok je form prazan
+  // (initial mount) — jednostavna logika sa initialized ref-om.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!existing || hydratedRef.current) return;
+    hydratedRef.current = true;
+    setName(existing.name || "");
+    setInstructions(existing.instructions || "");
+    setEquipment(existing.equipment?.[0] || "");
+    setFocus(existing.category || "");
+    const exLevel = existing.difficulty;
+    if (exLevel === "beginner" || exLevel === "intermediate" || exLevel === "advanced") {
+      setLevel(exLevel);
+    }
+    setVideoUrl(existing.videoUrl || null);
+  }, [existing]);
 
   // Otpusti blob URL na unmount da ne curi memory.
   useEffect(() => {
