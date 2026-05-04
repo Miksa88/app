@@ -38,3 +38,15 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Lovable cache + Firecrawl tooling cache
+.lovable/
+.firecrawl/
+
+# Claude Code session artifacts
+.claude/worktrees/
+.claude/worktrees/**
+
+# macOS app bundle wrappers (regenerable from scripts/fitbyivana-*.applescript)
+fitbyivana.app/
+fitbyivana-stop.app/
+
