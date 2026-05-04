@@ -10,7 +10,9 @@ import { TabControl } from "@/components/ui/tab-control";
 import { Plus, Search, Filter, ChevronRight, Dumbbell, LayoutGrid, BookOpen, Loader2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useExercises } from "@/hooks/useExercises";
-import { MOCK_WORKOUTS, MOCK_PROGRAMS, getTagColor } from "@/data/trainingMockData";
+import { getTagColor } from "@/data/trainingMockData";
+import { useWorkouts, type WorkoutRecord } from "@/hooks/useWorkouts";
+import { usePrograms } from "@/hooks/usePrograms";
 
 const TrainerTraining = () => {
   const navigate = useNavigate();
@@ -36,11 +38,14 @@ const TrainerTraining = () => {
     ex.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredWorkouts = MOCK_WORKOUTS.filter((w) =>
+  const { data: workouts = [], isLoading: workoutsLoading } = useWorkouts();
+  const { data: programs = [], isLoading: programsLoading } = usePrograms();
+
+  const filteredWorkouts = workouts.filter((w) =>
     w.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredPrograms = MOCK_PROGRAMS.filter((p) =>
+  const filteredPrograms = programs.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -50,7 +55,7 @@ const TrainerTraining = () => {
     return "bg-destructive/10 text-destructive";
   };
 
-  const getExerciseCount = (w: typeof MOCK_WORKOUTS[0]) =>
+  const getExerciseCount = (w: WorkoutRecord) =>
     w.sections.reduce((sum, s) => sum + s.exercises.length, 0);
 
   return (

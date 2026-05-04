@@ -9,6 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { ClientData } from "@/data/trainerMockData";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientActivity } from "@/hooks/useClientActivity";
+import { useClientNotes, useCreateClientNote, useDeleteClientNote } from "@/hooks/useClientNotes";
 import ClientNutritionPlan from "@/components/trainer/ClientNutritionPlan";
 import { ClientUserStatusPanel } from "@/components/queue/ClientUserStatusPanel";
 import { SyncRulesOverrideSection } from "@/components/trainer/SyncRulesOverrideSection";
@@ -37,9 +38,10 @@ const ClientProfile = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
-  // Notes su trenutno samo lokalne (brišu se na reload). client_notes tabela
-  // je W-3-extension (treba migracija).
-  const [notes, setNotes] = useState<Array<{ id: string; text: string; date: string }>>([]);
+  // Notes — real DB-backed (client_notes tabela, W-3 finishing)
+  const { data: notes = [] } = useClientNotes(id ?? null);
+  const createNoteMutation = useCreateClientNote(id ?? null);
+  const deleteNoteMutation = useDeleteClientNote(id ?? null);
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showTierSheet, setShowTierSheet] = useState(false);
@@ -167,12 +169,15 @@ const ClientProfile = () => {
     settings: t("clients.settings"),
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!newNote.trim()) return;
-    const note = { id: `n_${Date.now()}`, text: newNote.trim(), date: new Date().toISOString().split('T')[0] };
-    setNotes(prev => [note, ...prev]);
-    setNewNote('');
-    setShowNoteInput(false);
+    try {
+      await createNoteMutation.mutateAsync(newNote.trim());
+      setNewNote('');
+      setShowNoteInput(false);
+    } catch {
+      // toast handling — keep silent for now (caller would have shown error)
+    }
   };
 
   const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
@@ -415,9 +420,20 @@ const ClientProfile = () => {
               )}
               <div className="space-y-3">
                 {notes.map(n => (
-                  <div key={n.id} className="bg-muted/30 rounded-xl px-3.5 py-3">
-                    <p className="text-footnote text-foreground leading-relaxed">{n.text}</p>
-                    <p className="text-caption-2 text-muted-foreground/60 mt-1.5">— {new Date(n.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</p>
+                  <div key={n.id} className="bg-muted/30 rounded-xl px-3.5 py-3 group">
+                    <p className="text-footnote text-foreground leading-relaxed">{n.body}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-caption-2 text-muted-foreground/60">
+                        — {new Date(n.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                      </p>
+                      <button
+                        onClick={() => deleteNoteMutation.mutate(n.id)}
+                        className="text-caption-2 text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                        aria-label="Delete note"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {notes.length === 0 && !showNoteInput && <p className="text-caption-1 text-muted-foreground">No notes yet</p>}

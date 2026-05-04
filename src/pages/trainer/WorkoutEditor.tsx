@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ICON_SIZE } from "@/lib/design-tokens";
@@ -8,8 +8,9 @@ import { fadeUp, IOS_SPRING, MOTION_EASE, MOTION_DURATION } from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
 import { ChevronDown, MoreHorizontal, Plus, Trash2, GripVertical } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { MOCK_WORKOUTS, WorkoutSection, WorkoutExerciseItem, SECTION_TYPES } from "@/data/trainingMockData";
+import { WorkoutSection, WorkoutExerciseItem, SECTION_TYPES } from "@/data/trainingMockData";
 import type { ExerciseItem } from "@/hooks/useExercises";
+import { useWorkout, useUpsertWorkout } from "@/hooks/useWorkouts";
 import { useToast } from "@/hooks/use-toast";
 import ExercisePicker from "./ExercisePicker";
 
@@ -21,11 +22,20 @@ const WorkoutEditor = () => {
   const { toast } = useToast();
   const isNew = id === "new" || !id;
   const isAI = searchParams.get("ai") === "true";
-  const existing = !isNew ? MOCK_WORKOUTS.find((w) => w.id === id) : null;
+  const { data: existing } = useWorkout(isNew ? null : id);
+  const upsertWorkoutMutation = useUpsertWorkout();
 
-  const [name, setName] = useState(existing?.name || "");
-  const [description, setDescription] = useState(existing?.description || "");
-  const [sections, setSections] = useState<WorkoutSection[]>(existing?.sections || []);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [sections, setSections] = useState<WorkoutSection[]>([]);
+
+  useEffect(() => {
+    if (existing) {
+      setName(existing.name);
+      setDescription(existing.description ?? "");
+      setSections(existing.sections);
+    }
+  }, [existing]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [pickerTargetSection, setPickerTargetSection] = useState<string | null>(null);
@@ -112,13 +122,26 @@ const WorkoutEditor = () => {
     setPickerTargetSection(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       toast({ title: t("training.nameRequired"), variant: "destructive" });
       return;
     }
-    toast({ title: isNew ? t("training.workoutCreated") : t("training.workoutSaved") });
-    navigate(-1);
+    try {
+      await upsertWorkoutMutation.mutateAsync({
+        id: isNew ? undefined : id,
+        name,
+        description: description || null,
+        sections,
+      });
+      toast({ title: isNew ? t("training.workoutCreated") : t("training.workoutSaved") });
+      navigate(-1);
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Save failed",
+        variant: "destructive",
+      });
+    }
   };
 
   if (showExercisePicker) {
