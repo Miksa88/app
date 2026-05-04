@@ -84,7 +84,7 @@ const WorkoutEditor = () => {
     ));
   };
 
-  const updateExerciseField = (sectionId: string, exerciseId: string, field: keyof WorkoutExerciseItem, value: any) => {
+  const updateExerciseField = (sectionId: string, exerciseId: string, field: keyof WorkoutExerciseItem, value: WorkoutExerciseItem[keyof WorkoutExerciseItem]) => {
     setSections(sections.map((s) =>
       s.id === sectionId
         ? {
@@ -458,7 +458,7 @@ interface ExerciseRowProps {
   exIdx: number;
   sectionId: string;
   onRemove: (sectionId: string, exerciseId: string) => void;
-  onUpdate: (sectionId: string, exerciseId: string, field: keyof WorkoutExerciseItem, value: any) => void;
+  onUpdate: (sectionId: string, exerciseId: string, field: keyof WorkoutExerciseItem, value: WorkoutExerciseItem[keyof WorkoutExerciseItem]) => void;
   t: (key: string) => string;
 }
 
