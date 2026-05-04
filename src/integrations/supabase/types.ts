@@ -50,6 +50,7 @@ export type Database = {
       client_template_assignments: {
         Row: {
           assigned_at: string
+          assigned_program_id: string | null
           assigned_template_id: string
           client_id: string
           created_at: string
@@ -59,6 +60,7 @@ export type Database = {
         }
         Insert: {
           assigned_at?: string
+          assigned_program_id?: string | null
           assigned_template_id: string
           client_id: string
           created_at?: string
@@ -68,6 +70,7 @@ export type Database = {
         }
         Update: {
           assigned_at?: string
+          assigned_program_id?: string | null
           assigned_template_id?: string
           client_id?: string
           created_at?: string
@@ -468,6 +471,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      nutrition_templates: {
+        Row: {
+          calorie_range: Json | null
+          calorie_strategy: string
+          created_at: string
+          description: string | null
+          different_on_training_days: boolean
+          fixed_calories: number | null
+          goal_type: string
+          id: string
+          is_archived: boolean
+          macro_preset: string
+          macro_ratio: Json
+          meal_count: number
+          meal_slots: Json
+          name: string
+          rest_day_modifier: number | null
+          restrictions: string[]
+          tags: string[]
+          trainer_id: string
+          training_day_modifier: number | null
+          updated_at: string
+        }
+        Insert: {
+          calorie_range?: Json | null
+          calorie_strategy?: string
+          created_at?: string
+          description?: string | null
+          different_on_training_days?: boolean
+          fixed_calories?: number | null
+          goal_type: string
+          id?: string
+          is_archived?: boolean
+          macro_preset?: string
+          macro_ratio?: Json
+          meal_count?: number
+          meal_slots?: Json
+          name: string
+          rest_day_modifier?: number | null
+          restrictions?: string[]
+          tags?: string[]
+          trainer_id: string
+          training_day_modifier?: number | null
+          updated_at?: string
+        }
+        Update: {
+          calorie_range?: Json | null
+          calorie_strategy?: string
+          created_at?: string
+          description?: string | null
+          different_on_training_days?: boolean
+          fixed_calories?: number | null
+          goal_type?: string
+          id?: string
+          is_archived?: boolean
+          macro_preset?: string
+          macro_ratio?: Json
+          meal_count?: number
+          meal_slots?: Json
+          name?: string
+          rest_day_modifier?: number | null
+          restrictions?: string[]
+          tags?: string[]
+          trainer_id?: string
+          training_day_modifier?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       packages: {
         Row: {
