@@ -9,8 +9,10 @@ import { ChevronDown, Calendar, Dumbbell, Salad, CheckCircle2, XCircle } from "l
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { useEffect } from "react";
 import { usePrograms } from "@/hooks/usePrograms";
 import { useNutritionTemplates } from "@/hooks/useNutritionTemplates";
+import { useTrialSettings, useSetTrialSettings } from "@/hooks/useTrialSettings";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 
@@ -33,6 +35,8 @@ const TrainerFreeTrial = () => {
 
   const { data: programs = [] } = usePrograms();
   const { data: nutritionTemplates = [] } = useNutritionTemplates();
+  const { data: persistedSettings } = useTrialSettings();
+  const setTrialMutation = useSetTrialSettings();
 
   const [trialDuration, setTrialDuration] = useState(7);
   const [trialIncludes, setTrialIncludes] = useState({
@@ -40,6 +44,16 @@ const TrainerFreeTrial = () => {
   });
   const [trialProgram, setTrialProgram] = useState("");
   const [trialMealPlan, setTrialMealPlan] = useState("");
+
+  // Hydrate from DB
+  useEffect(() => {
+    if (persistedSettings) {
+      setTrialDuration(persistedSettings.duration);
+      setTrialIncludes(persistedSettings.includes);
+      setTrialProgram(persistedSettings.programId ?? "");
+      setTrialMealPlan(persistedSettings.mealPlanId ?? "");
+    }
+  }, [persistedSettings]);
 
   const trialIncludedList = [
     trialIncludes.workouts ? t("trial.workouts") : null,
@@ -51,9 +65,19 @@ const TrainerFreeTrial = () => {
     !trialIncludes.chat ? t("trial.chatWithTrainer") : null,
   ].filter(Boolean);
 
-  const handleSave = () => {
-    toast.success(t("trial.saved").replace(" ✓", "").replace("!", ""));
-    navigate(-1);
+  const handleSave = async () => {
+    try {
+      await setTrialMutation.mutateAsync({
+        duration: trialDuration,
+        includes: trialIncludes,
+        programId: trialProgram || null,
+        mealPlanId: trialMealPlan || null,
+      });
+      toast.success(t("trial.saved").replace(" ✓", "").replace("!", ""));
+      navigate(-1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Save failed");
+    }
   };
 
   return (

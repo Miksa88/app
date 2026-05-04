@@ -15,6 +15,7 @@ import {
   pathFromPublicUrl,
   deleteExerciseVideo,
 } from "@/services/exerciseVideoService";
+import { upsertExercise } from "@/services/exerciseUpsertService";
 
 const EQUIPMENT_OPTIONS = ["Barbell", "Dumbbell", "Machine", "Cable Machine", "Bodyweight", "Kettlebell", "Bench", "Rack"];
 const FOCUS_OPTIONS = ["Noge", "Grudi", "Leđa", "Ramena", "Ruke", "Core", "Kardio", "Full Body"];
@@ -140,13 +141,60 @@ const ExerciseDetail = () => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       toast({ title: t("training.nameRequired"), variant: "destructive" });
       return;
     }
-    toast({ title: t("training.exerciseSaved") });
-    navigate(-1);
+    if (!trainerId) {
+      toast({ title: "Not authenticated", variant: "destructive" });
+      return;
+    }
+    // Map UI focus (Serbian category) → movement_pattern; UI level → DB difficulty.
+    const FOCUS_TO_PATTERN: Record<string, string> = {
+      'Noge': 'knee_dominant',
+      'Grudi': 'horizontal_push',
+      'Leđa': 'horizontal_pull',
+      'Ramena': 'vertical_push',
+      'Ruke': 'isolation_biceps',
+      'Core': 'core_antirotation',
+      'Kardio': 'cardio_liss',
+      'Full Body': 'carry',
+    };
+    const FOCUS_TO_MUSCLE: Record<string, string> = {
+      'Noge': 'quads',
+      'Grudi': 'chest',
+      'Leđa': 'back_lats',
+      'Ramena': 'shoulders_side',
+      'Ruke': 'biceps',
+      'Core': 'core',
+      'Kardio': 'full_body',
+      'Full Body': 'full_body',
+    };
+    const difficulty = level === 'beginner' ? 'beginner_safe' : level;
+    try {
+      await upsertExercise(
+        {
+          id: isPersistedExercise ? id! : undefined,
+          name,
+          nameSr: name,
+          movementPattern: FOCUS_TO_PATTERN[focus] ?? 'knee_dominant',
+          primaryMuscle: FOCUS_TO_MUSCLE[focus] ?? 'full_body',
+          difficulty: difficulty as 'beginner_safe' | 'intermediate' | 'advanced',
+          equipment: equipment ? [equipment] : [],
+          instructions,
+          videoUrl: videoUrl && !videoUrl.startsWith("blob:") ? videoUrl : null,
+        },
+        trainerId,
+      );
+      toast({ title: t("training.exerciseSaved") });
+      navigate(-1);
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Save failed",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
