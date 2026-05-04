@@ -10,6 +10,10 @@ import type { ClientData } from "@/data/trainerMockData";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientActivity } from "@/hooks/useClientActivity";
 import { useClientNotes, useCreateClientNote, useDeleteClientNote } from "@/hooks/useClientNotes";
+import { useUserStatus } from "@/hooks/useUserStatus";
+import { useProgram } from "@/hooks/usePrograms";
+import { useQuery } from "@tanstack/react-query";
+import { listProgramAssignmentsForClient } from "@/services/programService";
 import ClientNutritionPlan from "@/components/trainer/ClientNutritionPlan";
 import { ClientUserStatusPanel } from "@/components/queue/ClientUserStatusPanel";
 import { SyncRulesOverrideSection } from "@/components/trainer/SyncRulesOverrideSection";
@@ -127,6 +131,16 @@ const ClientProfile = () => {
 
   const client = supabaseClient;
   const { data: activityEntries = [] } = useClientActivity(id ?? null);
+  const { status: clientStatus } = useUserStatus(id ?? null);
+
+  // Assigned program — citanje iz client_template_assignments.assigned_program_id
+  const { data: assignedProgramId } = useQuery({
+    queryKey: ["clientProgramAssignment", id ?? "anon"],
+    queryFn: () => (id ? listProgramAssignmentsForClient(id) : null),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+  });
+  const { data: assignedProgram } = useProgram(assignedProgramId ?? null);
 
   if (isResolving) {
     return (
@@ -352,8 +366,14 @@ const ClientProfile = () => {
                   <Dumbbell size={ICON_SIZE.md} className="text-warning" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-body font-semibold text-foreground">PPL Split — 12 Weeks</p>
-                  <p className="text-caption-1 text-muted-foreground">{t("clients.weekOf")} {client.programWeek} {t("clients.of")} {client.programTotalWeeks} · 85%</p>
+                  <p className="text-body font-semibold text-foreground">
+                    {assignedProgram?.name ?? t("clients.noProgramAssigned") ?? "No program assigned"}
+                  </p>
+                  <p className="text-caption-1 text-muted-foreground">
+                    {assignedProgram
+                      ? `${assignedProgram.workoutDays.length} ${t("training.daysLabel") ?? "days"} · ${assignedProgram.type}`
+                      : t("clients.assignProgramHint") ?? "Assign a program from Training tab"}
+                  </p>
                 </div>
                 <ChevronRight size={ICON_SIZE.xs} className="text-muted-foreground/30" />
               </button>
@@ -363,8 +383,25 @@ const ClientProfile = () => {
                     <UtensilsCrossed size={ICON_SIZE.md} className="text-success" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-body font-semibold text-foreground">Fat Loss Starter</p>
-                    <p className="text-caption-1 text-muted-foreground">1840 kcal · P:40% C:35% F:25%</p>
+                    {clientStatus?.nutrition ? (
+                      <>
+                        <p className="text-body font-semibold text-foreground">
+                          {clientStatus.nutrition.targetMode === 'deficit'
+                            ? t("nutrition.cut") ?? "Cut"
+                            : clientStatus.nutrition.targetMode === 'lean_bulk'
+                              ? t("nutrition.bulk") ?? "Bulk"
+                              : t("nutrition.maintain") ?? "Maintain"}
+                        </p>
+                        <p className="text-caption-1 text-muted-foreground tabular-nums">
+                          {clientStatus.nutrition.currentCalorieTarget} kcal · P:{clientStatus.nutrition.macros.proteinG}g C:{clientStatus.nutrition.macros.carbsG}g F:{clientStatus.nutrition.macros.fatG}g
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-body font-semibold text-foreground">{t("clients.noNutritionData") ?? "No nutrition data"}</p>
+                        <p className="text-caption-1 text-muted-foreground">—</p>
+                      </>
+                    )}
                   </div>
                   <ChevronRight size={ICON_SIZE.xs} className="text-muted-foreground/30" />
                 </button>
