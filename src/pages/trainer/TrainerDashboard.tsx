@@ -5,11 +5,11 @@ import {
   Users, Dumbbell, TrendingUp, Gift, CreditCard,
   ChevronRight, Package, Activity, AlertTriangle, Sparkles, ArrowUpRight,
 } from "lucide-react";
-import { MOCK_PACKAGES } from "@/data/packagesMockData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTrainerDashboard } from "@/hooks/useTrainerDashboard";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
+import { usePackages } from "@/hooks/usePackages";
 import AutoPilotFeed from "@/components/trainer/AutoPilotFeed";
 import { fadeUp, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
@@ -26,6 +26,7 @@ const TrainerDashboard = () => {
   const { user } = useAuth();
   const { counters, atRiskClients } = useTrainerDashboard();
   const { clients } = useTrainerClients();
+  const { data: packages = [] } = usePackages();
   const haptic = useHaptic();
 
   const trainerFirstName = String(
@@ -291,7 +292,7 @@ const TrainerDashboard = () => {
           <SectionLabel>Upravljanje</SectionLabel>
           <div className="space-y-2">
             {[
-              { icon: Package, iconBg: "bg-info/10", iconColor: "text-info", title: t("packages.title"), desc: `${MOCK_PACKAGES.filter(p => !p.isVip).length} ${t("packages.title").toLowerCase()} · ${MOCK_PACKAGES.reduce((s, p) => s + p.activeSubscribers, 0)} ${t("packages.subscribers")}`, path: "/trainer/packages" },
+              { icon: Package, iconBg: "bg-info/10", iconColor: "text-info", title: t("packages.title"), desc: `${packages.filter(p => p.tier !== 'high').length} ${t("packages.title").toLowerCase()} · ${counters?.totalClients ?? 0} ${t("packages.subscribers")}`, path: "/trainer/packages" },
               { icon: Gift, iconBg: "bg-primary/10", iconColor: "text-primary", title: t("trial.quickTitle"), desc: `${trialSettings.duration} ${t("trial.daysLabel")} · ${trialIncludesSummary}`, path: "/trainer/free-trial", badge: t("trial.active") },
               { icon: TrendingUp, iconBg: "bg-secondary/10", iconColor: "text-secondary", title: t("nav.analytics"), desc: t("trainer.viewProgress"), path: "/trainer/analytics" },
               { icon: CreditCard, iconBg: "bg-accent/30", iconColor: "text-primary", title: t("nav.payments"), desc: t("payments.subtitle"), path: "/trainer/payments" },
