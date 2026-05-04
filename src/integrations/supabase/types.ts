@@ -12,6 +12,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_notes: {
+        Row: {
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          client_id: string
+          created_at?: string
+          id?: string
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_template_assignments: {
         Row: {
           assigned_at: string
@@ -550,6 +585,45 @@ export type Database = {
           },
         ]
       }
+      programs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          tags: string[]
+          trainer_id: string
+          type: string
+          updated_at: string
+          workout_days: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name: string
+          tags?: string[]
+          trainer_id: string
+          type: string
+          updated_at?: string
+          workout_days?: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name?: string
+          tags?: string[]
+          trainer_id?: string
+          type?: string
+          updated_at?: string
+          workout_days?: Json
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           allergies: string[] | null
@@ -880,6 +954,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      workouts: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          sections: Json
+          trainer_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name: string
+          sections?: Json
+          trainer_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name?: string
+          sections?: Json
+          trainer_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
