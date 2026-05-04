@@ -37,7 +37,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useFoodItems } from "@/hooks/useFoodItems";
 import { useLogMeal, useSkipMeal, useReplaceMeal } from "@/hooks/mutations/useLogMeal";
-import { FOOD_DATABASE, FoodItem } from "@/data/foodDatabase";
+import type { FoodItem } from "@/data/foodDatabase";
 import {
   generateMealPlan,
   GeneratedMeal,
@@ -192,8 +192,7 @@ const Food = () => {
 
   // ── Real-time plan generation ────────────────────────────────────────────
   // Derive ClientProfile iz UserStatus + generate plan sa real food pool.
-  // Fallback na statički FOOD_DATABASE dok DB ne vrati rezultat ili ako
-  // food_items pool bude prazan (ne lomimo UI).
+  // Ako je DB pool prazan, plan se preskače (ne lomimo UI).
   const { plan, foodPool, isIRClient } = useMemo(() => {
     if (!status) {
       return { plan: null as GeneratedMealPlan | null, foodPool: [] as FoodItem[], isIRClient: false };
@@ -205,7 +204,7 @@ const Food = () => {
       nutrition: { metabolicFilter: status.nutrition.metabolicFilter },
     });
 
-    const pool = dbFoods.length > 0 ? dbFoods : FOOD_DATABASE;
+    const pool = dbFoods;
     const generated = generateMealPlan(
       profile,
       DEFAULT_TEMPLATE,

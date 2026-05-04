@@ -32,7 +32,7 @@ import ProgressOutlookCard from "@/components/home/ProgressOutlookCard";
 import GoalEventCard from "@/components/home/GoalEventCard";
 import PromoteBanner from "@/components/home/PromoteBanner";
 import { useMealPlan } from "@/hooks/useMealPlan";
-import { FOOD_DATABASE } from "@/data/foodDatabase";
+import { useFoodItems } from "@/hooks/useFoodItems";
 import type { Partition } from "@/types/training";
 
 // ============================================================================
@@ -65,6 +65,7 @@ const Home = () => {
   const { view: weeklyView } = useWeeklyCalendar(clientId);
   const { totals: dailyTotals } = useDailyTotals(clientId);
   const { plan: mealPlan } = useMealPlan();
+  const { foods: foodPool } = useFoodItems();
 
   const [unreadCount] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
@@ -425,7 +426,7 @@ const Home = () => {
                   </p>
                   <ul className="space-y-1.5">
                     {tomorrowSlots.map(slot => {
-                      const food = FOOD_DATABASE.find(f => f.id === slot.foodId);
+                      const food = foodPool.find(f => f.id === slot.foodId);
                       if (!food) return null;
                       return (
                         <li key={`${slot.dayIndex}-${slot.slotIndex}`} className="flex items-center gap-2">

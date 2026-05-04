@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useMealPlan } from "@/hooks/useMealPlan";
+import { useFoodItems } from "@/hooks/useFoodItems";
 import { computeDayRollups, findSwapAlternatives, type MealPlanSlot } from "@/utils/nutrition/mealPlanGenerator";
-import { FOOD_DATABASE } from "@/data/foodDatabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { addFoodDislike } from "@/services/dislikeService";
@@ -43,6 +43,7 @@ const MealPlanPage = () => {
   const { language, t } = useLanguage();
   const { clientId } = useAuth();
   const { plan, isLoading, regenerate, updateSlot, confirmAll } = useMealPlan();
+  const { foods: foodPool } = useFoodItems();
   const [openDay, setOpenDay] = useState<number | null>(0);
   const [swapSlotIdx, setSwapSlotIdx] = useState<number | null>(null);
 
@@ -65,7 +66,7 @@ const MealPlanPage = () => {
 
   const handlePickAlternative = (foodId: string) => {
     if (swapSlotIdx === null) return;
-    const food = FOOD_DATABASE.find(f => f.id === foodId);
+    const food = foodPool.find(f => f.id === foodId);
     if (!food) return;
     updateSlot(swapSlotIdx, {
       foodId: food.id,
@@ -80,7 +81,7 @@ const MealPlanPage = () => {
 
   const handleDontShowAgain = async (foodId: string) => {
     if (!clientId) return;
-    const food = FOOD_DATABASE.find(f => f.id === foodId);
+    const food = foodPool.find(f => f.id === foodId);
     if (!food) return;
     try {
       await addFoodDislike(clientId, food.nameEn);
@@ -244,7 +245,7 @@ const MealPlanPage = () => {
                     >
                       <div className="border-t border-border">
                         {day.slots.map(slot => {
-                          const food = FOOD_DATABASE.find(f => f.id === slot.foodId);
+                          const food = foodPool.find(f => f.id === slot.foodId);
                           if (!food) return null;
                           const slotIdx = plan.slots.findIndex(
                             s => s.dayIndex === slot.dayIndex && s.slotIndex === slot.slotIndex,
@@ -326,7 +327,7 @@ const MealPlanPage = () => {
 
               {/* "Ne volim ovo" — flagovi current food da se trajno isključi */}
               {(() => {
-                const currentFood = FOOD_DATABASE.find(f => f.id === swapSlot.foodId);
+                const currentFood = foodPool.find(f => f.id === swapSlot.foodId);
                 if (!currentFood) return null;
                 return (
                   <motion.button
