@@ -3,7 +3,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
-import { Search } from "lucide-react";
+import { Search, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -64,7 +64,23 @@ const AssignProgram = () => {
     }
   };
 
-  if (!program) return null;
+  if (!program) {
+    return (
+      <div className="min-h-screen bg-background-secondary pb-28">
+        <PageHeader onBack={() => navigate("/trainer/training")} backLabel={t("training.title")} />
+        <motion.div {...fadeUp()} className="px-5 pt-12 flex flex-col items-center text-center">
+          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+            <AlertTriangle size={28} className="text-muted-foreground" aria-hidden="true" />
+          </div>
+          <h1 className="text-title-2 font-bold text-foreground mb-2">{t("training.programNotFound") ?? "Program not found"}</h1>
+          <p className="text-body text-muted-foreground max-w-xs mb-6">{t("training.programNotFoundBody") ?? "This program may have been deleted or the link is stale."}</p>
+          <Button onClick={() => navigate("/trainer/training")} variant="cta" size="xl">
+            {t("training.title")}
+          </Button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background-secondary pb-28">
