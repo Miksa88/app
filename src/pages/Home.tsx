@@ -19,6 +19,7 @@ import { SectionLabel } from "@/components/ui/section-label";
 import { useHaptic } from "@/hooks/useHaptic";
 import { useStreakMilestones } from "@/hooks/useStreakMilestones";
 import { useStreak } from "@/hooks/useStreak";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { AchievementOverlay } from "@/components/AchievementOverlay";
 import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
@@ -67,7 +68,7 @@ const Home = () => {
   const { plan: mealPlan } = useMealPlan();
   const { foods: foodPool } = useFoodItems();
 
-  const [unreadCount] = useState(0);
+  const unreadCount = useUnreadMessages(clientId);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const haptic = useHaptic();
 

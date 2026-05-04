@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavBackButton } from "@/components/ui/nav-back-button";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Send, Paperclip, MessageCircle } from "lucide-react";
+import { Send, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import trainerAvatar from "@/assets/trainer-avatar.jpg";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -140,13 +140,8 @@ const Chat = () => {
       {/* Input */}
       <div className="shrink-0 px-5 py-3 pb-8 border-t border-border bg-card frosted-glass">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label={t("chat.attachFile")}
-            className="text-muted-foreground p-2 min-w-11 min-h-11 flex items-center justify-center"
-          >
-            <Paperclip size={20} aria-hidden="true" />
-          </button>
+          {/* Paperclip attachment dugme — sakriveno dok upload flow ne bude
+              implementiran (messages.attachment_url kolona postoji u DB). */}
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}

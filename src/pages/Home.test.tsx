@@ -68,6 +68,11 @@ vi.mock("@/hooks/useFoodItems", () => ({
   useFoodItems: () => ({ foods: [], isLoading: false, error: null }),
 }));
 
+// useUnreadMessages — supabase channel + count query
+vi.mock("@/hooks/useUnreadMessages", () => ({
+  useUnreadMessages: () => 0,
+}));
+
 // Weekly calendar — fallback empty (Home komponenta ima fallbackWeekDays)
 vi.mock("@/hooks/useWeeklyCalendar", () => ({
   useWeeklyCalendar: () => ({ view: null, isLoading: false }),
