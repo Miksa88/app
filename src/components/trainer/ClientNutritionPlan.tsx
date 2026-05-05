@@ -315,20 +315,11 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
     navigate(`/trainer/client/${client.id}/meal-picker?slot=${meal.slot}&calories=${meal.calories}&replace=${index}`);
   };
 
-  // Macro display calculations
-  const proteinGrams = Math.round((dailyCalories * macroRatio.protein) / 100 / 4);
-  const carbsGrams = Math.round((dailyCalories * macroRatio.carbs) / 100 / 4);
-  const fatGrams = Math.round((dailyCalories * macroRatio.fat) / 100 / 9);
-  const trainingDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.trainingDayModifier || 150) : 0);
-  const restDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.restDayModifier || -100) : 0);
-
-  // Is training day (mock)
-  const isTrainingDay = new Date().getDay() % 2 === 1; // odd days = training
-
-  // Swipe state per meal
+  // Swipe state per meal — MORA biti pre loading guard-a (Rules of Hooks)
   const [swipedIndex, setSwipedIndex] = useState<number | null>(null);
 
-  // Loading state — čekamo da templates + foods stignu pa da generišemo plan
+  // Loading state — čekamo da templates + foods stignu pa da generišemo plan.
+  // KRITIČNO: ovaj guard MORA biti pre bilo kakvih `selectedTemplate.x` access-a.
   if (templatesLoading || foodsLoading || !plan || !selectedTemplate) {
     return (
       <div className="space-y-3 py-6 flex flex-col items-center">
@@ -337,6 +328,16 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
       </div>
     );
   }
+
+  // Macro display calculations (selectedTemplate je guaranteed non-null posle guard-a)
+  const proteinGrams = Math.round((dailyCalories * macroRatio.protein) / 100 / 4);
+  const carbsGrams = Math.round((dailyCalories * macroRatio.carbs) / 100 / 4);
+  const fatGrams = Math.round((dailyCalories * macroRatio.fat) / 100 / 9);
+  const trainingDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.trainingDayModifier || 150) : 0);
+  const restDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.restDayModifier || -100) : 0);
+
+  // Is training day (mock)
+  const isTrainingDay = new Date().getDay() % 2 === 1; // odd days = training
 
   return (
     <div className="space-y-3">
