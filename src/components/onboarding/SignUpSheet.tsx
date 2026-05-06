@@ -60,26 +60,58 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
       return;
     }
 
-    // 2. Auto-confirm email (beta bypass — email confirmation toggle u Supabase
-    //    Auth Settings ostaje ON za production, ali za beta odmah confirm-ujemo
-    //    kroz Edge Function da user ne mora da klikne email link).
+    // 2. Auto-confirm email (beta bypass — Supabase Auth ostaje sa email
+    //    confirmation toggle ON, ali Edge Function odmah confirm-uje user-a
+    //    kroz service role tako da klijentkinja ne mora da klikne email link).
     //    EF anti-takeover: auto-confirm radi samo za signup mlađi od 60s.
+    //
+    //    Robust path (2026-05-06): proveravamo response-data; ako EF fail-uje
+    //    ili vrati error, prikazujemo eksplicitnu poruku umesto da nastavimo
+    //    i naletimo na "email_not_confirmed" kasnije.
+    let confirmFailed = false;
+    let confirmErrMsg = "";
     try {
-      await supabase.functions.invoke("auto-confirm-signup", {
-        body: { userId: signUpData.user.id },
-      });
+      const { data: confirmData, error: confirmErr } = await supabase.functions.invoke(
+        "auto-confirm-signup",
+        { body: { userId: signUpData.user.id } },
+      );
+      if (confirmErr) {
+        confirmFailed = true;
+        confirmErrMsg = confirmErr.message;
+      } else if (confirmData && (confirmData as { error?: string }).error) {
+        confirmFailed = true;
+        confirmErrMsg = (confirmData as { error?: string }).error ?? "EF returned error";
+      }
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn("[SignUpSheet] auto-confirm-signup failed:", e);
-      // Nastavlja se — ako fail, signIn ispod će fail sa email_not_confirmed,
-      // toast će obavestiti user-a.
+      confirmFailed = true;
+      confirmErrMsg = e instanceof Error ? e.message : String(e);
     }
 
-    // 3. Sign in odmah da session bude aktivna pre AnalysisReport-a
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    if (confirmFailed) {
+      // eslint-disable-next-line no-console
+      console.error("[SignUpSheet] auto-confirm-signup failed:", confirmErrMsg);
+      setSubmitting(false);
+      toast.error(
+        t("signup.confirmFailed") ||
+          "Aktivacija naloga trenutno ne radi. Probaj ponovo za par sekundi ili kontaktiraj podršku.",
+      );
+      return;
+    }
+
+    // 3. Sign in odmah da session bude aktivna pre AnalysisReport-a.
+    //    Retry once na "email_not_confirmed" — replication između auth.users
+    //    confirm-update i token endpoint-a može imati ~200ms delay.
+    let signInErr = (
+      await supabase.auth.signInWithPassword({ email: email.trim(), password })
+    ).error;
+
+    if (signInErr && /email[_ ]not[_ ]confirmed/i.test(signInErr.message)) {
+      // Wait briefly + retry — auth replication slow path
+      await new Promise((r) => setTimeout(r, 600));
+      signInErr = (
+        await supabase.auth.signInWithPassword({ email: email.trim(), password })
+      ).error;
+    }
 
     setSubmitting(false);
 

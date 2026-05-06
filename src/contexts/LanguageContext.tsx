@@ -526,6 +526,7 @@ const translations: Record<string, Record<Language, string>> = {
   "signup.errorGeneric": { en: "Sign-up failed. Try again.", sr: "Registracija nije uspela. Pokušaj ponovo." },
   "signup.errorMissingFields": { en: "Please fill all required fields", sr: "Popuni sva obavezna polja" },
   "signup.passwordShort": { en: "Password must be at least 8 characters", sr: "Lozinka mora imati najmanje 8 karaktera" },
+  "signup.confirmFailed": { en: "Account activation is unavailable. Try again in a moment or contact support.", sr: "Aktivacija naloga trenutno ne radi. Probaj ponovo za par sekundi ili kontaktiraj podršku." },
   "onboarding.stepCycleSub": { en: "We adapt your plan to your cycle phases", sr: "Prilagođavamo plan tvojim fazama ciklusa" },
   "onboarding.stepCycleTitle": { en: "Cycle tracking", sr: "Praćenje ciklusa" },
   "onboarding.why.cycle": { en: "Hormonal changes affect energy, hunger, and recovery — your plan adapts.", sr: "Hormonalne promene utiču na energiju, glad i oporavak — plan se prilagođava." },
