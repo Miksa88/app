@@ -43,75 +43,38 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
 
     setSubmitting(true);
 
-    // 1. Real Supabase signUp
-    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+    // 1. Server-side signup koji preskace Supabase email confirmation flow.
+    //    Stari put (auth.signUp + auto-confirm-signup EF) je slao confirmation
+    //    mail i posle ~4 signup-a hitao "email rate limit exceeded". Nova EF
+    //    `signup-confirmed` koristi auth.admin.createUser({email_confirm:true})
+    //    — nikakav mail se ne salje, nema rate limit-a, instant ready.
+    let signupErrMsg: string | null = null;
+    try {
+      const { data: signupData, error: signupErr } = await supabase.functions.invoke(
+        "signup-confirmed",
+        { body: { email: email.trim(), password } },
+      );
+      if (signupErr) {
+        signupErrMsg = signupErr.message;
+      } else {
+        const efPayload = (signupData ?? {}) as { ok?: boolean; error?: string };
+        if (!efPayload.ok) signupErrMsg = efPayload.error ?? "EF returned no ok";
+      }
+    } catch (e) {
+      signupErrMsg = e instanceof Error ? e.message : String(e);
+    }
+
+    if (signupErrMsg) {
+      setSubmitting(false);
+      toast.error(signupErrMsg);
+      return;
+    }
+
+    // 2. Sign in — sada bi trebalo da radi odmah (user je email_confirmed=true)
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
-
-    if (signUpErr) {
-      setSubmitting(false);
-      toast.error(signUpErr.message);
-      return;
-    }
-    if (!signUpData.user) {
-      setSubmitting(false);
-      toast.error(t("signup.errorGeneric") || "Kreiranje naloga nije uspelo");
-      return;
-    }
-
-    // 2. Auto-confirm email (beta bypass — Supabase Auth ostaje sa email
-    //    confirmation toggle ON, ali Edge Function odmah confirm-uje user-a
-    //    kroz service role tako da klijentkinja ne mora da klikne email link).
-    //    EF anti-takeover: auto-confirm radi samo za signup mlađi od 60s.
-    //
-    //    Robust path (2026-05-06): proveravamo response-data; ako EF fail-uje
-    //    ili vrati error, prikazujemo eksplicitnu poruku umesto da nastavimo
-    //    i naletimo na "email_not_confirmed" kasnije.
-    let confirmFailed = false;
-    let confirmErrMsg = "";
-    try {
-      const { data: confirmData, error: confirmErr } = await supabase.functions.invoke(
-        "auto-confirm-signup",
-        { body: { userId: signUpData.user.id } },
-      );
-      if (confirmErr) {
-        confirmFailed = true;
-        confirmErrMsg = confirmErr.message;
-      } else if (confirmData && (confirmData as { error?: string }).error) {
-        confirmFailed = true;
-        confirmErrMsg = (confirmData as { error?: string }).error ?? "EF returned error";
-      }
-    } catch (e) {
-      confirmFailed = true;
-      confirmErrMsg = e instanceof Error ? e.message : String(e);
-    }
-
-    if (confirmFailed) {
-      // eslint-disable-next-line no-console
-      console.error("[SignUpSheet] auto-confirm-signup failed:", confirmErrMsg);
-      setSubmitting(false);
-      toast.error(
-        t("signup.confirmFailed") ||
-          "Aktivacija naloga trenutno ne radi. Probaj ponovo za par sekundi ili kontaktiraj podršku.",
-      );
-      return;
-    }
-
-    // 3. Sign in odmah da session bude aktivna pre AnalysisReport-a.
-    //    Retry once na "email_not_confirmed" — replication između auth.users
-    //    confirm-update i token endpoint-a može imati ~200ms delay.
-    let signInErr = (
-      await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    ).error;
-
-    if (signInErr && /email[_ ]not[_ ]confirmed/i.test(signInErr.message)) {
-      // Wait briefly + retry — auth replication slow path
-      await new Promise((r) => setTimeout(r, 600));
-      signInErr = (
-        await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      ).error;
-    }
 
     setSubmitting(false);
 
