@@ -430,7 +430,7 @@ const ClientProfile = () => {
                     </div>
                   );
                 })}
-                {activities.length === 0 && <p className="text-caption-1 text-muted-foreground">No recent activity</p>}
+                {activities.length === 0 && <p className="text-caption-1 text-muted-foreground">{t("clients.noRecentActivity")}</p>}
               </div>
             </MotionCard>
 
@@ -473,7 +473,7 @@ const ClientProfile = () => {
                     </div>
                   </div>
                 ))}
-                {notes.length === 0 && !showNoteInput && <p className="text-caption-1 text-muted-foreground">No notes yet</p>}
+                {notes.length === 0 && !showNoteInput && <p className="text-caption-1 text-muted-foreground">{t("clients.noNotesYet")}</p>}
               </div>
             </MotionCard>
 

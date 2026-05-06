@@ -1,0 +1,22 @@
+# Zabrani čitanje teških direktorijuma
+node_modules/
+.git/
+.next/
+dist/
+build/
+supabase/.temp/
+
+# Zabrani čitanje medija (ovo troši najviše tokena bez razloga)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.mp3
+*.mp4
+*.pdf
+*.zip
+
+# Zabrani logove i privremene fajlove
+*.log
+.DS_Store

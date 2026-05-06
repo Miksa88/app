@@ -1,0 +1,506 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --background-secondary: 240 5% 96%;
+    --foreground: 0 0% 0%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 325 82% 51%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 289 63% 42%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 5% 96%;
+    /* WS-8 D2: muted-foreground tamnije (46% → 40% lightness) za 4.5:1 kontrast na
+       bg-card (white) i bg-background-secondary (light gray). Pre toga ~4.2:1 na
+       card pairs, ispod WCAG AA normal-text threshold. */
+    --muted-foreground: 240 4% 40%;
+
+    --accent: 325 82% 51%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 211 100% 50%;
+    --info-foreground: 0 0% 100%;
+
+    /* Macro color tokens (protein / carb / fat) — WS-8 D14 rotation to industry standard.
+       BLUE protein + ORANGE carb + YELLOW fat = MyFitnessPal / Lose It / Cronometer konvencija.
+       Razlozi rotacije iz red/yellow/green (v8.0):
+         1. WCAG SC 1.4.1 — red+green pair je kolor-blind problem (deuteranopia/protanopia)
+         2. 70% fitness korisnica već naviklo na industry mapping iz drugih app-ova
+         3. Green se oslobađa za success state (streak, eaten meal) — ne kolidira sa macro
+       Mapping dokumentovan u MASTER.md §1.1 (v8.1 Changelog). */
+    --macro-protein: 211 100% 50%;  /* blue — strukturno/mišić-gradivno */
+    --macro-carb: 25 95% 53%;       /* orange — energy/quick fuel */
+    --macro-fat: 45 93% 47%;        /* yellow — fat/ulje */
+
+    /* Apple Health brand colors — Activity Rings (Move/Exercise/Stand) + Sleep */
+    --health-move: 0 85% 55%;       /* red — Apple Fitness Move */
+    --health-exercise: 145 80% 45%; /* green — Apple Fitness Exercise */
+    --health-stand: 195 100% 50%;   /* cyan — Apple Fitness Stand */
+    --health-sleep: 270 60% 60%;    /* purple — Apple Health Sleep */
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 325 82% 51%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 325 82% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 240 6% 90%;
+    --sidebar-ring: 325 82% 51%;
+
+    --text-secondary: 240 6% 25%;
+    --text-tertiary: 240 6% 25%;
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05);
+    --shadow-elevated: 0 8px 30px rgba(0,0,0,0.12);
+    --shadow-fab: 0 4px 14px hsl(var(--primary) / 0.35);
+    /* DESIGN_AUDIT v2 H13: tokeni za dosadašnje ad-hoc shadow-e */
+    --shadow-primary-ring: 0 4px 16px hsl(var(--primary) / 0.12);
+    --shadow-hairline: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 0.5px rgba(0,0,0,0.04);
+
+    /* Motion tokens (iOS-inspired) — fix A7 + H6 iz DESIGN_AUDIT.md */
+    --motion-duration-fast: 150ms;
+    --motion-duration-base: 250ms;
+    --motion-duration-slow: 400ms;
+    --motion-duration-xslow: 800ms;
+    --motion-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --motion-spring-gentle: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Spacing scale — fix H1 iz DESIGN_AUDIT.md */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-base: 16px;
+    --spacing-lg: 20px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 32px;
+    --spacing-3xl: 48px;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --background-secondary: 240 6% 10%;
+    --foreground: 0 0% 100%;
+
+    --card: 240 6% 14%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 240 6% 14%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 325 82% 51%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 289 63% 42%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 5% 20%;
+    --muted-foreground: 240 4% 60%;
+
+    --accent: 325 82% 51%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 95% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 211 100% 50%;
+    --info-foreground: 0 0% 100%;
+
+    /* Macro color tokens (dark mode) — lighter shades za contrast na dark bg */
+    --macro-protein: 211 100% 65%;  /* blue */
+    --macro-carb: 25 95% 65%;       /* orange */
+    --macro-fat: 45 93% 60%;        /* yellow */
+
+    /* Apple Health brand colors — dark mode lighter shades */
+    --health-move: 0 85% 65%;
+    --health-exercise: 145 80% 55%;
+    --health-stand: 195 100% 60%;
+    --health-sleep: 270 60% 70%;
+
+    --border: 240 4% 22%;
+    --input: 240 4% 22%;
+    --ring: 325 82% 51%;
+
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 325 82% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 20%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 240 4% 22%;
+    --sidebar-ring: 325 82% 51%;
+
+    --text-secondary: 240 6% 75%;
+    --text-tertiary: 240 6% 75%;
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+    --shadow-elevated: 0 8px 30px rgba(0,0,0,0.4);
+    --shadow-fab: 0 4px 14px hsl(var(--primary) / 0.4);
+    /* Dark mode varijante novih shadow tokena (v2) */
+    --shadow-primary-ring: 0 4px 16px hsl(var(--primary) / 0.25);
+    --shadow-hairline: 0 1px 3px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.04);
+  }
+}
+
+/* ===========================================================================
+   Mobile viewport — 100dvh fallback za iOS Safari
+   100vh uračunava adresnu traku → skače pri scroll-u. 100dvh je dinamički.
+   Tailwind-ov min-h-screen = 100vh; override-ujemo ga globalno gde je moguće.
+   =========================================================================== */
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+  .h-screen {
+    height: 100dvh;
+  }
+}
+
+/* ===========================================================================
+   Accessibility — prefers-reduced-motion (fix A7 iz DESIGN_AUDIT.md)
+   Globalno gašenje animacija za korisnice sa vestibularnim potrebama.
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===========================================================================
+   Breathing animation — WS-8 G6
+   Signature motion za kalmni kontekst (rest day, luteal phase, processing).
+   Inspired by Meditation/Mental Health UX (ui-ux-pro-max row 22 + 98).
+   5s ease-in-out infinite, subtle scale + opacity.
+   Respektuje prefers-reduced-motion (gore-globalno).
+   =========================================================================== */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+.breathe {
+  animation: breathe 5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* ===========================================================================
+   Focus ring utilities — WS-8 D1
+   Sprečava naked focus:outline-none bez zamene (WCAG SC 2.4.7).
+   .focus-ring-default — za custom <button>/<input> van shadcn primitives.
+   .focus-ring-subtle — za elemente gde puni ring previše dominira.
+   =========================================================================== */
+.focus-ring-default {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+}
+
+.focus-ring-subtle {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40;
+}
+
+/* ===========================================================================
+   iOS settings row height — WS-8 D3
+   iOS Settings.app style grouped list rows use 52px min-height. Replaces
+   ad-hoc min-h-[52px] across Profile, ClientNutritionPlan, SignUpSheet.
+   =========================================================================== */
+.ios-row-h {
+  min-height: 3.25rem; /* 52px */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    /* Apple-native: stop iOS WebView bounce overscroll — sadržaj ne leluja preko ivica */
+    overscroll-behavior: none;
+    /* Sakrij native scrollbar — Apple aplikacije koriste minimalan indicator tokom scroll-a */
+    -webkit-overflow-scrolling: touch;
+  }
+  body {
+    @apply bg-background-secondary text-foreground antialiased;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+  }
+
+  /* Apple-native: skrij scrollbar u WebView-u (iOS apps ne prikazuju persistentni bar) */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    line-height: 1.3;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .card-shadow {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-fab {
+    box-shadow: var(--shadow-fab);
+  }
+
+  /* DESIGN_AUDIT v2 H13 — shadow utilities za ad-hoc slučajeve iz Iter 2b */
+  .shadow-primary-ring {
+    box-shadow: var(--shadow-primary-ring);
+  }
+
+  .shadow-hairline {
+    box-shadow: var(--shadow-hairline);
+  }
+
+  .gradient-border-left {
+    border-left: 3px solid;
+    border-image: linear-gradient(to bottom, hsl(var(--primary)), hsl(var(--secondary))) 1;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* iOS notch / Dynamic Island — padding za status bar area */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Apple-native: safe-area + 14px breathing za prvi page element (naslovi, back dugme).
+     Zamenjuje fiksni pt-14 koji je bio radio u non-overlay modu. */
+  .pt-header-safe {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+  }
+
+  /* Apple-native: safe-area bottom + breathing za poslednji element (CTA button, form submit) */
+  .pb-safe-cta {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+
+  /* iOS landscape — safe area left/right za Dynamic Island i gesture bar */
+  .safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Capacitor keyboard — kad se otvori tastatura, sakrij fixed elements koji smetaju
+     (npr. BottomNav). ThemeProvider/native.ts dodaje .keyboard-open na body. */
+  body.keyboard-open .hide-on-keyboard {
+    display: none;
+  }
+
+  /* iOS-native list row press highlight — Apple pattern za Settings-style lists.
+     Dim pozadinu umesto scale (koji je za buttons/cards). */
+  .row-ios {
+    transition: background-color 150ms ease-out;
+  }
+  .row-ios:active {
+    background-color: hsl(var(--muted) / 0.5);
+  }
+
+  /* iOS capsule — fully rounded CTA za prominent actions (Apple iOS 16+ style) */
+  .btn-capsule {
+    border-radius: 9999px;
+  }
+
+  /* iOS-native bold dynamic type — za large titles (letter-spacing tightening per SF Pro Display) */
+  .text-large-title,
+  .text-title-1,
+  .text-title-2 {
+    letter-spacing: -0.022em;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  /* Text color variants — semantic (fix A5 iz DESIGN_AUDIT.md) */
+  .text-secondary {
+    color: hsl(var(--text-secondary) / 0.85);
+  }
+
+  .text-tertiary {
+    color: hsl(var(--text-tertiary) / 0.6);
+  }
+
+  .text-placeholder {
+    color: hsl(var(--text-tertiary) / 0.35);
+  }
+
+  .separator-ios {
+    height: 1px;
+    background: hsl(var(--border));
+  }
+
+  .frosted-glass {
+    background: hsla(0, 0%, 100%, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .dark .frosted-glass {
+    background: hsla(0, 0%, 7%, 0.92);
+  }
+
+  /* Liquid Glass Navigation */
+  .liquid-glass-nav {
+    background: hsla(0, 0%, 96%, 0.75);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid hsla(0, 0%, 100%, 0.6);
+    box-shadow: 
+      0 8px 32px hsla(0, 0%, 0%, 0.08),
+      0 2px 8px hsla(0, 0%, 0%, 0.04),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.8);
+  }
+
+  .dark .liquid-glass-nav {
+    background: hsla(0, 0%, 12%, 0.7);
+    border: 1px solid hsla(0, 0%, 100%, 0.1);
+    box-shadow: 
+      0 8px 32px hsla(0, 0%, 0%, 0.3),
+      0 2px 8px hsla(0, 0%, 0%, 0.2),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.08);
+  }
+
+  .liquid-glass-active {
+    background: hsla(0, 0%, 100%, 0.65);
+    box-shadow: 
+      0 2px 8px hsla(0, 0%, 0%, 0.06),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.9);
+  }
+
+  .dark .liquid-glass-active {
+    background: hsla(0, 0%, 100%, 0.1);
+    box-shadow: 
+      0 2px 8px hsla(0, 0%, 0%, 0.15),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.1);
+  }
+
+  /* Dark mode separator ostaje isti (sada koristi --border CSS var globalno) */
+
+  /* ========================================================================
+     Apple HIG typography — rem-based za Dynamic Type (fix A8 iz DESIGN_AUDIT.md)
+     Base 1rem = 16px. Korisnice koje povećaju font size u browser settings-u
+     dobijaju proporcionalno skaliranje.
+     ======================================================================== */
+  .text-large-title { font-size: 2.125rem; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2; }   /* 34px */
+  .text-title-1     { font-size: 1.75rem;  font-weight: 700; letter-spacing: -0.4px; line-height: 1.3; }   /* 28px */
+  .text-title-2     { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.3px; line-height: 1.3; }   /* 22px */
+  .text-title-3     { font-size: 1.25rem;  font-weight: 600; letter-spacing: -0.2px; line-height: 1.3; }   /* 20px */
+  .text-headline    { font-size: 1.0625rem;font-weight: 600; line-height: 1.3; }                           /* 17px */
+  .text-body        { font-size: 1.0625rem;font-weight: 400; line-height: 1.5; }                           /* 17px */
+  .text-callout     { font-size: 1rem;     font-weight: 400; line-height: 1.5; }                           /* 16px */
+  .text-subhead     { font-size: 0.9375rem;font-weight: 400; line-height: 1.5; }                           /* 15px */
+  .text-footnote    { font-size: 0.8125rem;font-weight: 400; line-height: 1.4; }                           /* 13px */
+  .text-caption-1   { font-size: 0.75rem;  font-weight: 400; line-height: 1.3; }                           /* 12px */
+  .text-caption-2   { font-size: 0.6875rem;font-weight: 400; line-height: 1.2; }                           /* 11px */
+  .text-caption-micro { font-size: 0.5625rem; font-weight: 500; line-height: 1.1; letter-spacing: 0.02em; } /* 9px — Figma-driven weekday labels u compact widgetima */
+
+  /* ========================================================================
+     iOS Navigation typography — DESIGN_AUDIT v2 H10
+     17pt je Apple-standardna navigacija (UINavigationBar title / bar button).
+     ======================================================================== */
+  .text-nav-title   { font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.2px; line-height: 1.3; }  /* 17px */
+  .text-nav-action  { font-size: 1.0625rem; font-weight: 400; line-height: 1.3; }                         /* 17px */
+
+  /* ========================================================================
+     Display typography — DESIGN_AUDIT v2 H10
+     Za hero/stat numbers na dashboard-ima (iOS widget-large stil).
+     ======================================================================== */
+  .text-display-lg  { font-size: 3rem;     font-weight: 700; letter-spacing: -1px;   line-height: 1.05; }  /* 48px */
+  .text-display-xl  { font-size: 3.5rem;   font-weight: 700; letter-spacing: -1.2px; line-height: 1.03; }  /* 56px */
+  .text-display-2xl { font-size: 4rem;     font-weight: 700; letter-spacing: -1.4px; line-height: 1.0; }   /* 64px */
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -117,7 +117,7 @@ const translations: Record<string, Record<Language, string>> = {
   "health.stepsDistanceDesc": { en: "Daily steps and distance covered", sr: "Dnevni koraci i pređena distanca" },
   "health.heartRate": { en: "Heart rate", sr: "Puls" },
   "health.heartRateDesc": { en: "Average and max heart rate during workouts", sr: "Prosečan i max puls tokom treninga" },
-  "health.sleep": { en: "Sleep tracking", sr: "Sleep tracking" },
+  "health.sleep": { en: "Sleep tracking", sr: "Praćenje sna" },
   "health.sleepDesc": { en: "Duration and sleep quality", sr: "Trajanje i kvalitet sna" },
   "health.weight": { en: "Weight & body fat", sr: "Težina i body fat" },
   "health.weightDesc": { en: "Body weight and fat percentage", sr: "Telesna masa i procenat masti" },
@@ -141,7 +141,7 @@ const translations: Record<string, Record<Language, string>> = {
   "home.min": { en: "min", sr: "min" },
   "home.dailyNutrition": { en: "Daily Nutrition", sr: "Dnevna ishrana" },
   "home.remaining": { en: "remaining", sr: "preostalo" },
-  "home.protein": { en: "Protein", sr: "Protein" },
+  "home.protein": { en: "Protein", sr: "Proteini" },
   "home.carbs": { en: "Carbs", sr: "Ugljeni hidrati" },
   "home.fat": { en: "Fat", sr: "Masti" },
   "home.water": { en: "Water", sr: "Voda" },
@@ -278,7 +278,7 @@ const translations: Record<string, Record<Language, string>> = {
   "food.extraMealName": { en: "What did you eat?", sr: "Šta si pojela?" },
   "food.extraMealNamePlaceholder": { en: "e.g. handful of nuts", sr: "npr. šaka oraha" },
   "food.calories": { en: "Calories (kcal)", sr: "Kalorije (kcal)" },
-  "food.proteinG": { en: "Protein (g)", sr: "Protein (g)" },
+  "food.proteinG": { en: "Protein (g)", sr: "Proteini (g)" },
   "food.carbsG": { en: "Carbs (g)", sr: "Ugljeni (g)" },
   "food.fatG": { en: "Fat (g)", sr: "Masti (g)" },
   "food.wasLiquid": { en: "Liquid calories?", sr: "Tečne kalorije?" },
@@ -322,7 +322,7 @@ const translations: Record<string, Record<Language, string>> = {
   "trainer.focusOnDesc": { en: "Only at-risk and deload clients. Algo handles the rest.", sr: "Samo at-risk i deload klijentkinje. Algoritam radi ostalo." },
   "trainer.priorityClients": { en: "Priority clients", sr: "Prioritetne klijentkinje" },
   "trainer.allClients": { en: "Clients", sr: "Klijentkinje" },
-  "tier.entry": { en: "Entry", sr: "Entry" },
+  "tier.entry": { en: "Entry", sr: "Početni" },
   "tier.mid": { en: "Mid", sr: "Mid" },
   "tier.high": { en: "VIP", sr: "VIP" },
   "tier.entryDesc": { en: "Algorithm-driven, fully self-serve", sr: "Algoritam vodi, potpuno self-serve" },
@@ -414,7 +414,7 @@ const translations: Record<string, Record<Language, string>> = {
   "food.snack": { en: "Snack", sr: "Užina" },
   "food.kcal": { en: "kcal", sr: "kcal" },
   "food.calories": { en: "Calories", sr: "Kalorije" },
-  "food.protein": { en: "Protein", sr: "Protein" },
+  "food.protein": { en: "Protein", sr: "Proteini" },
   "food.carbs": { en: "Carbs", sr: "Ugljeni hidrati" },
   "food.fat": { en: "Fat", sr: "Masti" },
   "food.ingredients": { en: "Ingredients", sr: "Sastojci" },
@@ -711,7 +711,7 @@ const translations: Record<string, Record<Language, string>> = {
   "createMeal.mealName": { en: "Meal Name", sr: "Naziv obroka" },
   "createMeal.time": { en: "Time", sr: "Vreme" },
   "createMeal.calories": { en: "Calories", sr: "Kalorije" },
-  "createMeal.protein": { en: "Protein", sr: "Protein" },
+  "createMeal.protein": { en: "Protein", sr: "Proteini" },
   "createMeal.carbs": { en: "Carbs", sr: "Ugljeni hidrati" },
   "createMeal.fats": { en: "Fats", sr: "Masti" },
   "createMeal.foods": { en: "Foods", sr: "Namirnice" },
@@ -1273,7 +1273,7 @@ const translations: Record<string, Record<Language, string>> = {
   "analysis.yourNutrition": { en: "YOUR NUTRITION", sr: "TVOJA ISHRANA" },
   "analysis.kcalDaily": { en: "kcal daily", sr: "kcal dnevno" },
   "analysis.mealsPerDay": { en: "meals", sr: "obroka" },
-  "analysis.protein": { en: "Protein", sr: "Protein" },
+  "analysis.protein": { en: "Protein", sr: "Proteini" },
   "analysis.carbs": { en: "Carbs", sr: "Ugljeni" },
   "analysis.fat": { en: "Fat", sr: "Masti" },
   "analysis.whyThisNutrition": { en: "Why this nutrition", sr: "Zašto baš ovo" },
@@ -1658,6 +1658,8 @@ const translations: Record<string, Record<Language, string>> = {
   "clients.assignProgramHint": { en: "Assign a program from Training tab", sr: "Dodeli program iz Trening kartice" },
   "clients.noNutritionData": { en: "No nutrition data", sr: "Nema podataka o ishrani" },
   "clients.noProgramAssigned": { en: "No program assigned", sr: "Nije dodeljen program" },
+  "clients.noRecentActivity": { en: "No recent activity", sr: "Nema skorašnjih aktivnosti" },
+  "clients.noNotesYet": { en: "No notes yet", sr: "Još nema beleški" },
   "clients.search": { en: "Search clients", sr: "Pretraži klijente" },
   "clients.addClient": { en: "Add client", sr: "Dodaj klijenta" },
   "clients.all": { en: "All", sr: "Svi" },
@@ -2031,7 +2033,12 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const t = useCallback((key: string): string => {
-    return translations[key]?.[language] || key;
+    const entry = translations[key];
+    if (!entry) return key;
+    // Fallback chain: izabran jezik → engleski → key (samo ako i en nedostaje)
+    // Ovo sprečava da user koji je izabrao srpski vidi raw key string
+    // kad sr prevod fali — pokazuje engleski kao bezbedan default.
+    return entry[language] || entry.en || key;
   }, [language]);
 
   return (

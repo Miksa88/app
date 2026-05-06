@@ -166,7 +166,14 @@ export async function completeOnboarding(
   status.training.daysPerWeek = input.trainingDays;
 
   try {
-    const template = await getActiveTemplate(position);
+    // Bira goal-specific template (Ivanini SYS_BEG_FB_3_GLUTE/_FATLOSS/_TONE)
+    const goalToOverlay: Record<PrimaryGoal, 'GLUTE_FOCUS' | 'TONE' | 'FAT_LOSS'> = {
+      glute_focus: 'GLUTE_FOCUS',
+      tone: 'TONE',
+      fat_loss: 'FAT_LOSS',
+    };
+    const goalOverlay = goalToOverlay[input.primaryGoal];
+    const template = await getActiveTemplate(position, goalOverlay);
     await assignTemplateToClient(input.clientId, template);
     status.training.activeTemplateId = template.id;
     status.training.queue = buildMesocycleQueue({

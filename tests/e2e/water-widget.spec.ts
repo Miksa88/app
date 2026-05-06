@@ -14,23 +14,22 @@ test.describe("Water widget", () => {
   test("3× '+1 čaša' → 3 reda u water_logs", async ({ page }) => {
     await loginAsTestUser(page);
 
-    // Water widget ima 8+ čaša dugmad, svaka sa aria-label "<waterGlasses> N"
-    // Klik na prazan slot poziva setWaterTo → addWater.
-    // Da kliknemo 3 praznih, biramo slots 1, 2, 3 (početno svi prazni).
+    // Klik na Plus button (data-testid="water-add-glass") tri puta — semantički
+    // "+1 čaša" gesture. Dot-ovi su append-only display layer pa klik ispod
+    // trenutnog stanja je no-op (vidi setWaterTo u Home.tsx).
     const waterWidget = page.locator('[data-testid="water-widget"]');
     await expect(waterWidget).toBeVisible({ timeout: 10_000 });
 
+    const addButton = waterWidget.locator('[data-testid="water-add-glass"]');
+    await expect(addButton).toBeVisible();
+
     const before = await countRows("water_logs", TEST_USER.id);
 
-    // Glass buttons — svaki ima aria-label koja sadrži "glass" ili srpski
-    const glassButtons = waterWidget.locator("button[aria-label]");
-    const glassCount = await glassButtons.count();
-    expect(glassCount, "water widget should have glass buttons").toBeGreaterThanOrEqual(3);
-
-    // Klikni prvu 3 buttonа (pune prazne slots → trigger addWater)
     for (let i = 0; i < 3; i++) {
-      await glassButtons.nth(i).click();
-      await page.waitForTimeout(700); // hook mutate + optimistic update
+      // Sačekaj da dugme nije disabled (mutation isPending guard)
+      await expect(addButton).toBeEnabled({ timeout: 5_000 });
+      await addButton.click();
+      await page.waitForTimeout(700); // hook mutate + invalidate + refetch
     }
 
     // Wait for all inserts to propagate

@@ -79,7 +79,42 @@ export async function resetTestUserData(userId: string): Promise<void> {
       console.warn(`[resetTestUserData ${t}] ${error.message}`);
     }
   }
-  // user_status ostaje (needed za app to render); samo reset last_updated_at
+
+  // user_status ostaje (needed za app to render), ali resetujemo dnevne rollup-e
+  // koji su denormalizovani signal iz brisanja-tabela (water_logs/meal_logs).
+  // Bez ovog reseta, hydrationTodayMl iz prethodnog run-a bi rendered waterGlasses
+  // većim od 0 → dot tap-ovi (append-only model) postaju no-op i E2E pada.
+  const { data: existing, error: readErr } = await admin
+    .from("user_status")
+    .select("status_json")
+    .eq("client_id", userId)
+    .maybeSingle();
+
+  if (readErr) {
+    // eslint-disable-next-line no-console
+    console.warn(`[resetTestUserData read user_status] ${readErr.message}`);
+    return;
+  }
+  if (!existing?.status_json) return;
+
+  const statusJson = existing.status_json as Record<string, unknown>;
+  const nutrition = (statusJson.nutrition as Record<string, unknown> | undefined) ?? {};
+  const patched = {
+    ...statusJson,
+    nutrition: {
+      ...nutrition,
+      hydrationTodayMl: 0,
+    },
+  };
+
+  const { error: writeErr } = await admin
+    .from("user_status")
+    .update({ status_json: patched })
+    .eq("client_id", userId);
+  if (writeErr) {
+    // eslint-disable-next-line no-console
+    console.warn(`[resetTestUserData reset hydration] ${writeErr.message}`);
+  }
 }
 
 // ----------------------------------------------------------------------------
