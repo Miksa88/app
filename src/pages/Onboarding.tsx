@@ -109,15 +109,29 @@ const Onboarding = () => {
 
   const isOptional = !STEPS[step]?.required;
 
+  // Step 10 = frequency picker. Pocetnice (beginner) imaju FIKSNIH 3 dana
+  // (Spec 01 §3 + odluka 2026-05-06): nema biranja, korak se preskace.
+  const FREQUENCY_STEP_INDEX = 10;
+  const shouldSkipFrequency = trainingExperience === 'beginner';
+
   const next = () => {
     setDirection(1);
-    if (step < TOTAL - 1) setStep(step + 1);
+    let nextStep = step + 1;
+    if (nextStep === FREQUENCY_STEP_INDEX && shouldSkipFrequency) {
+      if (workoutFrequency !== 3) setWorkoutFrequency(3);
+      nextStep = FREQUENCY_STEP_INDEX + 1;
+    }
+    if (nextStep < TOTAL) setStep(nextStep);
     else setPhase("processing");
   };
 
   const back = () => {
     setDirection(-1);
-    if (step > 0) setStep(step - 1);
+    let prevStep = step - 1;
+    if (prevStep === FREQUENCY_STEP_INDEX && shouldSkipFrequency) {
+      prevStep = FREQUENCY_STEP_INDEX - 1;
+    }
+    if (prevStep >= 0) setStep(prevStep);
     else navigate("/");
   };
 

@@ -1215,6 +1215,10 @@ const translations: Record<string, Record<Language, string>> = {
 
   // Workout frequency
   "onboarding.freqDaysPerWeek": { en: "days per week", sr: "dana nedeljno" },
+  "onboarding.freqDaysWeekly": { en: "days weekly", sr: "dana nedeljno" },
+  "onboarding.freq3Sub": { en: "Gentler tempo, enough for results", sr: "Blaži tempo, dovoljno za rezultate" },
+  "onboarding.freq4Sub": { en: "Steady progress with full recovery", sr: "Stabilan progres sa punim oporavkom" },
+  "onboarding.freq5Sub": { en: "Maximum focus on results", sr: "Maksimalni fokus na rezultat" },
   "onboarding.freq3Desc": { en: "Training day, rest day – ideal for your start.", sr: "Dan treninga, dan odmora – idealno za tvoj početak." },
   "onboarding.freq4Desc": { en: "Faster results with a serious approach to your transformation.", sr: "Brži rezultati uz ozbiljniji pristup tvojoj transformaciji." },
   "onboarding.freq5Desc": { en: "Maximum focus for those who prioritize speed of transformation.", sr: "Maksimalan fokus za one kojima je brzina transformacije prioritet." },
