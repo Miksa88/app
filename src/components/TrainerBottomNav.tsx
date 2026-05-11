@@ -33,7 +33,7 @@ const TrainerBottomNav = () => {
         style={{ background: "linear-gradient(to top, hsl(var(--background-secondary)) 0%, transparent 100%)" }}
       />
       <div className="fixed bottom-2 left-1/2 -translate-x-1/2 z-40 safe-bottom w-[calc(100%-32px)] max-w-[420px]">
-        <nav className="liquid-glass-nav rounded-[28px] px-1.5 py-2">
+        <nav className="liquid-glass-nav rounded-[28px] px-1.5 py-2" aria-label={t("a11y.trainerNav")}>
           <svg width="0" height="0" className="absolute">
             <defs>
               <linearGradient id="trainer-nav-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -49,6 +49,8 @@ const TrainerBottomNav = () => {
                 <NavLink
                   key={path}
                   to={path}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={label}
                   className="relative flex-1 flex flex-col items-center gap-0.5 py-2 rounded-[22px] min-h-11"
                 >
                   {isActive && (
