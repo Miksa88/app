@@ -593,6 +593,7 @@ const translations: Record<string, Record<Language, string>> = {
   "packages.nameRequired": { en: "Name is required", sr: "Naziv je obavezan" },
   "packages.saved": { en: "Package saved", sr: "Paket sačuvan" },
   "a11y.loading": { en: "Loading", sr: "Učitavanje" },
+  "signup.passwordPwned": { en: "This password appears in known data breaches — pick a different one.", sr: "Ova lozinka je pronađena u poznatim curenjima podataka — izaberi drugu." },
   "clients.fieldType": { en: "Type", sr: "Tip" },
   "clients.fieldStatus": { en: "Status", sr: "Status" },
   "clients.fieldDuration": { en: "Duration", sr: "Trajanje" },

@@ -8,6 +8,7 @@ import GradientButton from "@/components/GradientButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
 import { supabase } from "@/integrations/supabase/client";
+import { checkPwnedPassword } from "@/utils/auth/pwnedPasswordCheck";
 
 interface SignUpSheetProps {
   onComplete: (method: string, email?: string) => void;
@@ -32,8 +33,8 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
       toast.error(t("signup.errorMissingFields") || "Popuni sva polja");
       return;
     }
-    if (password.length < 6) {
-      toast.error(t("signup.passwordShort") || "Password mora imati bar 6 karaktera");
+    if (password.length < 8) {
+      toast.error(t("signup.passwordShort") || "Password mora imati bar 8 karaktera");
       return;
     }
     if (password !== confirmPassword) {
@@ -42,6 +43,19 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
     }
 
     setSubmitting(true);
+
+    // HIBP proverera (P2-INFRA-1) — block ako je password u poznatim curenjima.
+    // Fail-open: ako HIBP nedostupan, propustamo (network ne sme da blokira signup).
+    try {
+      const hibp = await checkPwnedPassword(password);
+      if (hibp.pwned) {
+        setSubmitting(false);
+        toast.error(t("signup.passwordPwned"));
+        return;
+      }
+    } catch {
+      // fail-open per design
+    }
 
     // 1. Server-side signup koji preskace Supabase email confirmation flow.
     //    Stari put (auth.signUp + auto-confirm-signup EF) je slao confirmation
