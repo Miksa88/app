@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE, MOTION_EASE } from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
+import { MotionButton } from "@/components/ui/motion-button";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -210,20 +211,21 @@ const AddClient = () => {
         </motion.div>
 
         {/* Save button */}
-        <motion.button
+        <MotionButton
           {...fadeUp(0.25)}
-          whileTap={{ scale: TAP_SCALE.primary }}
+          variant="cta"
+          size="xl"
           disabled={isSaving}
           onClick={handleSave}
-          className={`w-full gradient-primary text-primary-foreground py-4 rounded-xl text-body font-semibold min-h-14 shadow-fab ${isSaving ? "opacity-70" : ""}`}
+          aria-busy={isSaving}
         >
           {isSaving ? (
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: MOTION_EASE.linear }}
-              className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full mx-auto" />
+              className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full" />
           ) : (
             t("addClient.save")
           )}
-        </motion.button>
+        </MotionButton>
       </div>
 
       <UnsavedChangesDialog open={showDialog} onStay={cancelLeave} onLeave={confirmLeave} />

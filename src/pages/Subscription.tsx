@@ -4,6 +4,7 @@ import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Crown, MessageCircle, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
+import { MotionButton } from "@/components/ui/motion-button";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // TODO: integrisati sa Stripe / RevenueCat backend-om u IT-25.
@@ -41,14 +42,14 @@ const Subscription = () => {
             {t("subscription.betaDescription")}
           </p>
 
-          <motion.button
-            whileTap={{ scale: TAP_SCALE.primary }}
+          <MotionButton
             onClick={() => navigate("/chat")}
-            className="w-full py-4 rounded-xl text-body font-semibold min-h-14 gradient-primary text-primary-foreground shadow-lg flex items-center justify-center gap-2"
+            variant="cta"
+            size="xl"
           >
             <MessageCircle size={18} aria-hidden="true" />
             {t("subscription.contactTrainer")}
-          </motion.button>
+          </MotionButton>
         </motion.div>
 
         <motion.div {...fadeUp(0.16)} className="mt-4">

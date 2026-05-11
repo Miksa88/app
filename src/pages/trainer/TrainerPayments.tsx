@@ -4,6 +4,7 @@ import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { CreditCard, MessageCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
+import { MotionButton } from "@/components/ui/motion-button";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // TODO: integracija sa Stripe + payments tabelom u IT-25.
@@ -26,14 +27,14 @@ const TrainerPayments = () => {
         </div>
         <h2 className="text-title-2 font-bold text-foreground mb-2">{t("payments.emptyTitle")}</h2>
         <p className="text-body text-muted-foreground max-w-xs mb-6">{t("payments.emptyBody")}</p>
-        <motion.button
-          whileTap={{ scale: TAP_SCALE.primary }}
+        <MotionButton
           onClick={() => navigate("/trainer/messages")}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl gradient-primary text-primary-foreground text-body font-semibold min-h-12"
+          variant="cta"
+          className="inline-flex rounded-xl px-6"
         >
           <MessageCircle size={18} aria-hidden="true" />
           {t("payments.contactClients")}
-        </motion.button>
+        </MotionButton>
       </motion.div>
     </div>
   );

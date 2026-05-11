@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { fadeUp, TAP_SCALE, MOTION_EASE } from "@/lib/motion";
 import { MotionCard } from "@/components/ui/motion-card";
+import { MotionButton } from "@/components/ui/motion-button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -228,11 +229,12 @@ const AnalysisReport = () => {
 
           {/* ============ CTA — jedini akcent na ekranu ============ */}
           <motion.div {...fadeUp(0.5)} className="mt-8">
-            <motion.button
-              whileTap={{ scale: TAP_SCALE.primary }}
+            <MotionButton
+              variant="cta"
+              size="xl"
               onClick={handleStartTrial}
               disabled={submitting}
-              className="w-full h-[56px] rounded-2xl gradient-primary text-primary-foreground text-body font-semibold shadow-fab flex items-center justify-center gap-2 disabled:opacity-60"
+              aria-busy={submitting}
             >
               {submitting ? (
                 <>
@@ -242,7 +244,7 @@ const AnalysisReport = () => {
                     className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
                     aria-hidden="true"
                   />
-                  Pokretanje...
+                  {t("analysis.starting")}
                 </>
               ) : (
                 <>
@@ -250,11 +252,11 @@ const AnalysisReport = () => {
                   <ArrowRight size={ICON_SIZE.md} strokeWidth={2.5} aria-hidden="true" />
                 </>
               )}
-            </motion.button>
+            </MotionButton>
 
             {/* Trial fine print — Apple style, tihi footer */}
             <p className="text-footnote text-muted-foreground text-center mt-3">
-              14 dana besplatno · Otkaži kad god želiš
+              {t("analysis.trialFinePrint")}
             </p>
           </motion.div>
 

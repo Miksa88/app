@@ -3,6 +3,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion } from "framer-motion";
 import { Check, ArrowLeft, Lock, Bell, Crown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { MotionButton } from "@/components/ui/motion-button";
 
 interface PaywallScreenProps {
   onComplete: () => void;
@@ -164,13 +165,14 @@ const PaywallScreen = ({ onComplete, onBack }: PaywallScreenProps) => {
       </div>
 
       {/* CTA button - black/foreground */}
-      <motion.button
-        whileTap={{ scale: 0.97 }}
+      <MotionButton
         onClick={onComplete}
-        className="w-full gradient-primary text-primary-foreground py-4 rounded-2xl text-headline min-h-14 shadow-fab"
+        variant="cta"
+        size="xl"
+        className="text-headline"
       >
         {t("paywall.ctaTrial")}
-      </motion.button>
+      </MotionButton>
 
       {/* Legal */}
       <p className="text-caption-1 text-muted-foreground text-center mt-3 leading-relaxed">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavSearchBar } from "@/components/ui/nav-search-bar";
 import { NavPlusButton } from "@/components/ui/nav-plus-button";
+import { PageTitle } from "@/components/PageTitle";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -98,15 +99,16 @@ const TrainerClients = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
-      <div className="px-5 pt-14 pb-2 bg-background-secondary">
-        <motion.div {...fadeUp()} className="flex items-center justify-between mb-5">
-          <h1 className="text-large-title text-foreground">{t("clients.title")}</h1>
+      <PageTitle
+        title={t("clients.title")}
+        action={
           <NavPlusButton
             onClick={() => navigate("/trainer/client/add")}
             aria-label={t("clients.addClient")}
           />
-        </motion.div>
-
+        }
+      />
+      <div className="px-5 pb-2 bg-background-secondary">
         <motion.div {...fadeUp(0.05)} className="mb-4">
           <NavSearchBar
             value={search}

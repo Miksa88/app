@@ -288,15 +288,27 @@ const PackageEditor = () => {
                 <label className="text-caption-2 text-muted-foreground mb-1 block">
                   {t("packages.currencyLabel")}
                 </label>
-                <select
-                  value={priceCurrency}
-                  onChange={(e) => setPriceCurrency(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="EUR">EUR</option>
-                  <option value="RSD">RSD</option>
-                  <option value="USD">USD</option>
-                </select>
+                <div role="radiogroup" aria-label={t("packages.currencyLabel")} className="grid grid-cols-3 gap-1 bg-card rounded-xl p-1 card-shadow">
+                  {(["EUR", "RSD", "USD"] as const).map((c) => {
+                    const isActive = priceCurrency === c;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        onClick={() => setPriceCurrency(c)}
+                        className={`min-h-11 rounded-lg text-caption-1 font-semibold transition-colors ${
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-muted/50"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

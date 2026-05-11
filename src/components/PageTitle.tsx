@@ -25,23 +25,51 @@ interface PageTitleProps {
   /** True kad već postoji PageHeader iznad — koristi pt-2 umesto pt-14. */
   compact?: boolean;
   className?: string;
+  /** Trailing action (NavPlusButton, IconButton, etc.) — aligned to right of title. */
+  action?: ReactNode;
 }
 
-export const PageTitle = ({ title, subtitle, compact = false, className = "" }: PageTitleProps) => (
+export const PageTitle = ({
+  title,
+  subtitle,
+  compact = false,
+  className = "",
+  action,
+}: PageTitleProps) => (
   <div className={`px-5 ${compact ? HERO_PADDING.afterHeader : HERO_PADDING.standalone} pb-2 ${className}`}>
-    <motion.h1
-      {...fadeUp()}
-      className="text-large-title text-foreground tracking-tight"
-    >
-      {title}
-    </motion.h1>
-    {subtitle && (
-      <motion.p
-        {...fadeUp(0.05)}
-        className="text-caption-1 text-muted-foreground mt-0.5"
-      >
-        {subtitle}
-      </motion.p>
+    {action ? (
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <motion.h1 {...fadeUp()} className="text-large-title text-foreground tracking-tight">
+            {title}
+          </motion.h1>
+          {subtitle && (
+            <motion.p
+              {...fadeUp(0.05)}
+              className="text-caption-1 text-muted-foreground mt-0.5"
+            >
+              {subtitle}
+            </motion.p>
+          )}
+        </div>
+        <motion.div {...fadeUp(0.1)} className="shrink-0">
+          {action}
+        </motion.div>
+      </div>
+    ) : (
+      <>
+        <motion.h1 {...fadeUp()} className="text-large-title text-foreground tracking-tight">
+          {title}
+        </motion.h1>
+        {subtitle && (
+          <motion.p
+            {...fadeUp(0.05)}
+            className="text-caption-1 text-muted-foreground mt-0.5"
+          >
+            {subtitle}
+          </motion.p>
+        )}
+      </>
     )}
   </div>
 );

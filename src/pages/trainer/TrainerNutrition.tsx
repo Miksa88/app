@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavPlusButton } from "@/components/ui/nav-plus-button";
 import { Button } from "@/components/ui/button";
+import { PageTitle } from "@/components/PageTitle";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
@@ -39,18 +40,16 @@ const TrainerNutrition = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
-      <div className="px-5 pt-14 pb-2 flex items-center justify-between">
-        <motion.div {...fadeUp()}>
-          <h1 className="text-large-title text-foreground">{t("nutrition.title")}</h1>
-          <p className="text-caption-1 text-muted-foreground mt-0.5">{t("nutrition.templates")}</p>
-        </motion.div>
-        <motion.div {...fadeUp(0.1)}>
+      <PageTitle
+        title={t("nutrition.title")}
+        subtitle={t("nutrition.templates")}
+        action={
           <NavPlusButton
             onClick={() => setAddSheetMode("menu")}
             aria-label={t("nutrition.addTemplate")}
           />
-        </motion.div>
-      </div>
+        }
+      />
 
       <div className="px-5 mt-4">
         {templates.length === 0 ? (
