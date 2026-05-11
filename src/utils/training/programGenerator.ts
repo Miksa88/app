@@ -40,6 +40,8 @@ import {
   type ExerciseHistorySample,
   type ExerciseMeta,
 } from './dpoCalculator';
+import { getMicrocycleIntensity } from './microcycleIntensity';
+import { applyTempoAndRampUp } from './tempoAndRampUp';
 
 // ============================================================================
 // applyGoalOverlay — Sekcija 5 Korak 3
@@ -182,6 +184,17 @@ export interface VolumeCalibrationContext {
   cyclePhase?: NutritionCyclePhase | null;
   loadingMode?: LoadingMode;             // ako MINI_DELOAD + returnFromBreak, jos -50%
   returnFromBreakActive?: boolean;
+  /**
+   * Microcycle volume multiplier (SREDNJE_NAPREDNE_V2 §2.1 mixed/undulating):
+   *   W2 → 1.10, W4 → 1.15, W5 → 0.90, W6 deload → 0.40, ostale → 1.00.
+   * Beginner uvek 1.00 (linear progression).
+   */
+  microcycleVolumeMultiplier?: number;
+  /**
+   * pocetnici.md §4.4: 2+ uzastopna "Teško" workouta → −1 set po vežbi.
+   * Floor MEV (ne ide ispod slot.setsRange[0]).
+   */
+  consecutiveHardWorkouts?: number;
 }
 
 export function calibrateVolume(
@@ -192,6 +205,7 @@ export function calibrateVolume(
   const cycleBonus = cycleBonusForPhase(ctx.cyclePhase ?? null);
   const effectiveRecovery = ctx.recoveryMultiplier + cycleBonus;
   const normalized = clamp((effectiveRecovery - 0.7) / 0.4, 0, 1);
+  const volMul = ctx.microcycleVolumeMultiplier ?? 1.0;
 
   for (const day of cloned.days) {
     for (const slot of day.exerciseSlots) {
@@ -202,6 +216,23 @@ export function calibrateVolume(
       // Return from Break: -50% volume
       if (ctx.returnFromBreakActive && ctx.loadingMode === 'MINI_DELOAD') {
         sets = Math.max(1, Math.floor(sets * 0.5));
+      }
+
+      // Microcycle waving (intermediate undulating): apply volume multiplier
+      // Floor je MEV (slot.setsRange[0]) za akumulaciju (>1.0), ali deload
+      // (<1.0) sme da padne ispod MEV (smišljeno — volumen treba da padne).
+      if (volMul !== 1.0) {
+        const adjusted = Math.round(sets * volMul);
+        sets = volMul > 1.0
+          ? Math.max(min, adjusted)        // akumulacija ne ide ispod MEV
+          : Math.max(1, adjusted);          // deload sme ispod MEV
+      }
+
+      // DOMS chronic protection — pocetnici.md §4.4: ako klijent prijavi
+      // "Teško" 2+ treninga zaredom, smanji serije za 1 (floor MEV).
+      const hardStreak = ctx.consecutiveHardWorkouts ?? 0;
+      if (hardStreak >= 2) {
+        sets = Math.max(min, sets - 1);
       }
 
       slot.finalSets = sets;
@@ -330,12 +361,35 @@ export function generateSessionSkeleton(input: GenerateSessionInputs): GenerateS
     today: input.today,
   });
 
+  // Pre-workout fatigue override — klijent je rekla "Umorna" → forsiraj
+  // MAINTAIN (bez progressive overload). MINI_DELOAD ima prednost ako je
+  // već aktivan (return from break ili decay) — ne unapredjujemo penalty.
+  const effectiveLoadingMode: LoadingMode =
+    input.profile.preWorkoutFatigue && loading.loadingMode === 'PROGRESS'
+      ? 'MAINTAIN'
+      : loading.loadingMode;
+
+  // Microcycle intensity — jednom za celu sesiju (RIR, RPE, volumen multiplier)
+  const totalWeeksInMesocycle = Math.max(
+    1,
+    Math.round(input.queue.sessions.length / Math.max(1, input.templateSkeleton.daysPerWeek)),
+  );
+  const microIntensity = getMicrocycleIntensity({
+    microcycleIndex: input.queue.currentMicrocycleIndex,
+    totalWeeksInMesocycle,
+    metabolicConditions: input.profile.metabolicConditions,
+    experienceLevel: input.profile.experienceLevel,
+  });
+
   // Sloj 3: kalibracija volumena (sets) sa cycle bonus + return from break penalty
+  // + microcycle waving (intermediate undulating) + DOMS chronic protection
   skeleton = calibrateVolume(skeleton, {
     recoveryMultiplier: input.profile.recoveryMultiplier,
     cyclePhase: input.cyclePhase,
-    loadingMode: loading.loadingMode,
+    loadingMode: effectiveLoadingMode,
     returnFromBreakActive: loading.newReturnFromBreakCountdown > 0,
+    microcycleVolumeMultiplier: microIntensity.volumeMultiplier,
+    consecutiveHardWorkouts: input.profile.consecutiveHardWorkouts,
   });
 
   // Sloj 4 weight/reps/RIR: ako je `exerciseHistoryMap` prosledjena, pozivamo
@@ -350,7 +404,7 @@ export function generateSessionSkeleton(input: GenerateSessionInputs): GenerateS
   for (const day of skeleton.days) {
     if (day.dayType !== input.session.dayType) continue;
     for (const slot of day.exerciseSlots) {
-      slot.loadingNote = loadingModeNote(loading.loadingMode);
+      slot.loadingNote = loadingModeNote(effectiveLoadingMode);
 
       if (!input.exerciseHistoryMap || slot.chosenExerciseId === undefined) {
         continue;
@@ -371,27 +425,52 @@ export function generateSessionSkeleton(input: GenerateSessionInputs): GenerateS
 
       const [repMin, repMax] = slot.repRange;
       const slotRepsTop = repMax;
-      const slotTargetRIR = day.targetRIR;
+      // pocetnici.md §2.1 + SREDNJE_NAPREDNE_V2 §2.1: RIR ramp po nedelji.
+      // Reuse `microIntensity` izračunat jednom za celu sesiju gore.
+      const slotTargetRIR = microIntensity.targetRIR;
 
       const dpo = calcNextWeight(
         history,
         meta,
-        loading.loadingMode,
+        effectiveLoadingMode,
         dpoProfile,
         returnFromBreakActive,
         slotRepsTop,
         slotTargetRIR,
       );
 
-      slot.targetWeight = dpo.targetWeight;
+      // SREDNJE_NAPREDNE_V2 §2.2.E — RPE autoregulacija za intermediate.
+      // Loš san (recoveryMultiplier < 0.85) ili lutealna faza → spusti težinu
+      // 10% da bi pogodila ZADATI RPE umesto zadate težine. Beginner ne
+      // dobija auto-decrement (još uvek uči tehniku — fiksne težine bolje).
+      let finalWeight = dpo.targetWeight;
+      if (input.profile.experienceLevel === 'intermediate') {
+        const lowRecovery = input.profile.recoveryMultiplier < 0.85;
+        const isLuteal = input.cyclePhase === 'luteal';
+        if (lowRecovery || isLuteal) {
+          finalWeight = Math.round(dpo.targetWeight * 0.9);
+        }
+      }
+
+      slot.targetWeight = finalWeight;
       slot.targetReps = `${repMin}-${repMax}`;
       slot.targetRIR = dpo.targetRIR;
     }
   }
 
+  // pocetnici.md §2.2.B + §2.2.C — popuni tempo i ramp-up setove.
+  // SREDNJE_NAPREDNE_V2 §2.2.B/C: extra 90% ramp-up set za prvu compound vežbu
+  // + tempo 3-0-1-2 za izolacije (vs 2-0-2-0 beginner).
+  skeleton = {
+    ...skeleton,
+    days: skeleton.days.map((d) =>
+      d.dayType === 'Rest' ? d : applyTempoAndRampUp(d, input.profile.experienceLevel),
+    ),
+  };
+
   return {
     skeleton,
-    loadingMode: loading.loadingMode,
+    loadingMode: effectiveLoadingMode,
     daysSinceLastSamePartition: loading.daysSinceLastSamePartition,
     shouldActivateReturnFromBreak: loading.shouldActivateReturnFromBreak,
     newReturnFromBreakCountdown: loading.newReturnFromBreakCountdown,

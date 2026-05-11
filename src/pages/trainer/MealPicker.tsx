@@ -10,13 +10,13 @@ import type { FoodItem } from "@/data/foodDatabase";
 import { useFoodItems } from "@/hooks/useFoodItems";
 
 const FILTER_CHIPS = [
-  { id: "all", label: "All" },
-  { id: "breakfast", label: "Breakfast" },
-  { id: "lunch", label: "Lunch" },
-  { id: "dinner", label: "Dinner" },
-  { id: "snack", label: "Snack" },
-  { id: "high-protein", label: "High Protein" },
-  { id: "low-gi", label: "Low GI" },
+  { id: "all", labelKey: "mealPicker.all" },
+  { id: "breakfast", labelKey: "mealPicker.breakfast" },
+  { id: "lunch", labelKey: "mealPicker.lunch" },
+  { id: "dinner", labelKey: "mealPicker.dinner" },
+  { id: "snack", labelKey: "mealPicker.snack" },
+  { id: "high-protein", labelKey: "mealPicker.highProtein" },
+  { id: "low-gi", labelKey: "mealPicker.lowGi" },
 ];
 
 const MealPicker = () => {
@@ -129,7 +129,7 @@ const MealPicker = () => {
                   : "bg-muted text-muted-foreground"
               }`}
             >
-              {chip.label}
+              {t(chip.labelKey)}
             </button>
           ))}
         </div>

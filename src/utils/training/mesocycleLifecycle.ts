@@ -7,9 +7,8 @@
 // Dva glavna zadatka:
 //
 //   1. `shouldStartDeload` — "Da li trenutna mikrociklus treba da bude deload?"
-//      5-nedeljni mezociklus: 4 nedelje load + 1 nedelja deload (spec §6.1
-//      line 1178: "4 nedelje + 1 deload = 5 nedelja po ciklusu").
-//      Lean bulk režim PRESKAĆE deload (kontinuirani rast u bulk fazi).
+//      7-nedeljni mezociklus: 6 nedelje load + 1 nedelja deload (pocetnici.md
+//      §2.1, 2026-05-08). Lean bulk PRESKAĆE deload (kontinuirani rast).
 //
 //   2. `handleMesocycleEnd` — "Queue je iscrpljen (pointer >= sessions.length),
 //      kreiraj novi queue za sledeći mezo sa deload flag-om na poslednjoj
@@ -32,9 +31,26 @@ import type {
 import type { CalorieTargetMode } from '@/types/nutrition';
 import { buildMesocycleQueue } from './queueBuilder';
 
-// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178: "4 nedelje + 1 deload = 5".
-// Model B (Mihajlo/Ivana, 2026-05-04): 4 load nedelje (RIR 3→2→1→0+) + 5. nedelja deload.
-const DEFAULT_MESOCYCLE_WEEKS = 5;
+// pocetnici.md §2.1 (2026-05-08): 6 load nedelje + 1 deload = 7 nedelja po ciklusu.
+// Razlog: početnice trebaju 14-20 dana neuralne adaptacije; 4-nedeljni blok
+// se završava pre nego što stvarno počne stimulus.
+//
+// KOD-FIT_Master_Protokol_SREDNJE_NAPREDNE_V2.md §2.1: 5 load + 1 deload = 6
+// nedelja za srednje-napredne. Naprednije adaptacije ne traže duže blokove,
+// CNS zamor diktira kraće mezocikluse.
+const BEGINNER_MESOCYCLE_WEEKS = 7;
+const INTERMEDIATE_MESOCYCLE_WEEKS = 6;
+const DEFAULT_MESOCYCLE_WEEKS = BEGINNER_MESOCYCLE_WEEKS;
+
+// ============================================================================
+// getMesocycleWeeks — single source of truth za dužinu mezociklusa
+// ============================================================================
+
+export function getMesocycleWeeks(experienceLevel: ExperienceLevel): number {
+  return experienceLevel === 'intermediate'
+    ? INTERMEDIATE_MESOCYCLE_WEEKS
+    : BEGINNER_MESOCYCLE_WEEKS;
+}
 
 // ============================================================================
 // shouldStartDeload
@@ -46,7 +62,7 @@ const DEFAULT_MESOCYCLE_WEEKS = 5;
 // i u deloadu ostaje kalorijski isto".
 
 export type DeloadReason =
-  | 'week_5_of_mesocycle'
+  | 'last_week_of_mesocycle'
   | 'not_yet'
   | 'lean_bulk_no_deload';
 
@@ -66,7 +82,7 @@ export function shouldStartDeload(
 
   // Poslednji mikrociklus (0-based): index === weeks-1
   if (currentMicrocycleIndex === mesocycleWeeks - 1) {
-    return { shouldStart: true, reason: 'week_5_of_mesocycle' };
+    return { shouldStart: true, reason: 'last_week_of_mesocycle' };
   }
 
   return { shouldStart: false, reason: 'not_yet' };
@@ -96,7 +112,7 @@ export function handleMesocycleEnd(
   queue: MesocycleQueue,
   profile: MesocycleEndProfile,
   skeleton: SessionSkeleton,
-  mesocycleWeeks: number = DEFAULT_MESOCYCLE_WEEKS,
+  mesocycleWeeks: number = getMesocycleWeeks(profile.experienceLevel),
 ): HandleMesocycleEndResult {
   // Mid-cycle: ništa za uraditi
   if (queue.sessionPointer < queue.sessions.length) {

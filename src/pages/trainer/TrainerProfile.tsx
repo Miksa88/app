@@ -3,18 +3,22 @@ import { Input } from "@/components/ui/input";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronRight, LogOut, Bell, Palette, Sun, Moon, Monitor, Check, Users, Clock, Briefcase, Globe, ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronRight, LogOut, Bell, Palette, Sun, Moon, Monitor, Check, Users, Clock, Briefcase, Globe, ChevronDown, Plane } from "lucide-react";
+import VacationModeCard from "@/components/trainer/VacationModeCard";
+import { IOS_SWITCH } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
 import { useState } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTrainerClients } from "@/hooks/useTrainerClients";
 import trainerAvatar from "@/assets/trainer-avatar.jpg";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Card } from "@/components/ui/card";
 import { useHaptic } from "@/hooks/useHaptic";
 
-type SettingsPage = null | "business" | "availability" | "notifications" | "appearance" | "language" | "workingHours" | "brand" | "defaults";
+type SettingsPage = null | "business" | "availability" | "notifications" | "appearance" | "language" | "workingHours" | "brand" | "defaults" | "vacation";
 
 const TrainerProfile = () => {
   const navigate = useNavigate();
@@ -23,9 +27,20 @@ const TrainerProfile = () => {
   const { language, setLanguage, t } = useLanguage();
   const { toast } = useToast();
   const haptic = useHaptic();
+  const { user } = useAuth();
+  const { clients: trainerClients } = useTrainerClients();
+  const displayName = (user?.user_metadata?.first_name && user?.user_metadata?.last_name)
+    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+    : (user?.user_metadata?.first_name as string | undefined)
+      ?? user?.email?.split("@")[0]
+      ?? "Trainer";
+  const displayEmail = user?.email ?? "";
+  const realClientCount = trainerClients.length;
 
   const [businessInfo, setBusinessInfo] = useState({
-    specialty: "Strength & Conditioning", experience: "5 years", certifications: ["NASM CPT", "Precision Nutrition L1"]
+    specialty: t("trainerProfile.specialtyDefault"),
+    experience: t("trainerProfile.experienceDefault"),
+    certifications: ["NASM CPT", "Precision Nutrition L1"],
   });
 
   const [availability, setAvailability] = useState({
@@ -50,6 +65,7 @@ const TrainerProfile = () => {
     language: { title: t("profile.language") },
     brand: { title: t("trainerProfile.brand") },
     defaults: { title: t("defaults.title") },
+    vacation: { title: t("trainer.vacation.title") },
   };
 
   const SETTINGS = [
@@ -59,8 +75,9 @@ const TrainerProfile = () => {
     { icon: Clock, label: t("trainerProfile.workingHours"), sub: `${workingHours.from} - ${workingHours.to}`, page: "workingHours" as const },
     { icon: Palette, label: t("profile.appearance"), sub: theme === "system" ? t("appearance.system") : theme === "dark" ? t("appearance.dark") : t("appearance.light"), page: "appearance" as const },
     { icon: Globe, label: t("profile.language"), sub: language === "sr" ? "Srpski" : "English", page: "language" as const },
-    { icon: Palette, label: t("trainerProfile.brand"), sub: "FlexFemme Fit", page: "brand" as const },
+    { icon: Palette, label: t("trainerProfile.brand"), sub: t("trainerProfile.brandNameDefault"), page: "brand" as const },
     { icon: Briefcase, label: t("defaults.title"), sub: t("overload.moderate"), page: "defaults" as const },
+    { icon: Plane, label: t("trainer.vacation.title"), sub: "", page: "vacation" as const },
   ];
 
   const slideIn = {
@@ -83,10 +100,10 @@ const TrainerProfile = () => {
       onClick={() => { haptic("medium"); onToggle(); }}
       role="switch"
       aria-checked={value}
-      className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-base shrink-0 focus-ring-default ${value ? "bg-success" : "bg-muted"}`}
+      className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 focus-ring-default ${value ? "bg-success" : "bg-muted"}`}
     >
       <motion.div layout transition={IOS_SPRING.precise}
-        className={`w-[27px] h-[27px] rounded-full bg-white shadow-sm ${value ? "ml-auto" : "ml-0"}`} />
+        className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${value ? "ml-auto" : "ml-0"}`} />
     </button>
   );
 
@@ -97,29 +114,16 @@ const TrainerProfile = () => {
 
       <div className="px-5 pt-3">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center py-6">
-          <UserAvatar imageUrl={trainerAvatar} alt="Ivana" size="xl" className="mb-3" />
-          <h2 className="text-title-3 text-foreground">Ivana Trainer</h2>
-          <p className="text-subhead text-muted-foreground">ivana@bootybyvana.com</p>
+          <UserAvatar imageUrl={trainerAvatar} alt={displayName} size="xl" className="mb-3" />
+          <h2 className="text-title-3 text-foreground">{displayName}</h2>
+          {displayEmail && <p className="text-subhead text-muted-foreground">{displayEmail}</p>}
           <div className="flex items-center gap-2 mt-3">
-            <div className="bg-primary/10 rounded-full px-4 py-2 text-caption-1 text-primary font-semibold">Pro Trainer</div>
+            <div className="bg-primary/10 rounded-full px-4 py-2 text-caption-1 text-primary font-semibold">{t("trainerProfile.proBadge")}</div>
             <div className="flex items-center gap-1 bg-card px-3 py-2 rounded-full card-shadow">
               <Users size={ICON_SIZE.xs} className="text-primary" />
-              <span className="text-caption-1 font-semibold text-foreground">6 {t("trainerProfile.clients")}</span>
+              <span className="text-caption-1 font-semibold text-foreground tabular-nums">{realClientCount} {t("trainerProfile.clients")}</span>
             </div>
           </div>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }} className="grid grid-cols-3 gap-3 mb-4">
-          {[
-            { label: t("trainerProfile.activePlans"), value: "12" },
-            { label: t("trainerProfile.thisMonth"), value: "€840" },
-            { label: t("trainerProfile.rating"), value: "4.9★" },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-card rounded-xl p-3 card-shadow text-center">
-              <p className="text-title-3 text-foreground font-bold">{value}</p>
-              <p className="text-caption-2 text-muted-foreground mt-0.5">{label}</p>
-            </div>
-          ))}
         </motion.div>
 
         <div className="bg-card rounded-xl card-shadow overflow-hidden mt-2">
@@ -266,14 +270,14 @@ const TrainerProfile = () => {
                   <div className="bg-card rounded-xl card-shadow p-4 space-y-4 mt-4">
                     <div>
                       <label className="text-caption-1 text-muted-foreground">{t("trainerProfile.appName")}</label>
-                      <p className="text-body text-foreground mt-1">FlexFemme Fit</p>
+                      <p className="text-body text-foreground mt-1">{t("trainerProfile.brandNameDefault")}</p>
                     </div>
                     <div className="separator-ios" />
                     <div>
                       <label className="text-caption-1 text-muted-foreground">{t("trainerProfile.primaryColor")}</label>
                       <div className="flex items-center gap-2 mt-1">
                         <div className="w-6 h-6 rounded-full gradient-primary" />
-                        <p className="text-body text-foreground">#E91E8C</p>
+                        <p className="text-body text-foreground tabular-nums">{t("trainerProfile.brandColorDefault")}</p>
                       </div>
                     </div>
                     <div className="separator-ios" />
@@ -359,7 +363,7 @@ const TrainerProfile = () => {
                           className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition-all ${
                             selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"
                           }`}>
-                          <span className="text-2xl">{flag}</span>
+                          <span className="text-title-3" aria-hidden="true">{flag}</span>
                           <div className="flex-1 text-left">
                             <p className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{label}</p>
                             <p className="text-footnote text-muted-foreground">{desc}</p>
@@ -372,6 +376,15 @@ const TrainerProfile = () => {
                         </button>
                       );
                     })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* VACATION MODE */}
+              {activePage === "vacation" && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="bg-card rounded-xl card-shadow p-4">
+                    <VacationModeCard />
                   </div>
                 </motion.div>
               )}

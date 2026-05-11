@@ -57,6 +57,44 @@ export interface UserStatusBio {
   sleepLast7DaysAvg: number;            // sati
   stressLast7DaysAvg: number;           // 1–5
   hydrationLast7DaysAvgMl: number;      // ml
+
+  /**
+   * Pre-workout fatigue signal (klijent je pritisla "Umorna" pre treninga).
+   * Postavlja se preko PreWorkoutFatigueDialog; čita ga programGenerator/DPO
+   * i forsira MAINTAIN mode (bez progressive overload). Briše se u
+   * process-workout-completion EF posle završene sesije.
+   */
+  preWorkoutFatigue?: boolean;
+  preWorkoutFatigueAnsweredAt?: Date | null;
+
+  /**
+   * Latest pump_score iz post-workout 3-button feedbacka (pocetnici.md §4.3 +
+   * §5.1). Mapuje "Lako/Taman/Teško" na 8/5/2. Konsumuje ga
+   * applyBiofeedbackReactiveRules: pump<5 → +so+voda pre treninga, +ovas
+   * Obrok 5; pump<5 + DOMS<3 = under-recovery refeed kandidat.
+   */
+  latestPumpScore?: number | null;
+
+  /**
+   * Counter uzastopnih "Teško" feedback-ova posle treninga (pump_score == 2).
+   * pocetnici.md §4.4 + SREDNJE_NAPREDNE_V2 §4.4: DOMS > 8 dva treninga
+   * zaredom → smanji volumen za 1 seriju po vežbi (chronic underrecovery).
+   * Resetuje se na 0 kad klijent prijavi "Lako" ili "Taman".
+   */
+  consecutiveHardWorkouts?: number;
+
+  /**
+   * Najnoviji libido score (1-10) iz WeeklyCheckIn. pocetnici.md §4.3:
+   * pad libida (<4/10) je crveni signal preagresivnog deficita → pauseSmartCut.
+   */
+  latestLibidoScore?: number | null;
+
+  /**
+   * Najnoviji subjektivni water-retention score (1-10) iz WeeklyCheckIn.
+   * pocetnici.md §4.3: >7 → waterRetentionAlert (pregled soli/alkohola/sna,
+   * NE smanjivati hidrate — kortizol driven).
+   */
+  latestWaterRetentionScore?: number | null;
 }
 
 // ============================================================================
@@ -92,6 +130,13 @@ export interface UserStatusTraining {
   currentMesocycleIndex: number;
   currentMicrocycleIndex: number;
 
+  // SREDNJE_NAPREDNE_V2 §5.4: OBAVEZAN Diet Break posle 4 mezociklusa.
+  // 2 nedelje na maintenance kalorijama; resetuje T3/leptin, ginekološki "reset".
+  // Auto-trigger u mesocycle-tick kad mesocyclesSinceDietBreak >= 4.
+  dietBreakActive: boolean;
+  dietBreakStartedAt: Date | null;
+  mesocyclesSinceDietBreak: number;     // 0..4 — counter
+
   activePauseEvent: {
     type: PauseType | null;
     startDate: Date | null;
@@ -123,6 +168,12 @@ export interface UserStatusNutrition {
   measurementWeekActive: boolean;
   measurementWeekDay: number;           // 1–7 ili 0 ako nije aktivna
   daysSincePlanChange: number;          // za 10-day stagnation override
+
+  // Smart Cut progresivni step:
+  //   pocetnici.md §3.8 (beginner): 0=baseline, 1=fats, 2=+off-window, 3=+peri-workout
+  //   SREDNJE_NAPREDNE_V2 §3.9 (intermediate): 0..4 — adds Step 3 mid-meals.
+  // Trener ili weekly evaluation handler advancuje korak.
+  currentSmartCutStep: 0 | 1 | 2 | 3 | 4;
 
   activeRefeedDay: boolean;
 

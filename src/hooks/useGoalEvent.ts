@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { useEffect, useState, useCallback } from "react";
+import { safeStorage } from "@/lib/safeStorage";
 
 export interface GoalEvent {
   name: string;          // "Svadba", "Letovanje", "Krštenje"
@@ -19,7 +20,7 @@ const STORAGE_KEY = "fbi:goal_event";
 
 function loadFromStorage(): GoalEvent | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = safeStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as GoalEvent;
   } catch {
@@ -30,9 +31,9 @@ function loadFromStorage(): GoalEvent | null {
 function saveToStorage(event: GoalEvent | null): void {
   try {
     if (event === null) {
-      localStorage.removeItem(STORAGE_KEY);
+      safeStorage.removeItem(STORAGE_KEY);
     } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(event));
+      safeStorage.setItem(STORAGE_KEY, JSON.stringify(event));
     }
   } catch {
     // ignore

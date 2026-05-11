@@ -28,7 +28,7 @@ import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import {
   Check, X, ArrowRightLeft, Search, Lock,
   Sunrise, Sun, Moon, Apple, Zap, Dumbbell, UtensilsCrossed, GlassWater,
-  Drumstick, Wheat, Droplets, ThumbsDown,
+  Drumstick, Wheat, Droplets, ThumbsDown, Youtube,
   type LucideProps,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -37,6 +37,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useFoodItems } from "@/hooks/useFoodItems";
 import { useLogMeal, useSkipMeal, useReplaceMeal } from "@/hooks/mutations/useLogMeal";
+import { useUndoableAction } from "@/hooks/useUndoableAction";
+import { findSimilarMeals } from "@/utils/mealPlanGenerator";
 import type { FoodItem } from "@/data/foodDatabase";
 import {
   generateMealPlan,
@@ -55,8 +57,10 @@ import { SectionLabel } from "@/components/ui/section-label";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import ExtraMealSheet, { ExtraMealTrigger } from "@/components/food/ExtraMealSheet";
+import { RecipeVideoSheet } from "@/components/food/RecipeVideoSheet";
 import { addFoodDislike } from "@/services/dislikeService";
 import { toast } from "sonner";
+import { PageTitle } from "@/components/PageTitle";
 
 // Meal images mapping — fallback mapa za slike lokalno dostupne u assets/meals
 import greekYogurt from "@/assets/meals/greek-yogurt.jpg";
@@ -181,12 +185,16 @@ const Food = () => {
   const haptic = useHaptic();
   const logMealMutation = useLogMeal();
   const skipMealMutation = useSkipMeal();
-  const replaceMealMutation = useReplaceMeal();
+  // silent: toast je pomeren u useUndoableAction da bi zadržao Mental Reset
+  // zero-guilt copy uz Vrati akciju (V3 audit §9 P0 #6).
+  const replaceMealMutation = useReplaceMeal({ silent: true });
+  const undoReplaceMeal = useUndoableAction();
 
   const [mealStatus, setMealStatus] = useState<Record<string, MealStatus>>({});
   const [selectedMeal, setSelectedMeal] = useState<GeneratedMeal | null>(null);
   const [showReplaceSheet, setShowReplaceSheet] = useState<string | null>(null);
   const [showExtraMealSheet, setShowExtraMealSheet] = useState(false);
+  const [recipeVideoForMeal, setRecipeVideoForMeal] = useState<GeneratedMeal | null>(null);
   const [replaceSearch, setReplaceSearch] = useState("");
   const [trialExpired] = useState(false);
 
@@ -277,18 +285,45 @@ const Food = () => {
     if (!original) return;
 
     haptic("selection");
-    setMealStatus(prev => ({ ...prev, [slot]: 'replaced' }));
+    const previousStatus = mealStatus[slot];
     setShowReplaceSheet(null);
     setReplaceSearch("");
-    replaceMealMutation.mutate({
-      clientId,
-      mealId: original.mealId,
-      slotIndex,
-      replacementMealId: replacement.id,
-      calories: replacement.calories,
-      protein: replacement.protein,
-      carbs: replacement.carbs,
-      fat: replacement.fat,
+
+    void undoReplaceMeal.run({
+      title: t("food.mealReplacedTitle"),
+      description: t("food.mealReplacedDesc"),
+      apply: () => {
+        setMealStatus(prev => ({ ...prev, [slot]: 'replaced' }));
+        replaceMealMutation.mutate({
+          clientId,
+          mealId: original.mealId,
+          slotIndex,
+          replacementMealId: replacement.id,
+          calories: replacement.calories,
+          protein: replacement.protein,
+          carbs: replacement.carbs,
+          fat: replacement.fat,
+        });
+      },
+      revert: () => {
+        // Vrati lokalno mealStatus + log original meal back (audit trail
+        // preserves both events; sync engine recomputes target on re-log).
+        setMealStatus(prev => {
+          const next = { ...prev };
+          if (previousStatus === undefined) delete next[slot];
+          else next[slot] = previousStatus;
+          return next;
+        });
+        logMealMutation.mutate({
+          clientId,
+          mealId: original.mealId,
+          slotIndex,
+          calories: original.calories,
+          protein: original.protein,
+          carbs: original.carbs,
+          fat: original.fat,
+        });
+      },
     });
   };
 
@@ -301,8 +336,8 @@ const Food = () => {
         </div>
         <h2 className="text-title-2 text-foreground mb-2">{t("trial.locked")}</h2>
         <p className="text-body text-muted-foreground mb-6 max-w-xs">{t("trial.lockedFoodMessage")}</p>
-        <Button onClick={() => navigate("/subscription")} variant="cta" className="px-6 min-h-11 rounded-2xl">
-          {t("trial.subscribe")}
+        <Button onClick={() => navigate("/chat")} variant="cta" className="px-6 min-h-11 rounded-2xl">
+          {t("subscription.contactTrainer")}
         </Button>
       </div>
     );
@@ -366,10 +401,7 @@ const Food = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
-      {/* Header */}
-      <div className="px-5 pt-14 pb-2">
-        <motion.h1 {...fadeUp()} className="text-large-title text-foreground">{t("food.title")}</motion.h1>
-      </div>
+      <PageTitle title={t("food.title")} />
 
       {/* Sync banner — luteal/deload/hydration warning-i */}
       <motion.div {...fadeUp(0.06)} className="px-5 mt-1">
@@ -589,18 +621,35 @@ const Food = () => {
                   </div>
                 )}
 
+                {/* "Kako se pravi" — YouTube video sheet trigger */}
+                <button
+                  type="button"
+                  onClick={() => setRecipeVideoForMeal(selectedMeal)}
+                  className="mt-6 w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-destructive/5 hover:bg-destructive/10 transition-colors min-h-11 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`${t("food.howToMake")} — ${selectedMeal.name}`}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                    <Youtube size={20} className="text-destructive" aria-hidden={true} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body font-semibold text-foreground">{t("food.howToMake")}</p>
+                    <p className="text-caption-1 text-muted-foreground truncate">{t("food.howToMakeHint")}</p>
+                  </div>
+                </button>
+
                 {/* Actions */}
                 <div className="flex gap-2 mt-8">
-                  <button
+                  <Button
                     onClick={() => {
                       const idx = plan.meals.findIndex(m => m.slot === selectedMeal.slot);
                       markEaten(selectedMeal, idx);
                     }}
-                    className="flex-1 gradient-primary text-primary-foreground py-4 rounded-2xl text-body font-semibold ios-row-h flex items-center justify-center gap-2"
+                    variant="cta"
+                    className="flex-1 rounded-2xl"
                   >
                     <Check size={ICON_SIZE.md} aria-hidden="true" strokeWidth={2.5} />
                     {t("nutrition.markEaten")}
-                  </button>
+                  </Button>
                   <button
                     onClick={() => handleReplaceOpen(selectedMeal.slot)}
                     aria-label={t("nutrition.replace")}
@@ -635,7 +684,7 @@ const Food = () => {
         )}
       </AnimatePresence>
 
-      {/* Replace bottom sheet */}
+      {/* Replace bottom sheet — auto-suggest po macro sličnosti + fallback search */}
       <BottomSheet
         open={!!showReplaceSheet}
         onOpenChange={(open) => {
@@ -648,6 +697,48 @@ const Food = () => {
         maxHeight="70vh"
       >
         <div className="pb-2">
+          {/* Slično ovome — auto-suggest top 5 sa istim makroima ±10% */}
+          {(() => {
+            const currentMeal = showReplaceSheet
+              ? plan?.meals.find(m => m.slot === showReplaceSheet)
+              : null;
+            const similarMeals = currentMeal
+              ? findSimilarMeals(
+                  {
+                    mealId: currentMeal.mealId,
+                    calories: currentMeal.calories,
+                    protein: currentMeal.protein,
+                    slot: currentMeal.slot,
+                  },
+                  allowedReplaceFoods,
+                  { tolerance: 0.10, topN: 5 },
+                )
+              : [];
+            if (similarMeals.length === 0 || replaceSearch.trim().length > 0) return null;
+            return (
+              <div className="mb-3">
+                <p className="text-caption-1 font-semibold text-foreground/70 px-1 mb-2">
+                  Slično ovome
+                </p>
+                <div className="space-y-1">
+                  {similarMeals.map(food => (
+                    <button
+                      key={food.id}
+                      onClick={() => handleReplaceConfirm(food)}
+                      className="w-full text-left px-4 py-3 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-colors min-h-12 flex items-center justify-between cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <div>
+                        <p className="text-body text-foreground">{food.name}</p>
+                        <p className="text-caption-1 text-muted-foreground">{food.calories} kcal · {food.protein}g P</p>
+                      </div>
+                      <span className="text-primary text-caption-1 font-semibold">Zameni</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="relative mb-3">
             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
             <input
@@ -655,7 +746,6 @@ const Food = () => {
               onChange={e => setReplaceSearch(e.target.value)}
               placeholder={t("training.searchExercises")}
               className="w-full bg-muted/50 text-foreground placeholder:text-muted-foreground/50 rounded-2xl pl-11 pr-4 py-3 text-body focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
-              autoFocus
             />
           </div>
 
@@ -664,7 +754,7 @@ const Food = () => {
               <button
                 key={food.id}
                 onClick={() => handleReplaceConfirm(food)}
-                className="w-full text-left px-4 py-3 rounded-2xl hover:bg-muted/40 transition-colors min-h-12 flex items-center justify-between"
+                className="w-full text-left px-4 py-3 rounded-2xl hover:bg-muted/40 transition-colors min-h-12 flex items-center justify-between cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <div>
                   <p className="text-body text-foreground">{food.name}</p>
@@ -680,6 +770,12 @@ const Food = () => {
       <ExtraMealSheet
         open={showExtraMealSheet}
         onOpenChange={setShowExtraMealSheet}
+      />
+
+      <RecipeVideoSheet
+        open={recipeVideoForMeal !== null}
+        onOpenChange={(open) => !open && setRecipeVideoForMeal(null)}
+        mealName={recipeVideoForMeal?.name ?? ""}
       />
     </div>
   );

@@ -47,6 +47,26 @@ export async function listTrainerPrograms(trainerId: string): Promise<ProgramRec
   return (data ?? []).map(toRecord);
 }
 
+/**
+ * Pretražuje sve programe sa `default_for_<level>` tag-om za auto-assignment
+ * pri client onboarding-u. Vraća prvi match (najsvežiji updated_at) ili null
+ * ako trener nije obeležio nijedan program kao default za taj nivo.
+ */
+export async function findDefaultProgramForLevel(
+  level: "beginner" | "intermediate" | "advanced",
+): Promise<ProgramRecord | null> {
+  const tag = `default_for_${level}`;
+  const { data, error } = await supabase
+    .from("programs")
+    .select("*")
+    .contains("tags", [tag])
+    .eq("is_archived", false)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`findDefaultProgramForLevel: ${error.message}`);
+  return data && data.length > 0 ? toRecord(data[0]) : null;
+}
+
 export async function getProgramById(id: string): Promise<ProgramRecord | null> {
   const { data, error } = await supabase
     .from("programs")

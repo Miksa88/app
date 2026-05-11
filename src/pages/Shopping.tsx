@@ -9,6 +9,7 @@ import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Check, Home, ShoppingBasket, Sparkles } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -124,10 +125,7 @@ const ShoppingPage = () => {
     <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate("/meal-plan")} backLabel={t("mealPlan.title")} />
 
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("shopping.title")}</h1>
-        <p className="text-subhead text-muted-foreground mt-1">{t("shopping.subtitle")}</p>
-      </div>
+      <PageTitle title={t("shopping.title")} subtitle={t("shopping.subtitle")} compact />
 
       {/* Stats */}
       <div className="px-5 pt-4 grid grid-cols-2 gap-3">

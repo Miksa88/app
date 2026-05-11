@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { generateMealPlan, type MealPlanWeek, type MealPlanSlot } from "@/utils/nutrition/mealPlanGenerator";
 import { supabase } from "@/integrations/supabase/client";
+import { safeStorage } from "@/lib/safeStorage";
 
 const STORAGE_KEY_PLAN = "fbi:meal_plan";
 const STORAGE_KEY_PANTRY = "fbi:pantry_keys";
@@ -25,7 +26,7 @@ function getMonday(date: Date = new Date()): string {
 
 function loadPlanFromStorage(weekStartDate: string): MealPlanWeek | null {
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY_PLAN}:${weekStartDate}`);
+    const raw = safeStorage.getItem(`${STORAGE_KEY_PLAN}:${weekStartDate}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as MealPlanWeek;
     return parsed;
@@ -36,7 +37,7 @@ function loadPlanFromStorage(weekStartDate: string): MealPlanWeek | null {
 
 function savePlanToStorage(plan: MealPlanWeek): void {
   try {
-    localStorage.setItem(`${STORAGE_KEY_PLAN}:${plan.weekStartDate}`, JSON.stringify(plan));
+    safeStorage.setItem(`${STORAGE_KEY_PLAN}:${plan.weekStartDate}`, JSON.stringify(plan));
   } catch {
     // localStorage full or unavailable — ignore (UI ostaje u memoriji)
   }
@@ -44,7 +45,7 @@ function savePlanToStorage(plan: MealPlanWeek): void {
 
 function loadPantryFromStorage(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PANTRY);
+    const raw = safeStorage.getItem(STORAGE_KEY_PANTRY);
     if (!raw) return new Set();
     return new Set(JSON.parse(raw) as string[]);
   } catch {
@@ -54,7 +55,7 @@ function loadPantryFromStorage(): Set<string> {
 
 function savePantryToStorage(keys: Set<string>): void {
   try {
-    localStorage.setItem(STORAGE_KEY_PANTRY, JSON.stringify(Array.from(keys)));
+    safeStorage.setItem(STORAGE_KEY_PANTRY, JSON.stringify(Array.from(keys)));
   } catch {
     // ignore
   }

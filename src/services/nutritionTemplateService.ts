@@ -82,6 +82,25 @@ export interface UpsertNutritionTemplateInput {
   mealSlots: TemplateMealSlot[];
 }
 
+/**
+ * Pretražuje sve nutrition template-e sa `default_for_<level>` tag-om za auto-assignment
+ * pri client onboarding-u. Vraća prvi match (najsvežiji updated_at) ili null
+ * ako trener nije obeležio nijedan template kao default za taj nivo.
+ */
+export async function findDefaultNutritionTemplateForLevel(
+  level: "beginner" | "intermediate" | "advanced",
+): Promise<NutritionTemplateRecord | null> {
+  const tag = `default_for_${level}`;
+  const { data, error } = await supabase
+    .from("nutrition_templates")
+    .select("*")
+    .contains("tags", [tag])
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`findDefaultNutritionTemplateForLevel: ${error.message}`);
+  return data && data.length > 0 ? toRecord(data[0]) : null;
+}
+
 export async function upsertNutritionTemplate(input: UpsertNutritionTemplateInput): Promise<NutritionTemplateRecord> {
   const payload = {
     trainer_id: input.trainerId,

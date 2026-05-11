@@ -9,6 +9,7 @@ import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { Check, ChevronDown, ChevronRight, RefreshCw, ShoppingBasket, Sparkles, ThumbsDown } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -128,10 +129,7 @@ const MealPlanPage = () => {
     <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate("/home")} backLabel={t("nav.home")} />
 
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("mealPlan.title")}</h1>
-        <p className="text-subhead text-muted-foreground mt-1">{t("mealPlan.subtitle")}</p>
-      </div>
+      <PageTitle title={t("mealPlan.title")} subtitle={t("mealPlan.subtitle")} compact />
 
       <div className="px-5 space-y-3 pt-4">
         {/* Status hero */}

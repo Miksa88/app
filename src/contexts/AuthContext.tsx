@@ -28,6 +28,16 @@ const MOCK_AUTH_ENABLED = import.meta.env.VITE_DEV_MOCK_AUTH === 'true';
 const MOCK_USER_ID = import.meta.env.VITE_DEV_TEST_USER_ID ?? '';
 const MOCK_USER_EMAIL = import.meta.env.VITE_DEV_TEST_USER_EMAIL ?? 'dev-test@local';
 
+// P0 security guard — mock auth NIKAD ne sme da pristane u prod bundle-u.
+// Bez ovoga, slucajni VITE_DEV_MOCK_AUTH=true u prod env-u znaci sign-in bypass
+// kroz seeded UUID. Throw u module-init faze — fail-loud, ne tise.
+if (MOCK_AUTH_ENABLED && import.meta.env.PROD) {
+  throw new Error(
+    '[AuthContext] FATAL: VITE_DEV_MOCK_AUTH=true u PROD build-u. ' +
+      'Mock auth je dev-only — proverava env vars pre deploya.',
+  );
+}
+
 // ============================================================================
 // Mock User helper — minimalan supabase User shape
 // ============================================================================

@@ -118,7 +118,7 @@ function mapToMetabolicConditions(profile: string[]): MetabolicCondition[] {
 
   for (const raw of profile) {
     const p = raw.toLowerCase().replace(/-/g, '_');
-    // 'thyroid' je legacy alias za 'hashimoto' (Lovable je koristio oba)
+    // 'thyroid' je legacy alias za 'hashimoto'
     if (p === 'thyroid') {
       result.add('hashimoto');
     } else if (known.includes(p as MetabolicCondition)) {
@@ -180,13 +180,14 @@ function detectSynergies(food: FoodItem): string[] {
 
 // ── MEAL MATCHING ──
 
-function findBestMatch(
+function findTopMatches(
   foods: FoodItem[],
   targetCal: number,
   targetProtein: number,
-  minProtein: number
-): FoodItem | null {
-  if (foods.length === 0) return null;
+  minProtein: number,
+  topN: number = 3,
+): FoodItem[] {
+  if (foods.length === 0) return [];
 
   return foods
     .map(food => {
@@ -198,7 +199,18 @@ function findBestMatch(
       const score = (calDiff * 1) + (proteinDiff * 2) + proteinPenalty;
       return { food, score };
     })
-    .sort((a, b) => a.score - b.score)[0]?.food || null;
+    .sort((a, b) => a.score - b.score)
+    .slice(0, topN)
+    .map(x => x.food);
+}
+
+function findBestMatch(
+  foods: FoodItem[],
+  targetCal: number,
+  targetProtein: number,
+  minProtein: number,
+): FoodItem | null {
+  return findTopMatches(foods, targetCal, targetProtein, minProtein, 1)[0] ?? null;
 }
 
 function createMealFromFood(
@@ -232,7 +244,12 @@ export function generateMealPlan(
   template: NutritionTemplate,
   foodDatabase: FoodItem[],
   _trainingSchedule?: { trainingDays: number[] },
-  cyclePhase?: NutritionCyclePhase | null,  // NOVI opcioni param za cycle bonus
+  cyclePhase?: NutritionCyclePhase | null,
+  /**
+   * A/B/C dnevna rotacija (0=Pon, 1=Uto, 2=Sre, 0=Čet, ...). Iste makroe,
+   * različita jela. Ako se ne prosledi, koristi se 0 (klasičan single-day plan).
+   */
+  rotationIndex?: number,
 ): GeneratedMealPlan {
 
   const insights: PlanInsight[] = [];
@@ -295,6 +312,8 @@ export function generateMealPlan(
       cyclePhase: cyclePhase ?? undefined,
       // Stress + nizak san aktivira fatigue safeguard (Spec 03 Rule 2)
       fatigueSyncActive: client.stressLevel >= 7 || client.sleepQuality <= 4,
+      // pocetnici.md §1.1: Hashimoto deficit cap
+      metabolicConditions,
     });
   }
 
@@ -302,8 +321,12 @@ export function generateMealPlan(
   const restDayCalories = dailyCalories + (template.differentOnTrainingDays ? (template.restDayModifier || -100) : 0);
 
   // STEP 5: Makro split + patoloski override
-  // (Spec 02 Sekcija 4 — protein 2.0g/kg, fat min 0.9g/kg, carbs ostatak)
-  const baseMacros = calcMacroSplit({ weightKg: client.weight, totalCalories: dailyCalories });
+  // (Spec 02 §4 + SREDNJE_NAPREDNE_V2 §3.3 za intermediate macros)
+  const baseMacros = calcMacroSplit({
+    weightKg: client.weight,
+    totalCalories: dailyCalories,
+    experienceLevel: client.experience === 'intermediate' ? 'intermediate' : 'beginner',
+  });
   const finalMacros = applyPathologyMacroOverride({
     macros: baseMacros,
     totalCalories: dailyCalories,
@@ -396,7 +419,13 @@ export function generateMealPlan(
       });
     }
 
-    const bestMatch = findBestMatch(slotFoods, targetCal, targetProtein, slotConfig.minProtein);
+    // A/B/C rotacija — top 3 kandidata, biramo po dnevnom rotation index-u.
+    // Iste makroe, različita jela; ako je rotationIndex undefined, biramo prvi.
+    const topMatches = findTopMatches(slotFoods, targetCal, targetProtein, slotConfig.minProtein, 3);
+    const variantIdx = topMatches.length > 0
+      ? ((rotationIndex ?? 0) % topMatches.length)
+      : 0;
+    const bestMatch = topMatches[variantIdx] ?? null;
 
     if (!bestMatch) {
       // Defense in depth: ako je availableFoods prazan (caller je trebao da
@@ -459,6 +488,25 @@ export function generateMealPlan(
     title: 'insight.overviewTitle',
     description: `${dailyCalories} kcal/day · ${proteinGrams}g protein (${Math.round(proteinGrams / client.weight * 10) / 10}g/kg) · 7-day fixed plan`,
   });
+
+  // Per-meal protein validator (pocetnici.md §3.4 mTOR Protokol):
+  // Standardni obrok mora imati 25-30g proteina za kontinuiranu mTOR aktivaciju.
+  // Mini-obroci (IR P+F) se izuzimaju jer su namerno manji.
+  const PROTEIN_FLOOR_PER_MEAL = 25;
+  const lowProteinMeals = finalMeals.filter(m =>
+    m.slotType !== 'mini_meal_ir' &&
+    m.protein > 0 &&
+    m.protein < PROTEIN_FLOOR_PER_MEAL,
+  );
+  if (lowProteinMeals.length > 0) {
+    insights.push({
+      type: 'warning', icon: '⚠️',
+      title: 'insight.lowMealProtein',
+      description: `${lowProteinMeals.length} obrok(a) ispod ${PROTEIN_FLOOR_PER_MEAL}g proteina ` +
+        `(${lowProteinMeals.map(m => `${m.slotLabel}=${Math.round(m.protein)}g`).join(', ')}). ` +
+        `mTOR aktivacija je suboptimalna — razmotri jaču protein opciju za te slotove.`,
+    });
+  }
 
   return {
     dailyCalories,
@@ -570,34 +618,83 @@ export const MEAL_PRESETS: Record<number, TemplateMealSlot[]> = {
   ],
 };
 
-export const MOCK_NUTRITION_TEMPLATES: NutritionTemplate[] = [
-  {
-    id: "nt1", name: "Fat Loss Starter", description: "Moderate deficit for beginners starting their fat loss journey",
-    goalType: "cut", macroRatio: { protein: 40, carbs: 35, fat: 25 }, macroPreset: "highProtein",
-    calorieStrategy: "auto", differentOnTrainingDays: true, trainingDayModifier: 150, restDayModifier: -100,
-    restrictions: [], tags: ["beginner", "fat_loss", "3_days_week", "free_trial"],
-    createdAt: "2026-03-01", mealCount: 5, mealSlots: [...DEFAULT_5_MEAL_SLOTS],
-  },
-  {
-    id: "nt2", name: "Lean Bulk Protocol", description: "Controlled surplus for muscle gain with minimal fat",
-    goalType: "bulk", macroRatio: { protein: 30, carbs: 45, fat: 25 }, macroPreset: "balanced",
-    calorieStrategy: "auto", differentOnTrainingDays: true, trainingDayModifier: 200, restDayModifier: 0,
-    restrictions: [], tags: ["intermediate", "muscle_gain", "4_days_week"],
-    createdAt: "2026-03-05", mealCount: 5, mealSlots: [...DEFAULT_5_MEAL_SLOTS],
-  },
-  {
-    id: "nt3", name: "Balanced Wellness", description: "Maintenance plan for general health and wellbeing",
-    goalType: "health", macroRatio: { protein: 30, carbs: 40, fat: 30 }, macroPreset: "balanced",
-    calorieStrategy: "auto", differentOnTrainingDays: false,
-    restrictions: [], tags: ["beginner", "health", "3_days_week"],
-    createdAt: "2026-03-10", mealCount: 5, mealSlots: [...DEFAULT_5_MEAL_SLOTS],
-  },
-  {
-    id: "nt4", name: "High Protein Cut", description: "Aggressive cut for experienced clients with high protein",
-    goalType: "cut", macroRatio: { protein: 40, carbs: 30, fat: 30 }, macroPreset: "highProtein",
-    calorieStrategy: "fixed", fixedCalories: 1800,
-    differentOnTrainingDays: true, trainingDayModifier: 200, restDayModifier: -150,
-    restrictions: ["lactose"], tags: ["advanced", "fat_loss", "5_days_week"],
-    createdAt: "2026-03-15", mealCount: 4, mealSlots: [...MEAL_PRESETS[4]],
-  },
-];
+// ============================================================================
+// generateMealPlanWeek — 7-dnevni plan sa A/B/C rotacijom
+// ============================================================================
+//
+// Iste makroe, različita jela kroz nedelju. Klijent dobija varijaciju a
+// algoritam i dalje pogađa target kcal/protein/carbs/fat.
+//
+// rotationIndex per day: [0, 1, 2, 0, 1, 2, 0] (7 dana = 3 varijante × 2 + 1)
+
+export interface MealPlanWeek {
+  /** 7 dana, indeksiranih 0..6 (0 = ponedeljak). Svaki dan je validan plan. */
+  days: GeneratedMealPlan[];
+  /** Najmanja zajednička metrika nedelje (target kcal — isti za sve dane). */
+  dailyCalories: number;
+}
+
+export function generateMealPlanWeek(
+  client: ClientProfile,
+  template: NutritionTemplate,
+  foodDatabase: FoodItem[],
+  trainingSchedule?: { trainingDays: number[] },
+  cyclePhase?: NutritionCyclePhase | null,
+): MealPlanWeek {
+  const days: GeneratedMealPlan[] = [];
+  for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+    const rotationIndex = dayIdx % 3;        // 0,1,2,0,1,2,0
+    days.push(
+      generateMealPlan(
+        client, template, foodDatabase, trainingSchedule, cyclePhase, rotationIndex,
+      ),
+    );
+  }
+  const dailyCalories = days[0]?.dailyCalories ?? 0;
+  return { days, dailyCalories };
+}
+
+// ============================================================================
+// findSimilarMeals — auto-swap kandidati po macro sličnosti
+// ============================================================================
+//
+// Za dato jelo (currentMealId), vrati N alternativa iz availableFoods koji
+// pogađaju isti slot, ±tolerance% kalorija/proteina, prošli alergi/metab.
+// Filter — caller je vec primenio antiIngredientFilter na availableFoods.
+
+export interface FindSimilarOptions {
+  /** ±tolerance fraction (0.10 = ±10%). Default 0.10. */
+  tolerance?: number;
+  /** Max kandidata vraceno. Default 5. */
+  topN?: number;
+}
+
+export function findSimilarMeals(
+  currentMeal: { mealId: string; calories: number; protein: number; slot: string },
+  availableFoods: FoodItem[],
+  options: FindSimilarOptions = {},
+): FoodItem[] {
+  const { tolerance = 0.10, topN = 5 } = options;
+  const targetCal = currentMeal.calories;
+  const targetProtein = Math.max(1, currentMeal.protein);
+
+  const candidates = availableFoods.filter(f => {
+    if (f.id === currentMeal.mealId) return false;
+    if (!f.mealSlots.includes(currentMeal.slot as never)) return false;
+    const calDelta = Math.abs(f.calories - targetCal) / Math.max(1, targetCal);
+    const protDelta = Math.abs(f.protein - targetProtein) / targetProtein;
+    return calDelta <= tolerance && protDelta <= tolerance;
+  });
+
+  // Sortiraj po blizini (manja delta = bolji match)
+  return candidates
+    .map(f => ({
+      food: f,
+      score:
+        Math.abs(f.calories - targetCal) +
+        Math.abs(f.protein - targetProtein) * 2,
+    }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, topN)
+    .map(x => x.food);
+}

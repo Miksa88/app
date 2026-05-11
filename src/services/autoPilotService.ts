@@ -65,36 +65,66 @@ export async function getTrainerPlateauAlerts(): Promise<PlateauAlert[]> {
     .select("id, first_name, last_name, role")
     .eq("role", "client");
 
-  if (!profiles) return [];
+  if (!profiles || profiles.length === 0) return [];
+
+  const clientIds = profiles.map((p) => p.id);
+
+  // Batch fetch user_status za sve klijente (N+1 elimination)
+  const { data: statusRows } = await supabase
+    .from("user_status")
+    .select("client_id, status_json")
+    .in("client_id", clientIds);
+
+  const statusByClient = new Map<string, UserStatus>();
+  for (const row of statusRows ?? []) {
+    statusByClient.set(
+      row.client_id,
+      row.status_json as unknown as UserStatus,
+    );
+  }
+
+  // Batch fetch weekly_check_ins za sve klijente (limit liberal — server pošalje
+  // sve nedeljne redove zadnjih 8 nedelja, mi grupišemo po user_id u kodu)
+  const { data: weeklyRows } = await supabase
+    .from("weekly_check_ins")
+    .select("user_id, week_start_date, weight_avg_kg")
+    .in("user_id", clientIds)
+    .order("week_start_date", { ascending: false });
+
+  const samplesByClient = new Map<
+    string,
+    Array<{ weekStartDate: string; weightAvgKg: number | null }>
+  >();
+  for (const row of weeklyRows ?? []) {
+    const arr = samplesByClient.get(row.user_id) ?? [];
+    if (arr.length < 8) {
+      arr.push({
+        weekStartDate: row.week_start_date,
+        weightAvgKg: row.weight_avg_kg,
+      });
+    }
+    samplesByClient.set(row.user_id, arr);
+  }
 
   const alerts: PlateauAlert[] = [];
+  for (const p of profiles) {
+    const status = statusByClient.get(p.id);
+    if (!status) continue;
 
-  // Paralelno za svakog klijenta
-  await Promise.all(
-    profiles.map(async (p) => {
-      const { data: status } = await supabase
-        .from("user_status")
-        .select("status_json")
-        .eq("client_id", p.id)
-        .maybeSingle();
-      if (!status) return;
-
-      const targetMode =
-        (status.status_json as unknown as UserStatus)?.nutrition?.targetMode ??
-        "maintenance";
-      const verdict = await checkClientPlateau(p.id, targetMode);
-      if (verdict.kind === "plateau") {
-        alerts.push({
-          clientId: p.id,
-          firstName: p.first_name,
-          lastName: p.last_name,
-          weeksObserved: verdict.weeksObserved,
-          trendKgPerWeek: verdict.trendKgPerWeek,
-          suggestion: verdict.suggestion,
-        });
-      }
-    }),
-  );
+    const targetMode = status.nutrition?.targetMode ?? "maintenance";
+    const samples = samplesByClient.get(p.id) ?? [];
+    const verdict = detectPlateau(samples, targetMode);
+    if (verdict.kind === "plateau") {
+      alerts.push({
+        clientId: p.id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        weeksObserved: verdict.weeksObserved,
+        trendKgPerWeek: verdict.trendKgPerWeek,
+        suggestion: verdict.suggestion,
+      });
+    }
+  }
 
   return alerts;
 }

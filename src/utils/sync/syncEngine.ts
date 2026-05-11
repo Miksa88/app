@@ -17,15 +17,14 @@
 // ============================================================================
 
 import type { UserStatus, SyncRuleName } from '@/types/userStatus';
-import type { DailyCheckIn } from '@/types/nutrition';
 import type { SystemEvent } from '@/types/events';
 
-import { calcRecoveryMultiplier } from '@/utils/training/recoveryCalibration';
-import { detectAndShiftMissedSessions } from '@/utils/training/sessionResolver';
-import { calcCycleDay, getCyclePhase } from '@/utils/nutrition/cyclePhase';
 import { recalcCalorieTarget } from '@/utils/nutrition/calorieTarget';
 import { calcMacroSplit } from '@/utils/nutrition/macroSplit';
 import { applyPathologyMacroOverride } from '@/utils/nutrition/pathologyMacroOverride';
+import { applySmartCut } from '@/utils/nutrition/smartCut';
+import { applyRefeedDay } from '@/utils/nutrition/emergencyRefeed';
+import { applyBiofeedbackReactiveRules } from '@/utils/nutrition/biofeedbackReactiveRules';
 import { calcRedFlags } from './redFlags';
 import { EventBus } from './eventBus';
 
@@ -49,76 +48,6 @@ const TRAINING_VOLUME_REDUCE_FATIGUE = 0.15;
 const LUTEAL_EXPLICIT_CARB_BONUS_G = 38;
 
 // Helper za async-coerce — neki rule-ovi emit event, neki ne
-async function noop(): Promise<void> { /* */ }
-
-// ============================================================================
-// applyDailyCheckIn — pure data transformer
-// Spec: 03 Sekcija 3.1
-// ============================================================================
-//
-// Uzima trenutni UserStatus + novu DailyCheckIn vrednost, vraca novi
-// UserStatus. NE dira DB ni Realtime (to je posao service sloja).
-// Service `processDailyCheckIn` u userStatusService.ts wraps ovu funkciju
-// sa load/save i emit-uje appropriate events.
-
-export async function applyDailyCheckIn(
-  status: UserStatus,
-  checkIn: DailyCheckIn,
-): Promise<UserStatus> {
-  // 1. Klone status (immutable pattern)
-  let s = cloneStatus(status);
-
-  // 2. Update bio sekciju iz check-in-a
-  // (7-day moving avg-e mock-iramo kao prosti substitute za sada — Faza 3
-  //  ce ucitavati istoriju iz daily_check_ins tabele za pravi MA)
-  s.bio.sleepLast7DaysAvg = checkIn.sleepHours;
-  s.bio.stressLast7DaysAvg = checkIn.stressLevel;
-  s.bio.hydrationLast7DaysAvgMl = checkIn.waterIntakeMl;
-  s.nutrition.hydrationTodayMl = checkIn.waterIntakeMl;
-  s.bio.currentWeightMA5 = checkIn.weightKg;
-
-  // Update recovery multiplier iz nove bio data
-  s.bio.recoveryMultiplier = calcRecoveryMultiplier({
-    sleepHoursAvg: s.bio.sleepLast7DaysAvg,
-    stressLevel: s.bio.stressLast7DaysAvg,
-    age: s.bio.age,
-    metabolicConditions: s.nutrition.metabolicFilter,
-  });
-
-  // 3. Cycle update (ako tracker aktivan i checkIn ima cycleDay)
-  if (checkIn.cycleDay !== undefined) {
-    s.bio.cycleDay = checkIn.cycleDay;
-    s.bio.cyclePhase = getCyclePhase(checkIn.cycleDay);
-  }
-
-  // 4. Update last_updated_at
-  s.lastUpdatedAt = checkIn.date;
-
-  // 4.5 Hibridni kalendar shift (Faza 4.3) — pomeri missed sesije na sledeće
-  // trening dane PRE ostalih sync rule-ova. Idempotentan: ako nema missed
-  // sesija, NO-OP. Queue pointer se ne menja (biologija ostaje linearna).
-  if (s.training.queue.sessions.length > 0) {
-    const shiftResult = detectAndShiftMissedSessions(
-      s.training.queue,
-      checkIn.date,
-      s.training.daysPerWeek,
-      'missed',
-    );
-    s.training.queue = shiftResult.updatedQueue;
-  }
-
-  // 5. POKRENI SVE SYNC RULES
-  s = await runSyncRules(s);
-
-  // 6. Update Red Flags
-  s.redFlags = calcRedFlags({
-    status: s,
-    incrementEnergyBelowDays: checkIn.energyLevel < 5 ? 1 : 0,
-  });
-
-  return s;
-}
-
 // ============================================================================
 // runSyncRules — pokrene svih 8 pravila redom + finalizuje calorie target
 // Spec: 03 Sekcija 3.2
@@ -166,13 +95,19 @@ export async function runSyncRules(status: UserStatus): Promise<UserStatus> {
     isInReturnFromBreak: s.training.isInReturnFromBreak,
     isInIllnessPause: s.training.activePauseEvent?.type === 'illness',
     fatigueSyncActive: s.nutrition._fatigueSyncActive,
+    isInDietBreak: s.training.dietBreakActive,    // SREDNJE_NAPREDNE_V2 §5.4
     cyclePhase: s.bio.cyclePhase,
+    metabolicConditions: s.nutrition.metabolicFilter,  // pocetnici.md §1.1: Hashimoto cap
   });
 
   // Rekompjutuj makro split iz novog targeta + patoloskih override-a
+  const experienceLevel = s.training.position.startsWith('intermediate')
+    ? 'intermediate'
+    : 'beginner';
   const baseMacros = calcMacroSplit({
     weightKg: s.bio.currentWeightMA5,
     totalCalories: s.nutrition.currentCalorieTarget,
+    experienceLevel,
   });
   const finalMacros = applyPathologyMacroOverride({
     macros: baseMacros,
@@ -185,6 +120,47 @@ export async function runSyncRules(status: UserStatus): Promise<UserStatus> {
     fatG: finalMacros.fatG,
   };
 
+  // Smart Cut step-down (pocetnici.md §3.8 + SREDNJE_NAPREDNE_V2 §3.9).
+  // Smart Cut se primenjuje SAMO na deficit/recomposition (bulk i maintenance
+  // ne idu kroz cut hijerarhiju). SREDNJE_NAPREDNE_V2 §5.4: Diet Break PAUZIRA
+  // Smart Cut — "Šta se NE RADI: Smart Cut" tokom 2-nedeljne pauze.
+  // Biofeedback reactive rules (pocetnici.md §4.3) — primenjuju se PRE Smart
+  // Cut-a da pauseSmartCut može da preskoči blok. Sleep quality skala (1-10)
+  // se izvodi iz sleep hours: <5h → quality<5 (heuristika).
+  const sleepQualityProxy = s.bio.sleepLast7DaysAvg < 5 ? 3 : 8;
+  const biofeedback = applyBiofeedbackReactiveRules({
+    pumpScore: s.bio.latestPumpScore ?? null,
+    sleepQualityScore: sleepQualityProxy,
+    cyclePhase: s.bio.cyclePhase,
+    currentSmartCutStep: s.nutrition.currentSmartCutStep,
+    libidoScore: s.bio.latestLibidoScore ?? null,
+    waterRetentionScore: s.bio.latestWaterRetentionScore ?? null,
+  });
+
+  // Pump < 5 → +1 šaka ovsa Obrok 5 (~25g carbs, triptofan→serotonin za san)
+  if (biofeedback.obrok5OatsHandfulBonus > 0) {
+    s.nutrition.macros.carbsG += 25 * biofeedback.obrok5OatsHandfulBonus;
+  }
+
+  // Smart Cut step-down (pocetnici.md §3.8 + SREDNJE_NAPREDNE_V2 §3.9).
+  // Smart Cut se primenjuje SAMO na deficit/recomposition (bulk i maintenance
+  // ne idu kroz cut hijerarhiju). SREDNJE_NAPREDNE_V2 §5.4: Diet Break PAUZIRA
+  // Smart Cut. biofeedback.pauseSmartCut (libido pad) takođe pauzira.
+  if (s.nutrition.currentSmartCutStep > 0 &&
+      !s.training.dietBreakActive &&
+      !biofeedback.pauseSmartCut &&
+      (s.nutrition.targetMode === 'deficit' || s.nutrition.targetMode === 'recomposition')) {
+    const cutResult = applySmartCut({
+      macros: s.nutrition.macros,
+      totalCalories: s.nutrition.currentCalorieTarget,
+      weightKg: s.bio.currentWeightMA5,
+      step: s.nutrition.currentSmartCutStep,
+      experienceLevel,
+    });
+    s.nutrition.macros = cutResult.macros;
+    s.nutrition.currentCalorieTarget = cutResult.totalCalories;
+  }
+
   // Rule 1 explicit carb bonus (Spec 03 Sekcija 3.2 Rule 1):
   //   `status.nutrition.macros.carbsG += 38`
   // Idempotentno jer macros se uvek rekomputuje iz baseline-a u svakoj
@@ -195,6 +171,15 @@ export async function runSyncRules(status: UserStatus): Promise<UserStatus> {
       !isRuleDisabled(s, 'hormonal_sync') &&
       !s.nutrition.metabolicFilter.includes('insulin_resistance')) {
     s.nutrition.macros.carbsG += LUTEAL_EXPLICIT_CARB_BONUS_G;
+  }
+
+  // Emergency Refeed dan (pocetnici.md §5.1) — overrides finalne makroe.
+  // Trigger se postavlja u check-in handler-u; ovde samo primenjujemo override.
+  // Refeed: +50% carbs, -40% fats, protein nepromenjen.
+  if (s.nutrition.activeRefeedDay) {
+    const refeed = applyRefeedDay(s.nutrition.macros);
+    s.nutrition.macros = refeed.macros;
+    s.nutrition.currentCalorieTarget = refeed.totalCalories;
   }
 
   return s;

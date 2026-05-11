@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
@@ -9,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ChevronDown, MoreHorizontal, Plus, Trash2, GripVertical } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { WorkoutSection, WorkoutExerciseItem, SECTION_TYPES } from "@/data/trainingMockData";
+import { MASTER_WORKOUTS } from "@/data/masterWorkouts";
 import type { ExerciseItem } from "@/hooks/useExercises";
 import { useWorkout, useUpsertWorkout } from "@/hooks/useWorkouts";
 import { useToast } from "@/hooks/use-toast";
@@ -20,9 +22,13 @@ const WorkoutEditor = () => {
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const { toast } = useToast();
-  const isNew = id === "new" || !id;
+  // `default-master-*` ID = master template iz hardkodirane liste. Save uvek pravi NOVI red.
+  const isDefault = !!id?.startsWith("default-");
+  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
+  const isNew = id === "new" || !id || isDefault;
   const isAI = searchParams.get("ai") === "true";
   const { data: existing } = useWorkout(isNew ? null : id);
+  const masterTemplate = isDefault ? MASTER_WORKOUTS.find((w) => w.id === defaultSourceId) : null;
   const upsertWorkoutMutation = useUpsertWorkout();
 
   const [name, setName] = useState("");
@@ -34,8 +40,12 @@ const WorkoutEditor = () => {
       setName(existing.name);
       setDescription(existing.description ?? "");
       setSections(existing.sections);
+    } else if (masterTemplate) {
+      setName(masterTemplate.name);
+      setDescription(masterTemplate.description);
+      setSections(masterTemplate.sections);
     }
-  }, [existing]);
+  }, [existing, masterTemplate]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [pickerTargetSection, setPickerTargetSection] = useState<string | null>(null);
@@ -200,20 +210,17 @@ const WorkoutEditor = () => {
           </motion.div>
         )}
 
-        {/* Hero — naslov + opis kao clean iOS editorial header, bez card frame-a */}
-        <motion.div {...fadeUp(0.05)} className="pt-1 pb-2">
+        {/* Naziv — isti pattern kao ProgramEditor (label + carded input). Opis izbačen
+            (workout je atomska celina; opisi idu na program nivo). */}
+        <motion.div {...fadeUp(0.05)}>
+          <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block px-1">
+            {t("training.workoutName")}
+          </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t("training.workoutName")}
-            className="text-large-title tracking-tight bg-transparent shadow-none card-shadow-none rounded-none h-auto px-0 py-0 font-bold focus-visible:ring-0 placeholder:text-muted-foreground/40 leading-tight"
-          />
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder={t("training.workoutDescription")}
-            className="mt-1 text-subhead text-muted-foreground bg-transparent shadow-none card-shadow-none rounded-none px-0 py-0 min-h-0 resize-none placeholder:text-muted-foreground/50 leading-snug"
+            placeholder={t("training.workoutNamePlaceholder")}
+            className="bg-card text-foreground text-body rounded-xl px-4 py-3 card-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 border-0"
           />
         </motion.div>
 
@@ -343,13 +350,14 @@ const WorkoutEditor = () => {
             <Plus size={16} />
             {t("training.exercise")}
           </button>
-          <button
+          <Button
             onClick={() => setShowSectionSheet(true)}
-            className="flex-1 min-h-12 rounded-2xl gradient-primary text-primary-foreground text-body font-semibold shadow-fab active:opacity-90 flex items-center justify-center gap-1.5"
+            variant="cta"
+            className="flex-1 rounded-2xl"
           >
             <Plus size={16} />
             {t("training.section")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -470,8 +478,14 @@ const ExerciseRow = ({ ex, exIdx, sectionId, onRemove, onUpdate, t }: ExerciseRo
       value={ex}
       dragListener={false}
       dragControls={dragControls}
-      className="bg-card rounded-2xl card-shadow overflow-hidden touch-manipulation"
-      whileDrag={{ scale: 1.02, boxShadow: "0 12px 32px -8px rgba(0,0,0,0.18)", zIndex: 10 }}
+      className="relative bg-card rounded-2xl card-shadow overflow-hidden touch-manipulation"
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: "0 16px 40px -8px rgba(0,0,0,0.22)",
+        // z-modal (100) — kartica koja se drži uvek je iznad sibling-a
+        zIndex: 100,
+      }}
+      style={{ position: "relative" }}
       transition={{ type: "spring", stiffness: 400, damping: 28 }}
     >
       {/* Row 1: drag handle + index + name + delete */}

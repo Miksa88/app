@@ -14,7 +14,7 @@
 // useActiveWorkoutSession ili Workout sesije — van scope-a IT-9.
 // ============================================================================
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -22,9 +22,9 @@ import GradientButton from "@/components/GradientButton";
 import { Flame, Clock, Dumbbell, Star, PartyPopper } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { ConfettiCelebration } from "@/components/ConfettiCelebration";
-import { MOTION_DURATION, MOTION_EASE, IOS_SPRING } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface ProgressRow {
   exercise_id: string;
@@ -56,16 +56,84 @@ async function loadTodaySets(clientId: string): Promise<ProgressRow[]> {
   }));
 }
 
+type PerceivedDifficulty = 'easy' | 'just_right' | 'hard';
+
+// pump_score reuse: easy=8 (high pump = recovered), just_right=5, hard=2 (low pump = under-recovered).
+// biofeedbackReactiveRules reads pump<5 → +salt/water sledeći trening.
+const DIFFICULTY_TO_PUMP_SCORE: Record<PerceivedDifficulty, number> = {
+  easy: 8,
+  just_right: 5,
+  hard: 2,
+};
+
+async function saveDifficulty(clientId: string, difficulty: PerceivedDifficulty): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const pumpScore = DIFFICULTY_TO_PUMP_SCORE[difficulty];
+
+  // 1. Snimi u daily_check_ins (audit log)
+  const { error: ciErr } = await supabase
+    .from('daily_check_ins')
+    .upsert(
+      { user_id: clientId, date: today, pump_score: pumpScore },
+      { onConflict: 'user_id,date' },
+    );
+  if (ciErr) throw new Error(`saveDifficulty check-in: ${ciErr.message}`);
+
+  // 2. Patchuj user_status.bio — latestPumpScore + consecutiveHardWorkouts.
+  // applyBiofeedbackReactiveRules čita pump score; programGenerator čita
+  // consecutiveHardWorkouts za auto-decrement volumena kad je 2+ "Teško".
+  const { data: row, error: readErr } = await supabase
+    .from('user_status')
+    .select('status_json')
+    .eq('client_id', clientId)
+    .single();
+  if (readErr) throw new Error(`saveDifficulty status read: ${readErr.message}`);
+
+  const status = (row?.status_json ?? {}) as Record<string, unknown>;
+  const bio = (status.bio ?? {}) as Record<string, unknown>;
+  const prevHardCount = (bio.consecutiveHardWorkouts as number | undefined) ?? 0;
+  const isHard = difficulty === 'hard';
+  const newStatus = {
+    ...status,
+    bio: {
+      ...bio,
+      latestPumpScore: pumpScore,
+      consecutiveHardWorkouts: isHard ? prevHardCount + 1 : 0,
+    },
+  };
+  const { error: writeErr } = await supabase
+    .from('user_status')
+    .update({ status_json: newStatus, last_updated_at: new Date().toISOString() })
+    .eq('client_id', clientId);
+  if (writeErr) throw new Error(`saveDifficulty status write: ${writeErr.message}`);
+}
+
 const PostWorkout = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { clientId } = useAuth();
+  const [difficulty, setDifficulty] = useState<PerceivedDifficulty | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const { data: rows = [] } = useQuery<ProgressRow[], Error>({
     queryKey: ["postWorkoutTodaySets", clientId],
     enabled: Boolean(clientId),
     queryFn: () => loadTodaySets(clientId as string),
   });
+
+  const handleDifficulty = async (choice: PerceivedDifficulty) => {
+    if (!clientId || submitting) return;
+    setDifficulty(choice);
+    setSubmitting(true);
+    try {
+      await saveDifficulty(clientId, choice);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Greška pri snimanju');
+      setDifficulty(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const summary = useMemo(() => {
     const totalSets = rows.length;
@@ -107,8 +175,6 @@ const PostWorkout = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex flex-col items-center justify-center px-6">
-      <ConfettiCelebration />
-
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -165,11 +231,55 @@ const PostWorkout = () => {
         </motion.p>
       )}
 
+      {/* Kako je bio trening? — 3-tap feedback (Lako/Taman/Teško) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.0 }}
+        className="mt-10 w-full max-w-sm z-10"
+      >
+        <p className="text-subhead font-semibold text-foreground text-center mb-3">
+          Kako je bio trening?
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: 'easy' as const, label: 'Lako', emoji: '😌' },
+            { key: 'just_right' as const, label: 'Taman', emoji: '😊' },
+            { key: 'hard' as const, label: 'Teško', emoji: '😤' },
+          ]).map((opt) => {
+            const isSelected = difficulty === opt.key;
+            return (
+              <motion.button
+                key={opt.key}
+                whileTap={{ scale: TAP_SCALE.primary }}
+                onClick={() => handleDifficulty(opt.key)}
+                disabled={submitting || difficulty !== null}
+                aria-pressed={isSelected}
+                aria-label={`${opt.label} — kako je bio trening`}
+                className={`min-h-[88px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all border-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+                  isSelected
+                    ? 'gradient-primary text-primary-foreground border-transparent shadow-fab'
+                    : 'bg-card text-foreground border-transparent card-shadow hover:border-primary/30'
+                } ${difficulty !== null && !isSelected ? 'opacity-40' : ''}`}
+              >
+                <span className="text-2xl" aria-hidden="true">{opt.emoji}</span>
+                <span className="text-footnote font-semibold">{opt.label}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+        {difficulty !== null && (
+          <p className="text-caption-2 text-muted-foreground text-center mt-2">
+            Sledeći trening će biti prilagođen.
+          </p>
+        )}
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
-        className="mt-10 w-full max-w-sm z-10 space-y-3"
+        className="mt-6 w-full max-w-sm z-10 space-y-3"
       >
         <GradientButton onClick={() => navigate("/home")} className="w-full" size="lg">
           {t("postWorkout.backToHome")}

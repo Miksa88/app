@@ -68,5 +68,16 @@ export function applyPathologyMacroOverride(
     out.potassiumMinMg = Math.max(out.potassiumMinMg ?? 0, 3500);
   }
 
+  // === Anemija (Fe deficit) === pocetnici.md §1.1
+  // Crveno meso 2-3x nedeljno + paprika/limun (Vit C uz svaki Fe obrok).
+  // Bisglicinat suplement preporuka u suplementsService (X-3).
+  if (conditions.includes('anemia')) {
+    // Iron RDA za žene 19-50: 18mg/dan; anemija pacijent treba 25-30mg dok se
+    // hemoglobin ne stabilizuje (klinički dogovor sa lekarom).
+    out.ironMinMg = Math.max(out.ironMinMg ?? 0, 25);
+    out.hemeIronPriority = true;
+    out.vitaminCRequiredWithIron = true;
+  }
+
   return out;
 }

@@ -26,7 +26,6 @@ const Food = lazy(() => import("./pages/Food"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Progress = lazy(() => import("./pages/Progress"));
-const Milestones = lazy(() => import("./pages/Milestones"));
 const Subscription = lazy(() => import("./pages/Subscription"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const AnalysisReport = lazy(() => import("./pages/AnalysisReport"));
@@ -128,7 +127,6 @@ const AnimatedRoutes = () => {
         <Route path="/chat" element={<AuthGuard><Chat /></AuthGuard>} />
         <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
         <Route path="/progress" element={<AuthGuard><Progress /></AuthGuard>} />
-        <Route path="/milestones" element={<AuthGuard><Milestones /></AuthGuard>} />
         <Route path="/weekly-check-in" element={<AuthGuard><WeeklyCheckIn /></AuthGuard>} />
         <Route path="/meal-plan" element={<AuthGuard><MealPlanPage /></AuthGuard>} />
         <Route path="/shopping" element={<AuthGuard><ShoppingPage /></AuthGuard>} />

@@ -31,6 +31,10 @@ import { useCompleteSet } from "@/hooks/mutations/useCompleteSet";
 import { useFinishWorkout } from "@/hooks/mutations/useFinishWorkout";
 import { MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
 import SwapExerciseSheet from "@/components/workout/SwapExerciseSheet";
+import PreWorkoutFatigueDialog from "@/components/workout/PreWorkoutFatigueDialog";
+import { ExerciseNotesField } from "@/components/workout/ExerciseNotesField";
+import { toast } from "sonner";
+import { useUserStatus } from "@/hooks/useUserStatus";
 import type { Exercise } from "@/types/training";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -76,9 +80,26 @@ const ActiveWorkout = () => {
   const { data: session, isLoading, error } = useActiveWorkoutSession();
   const completeSet = useCompleteSet({ silent: true });
   const finishWorkout = useFinishWorkout();
+  const { status } = useUserStatus(clientId);
+
+  // Pre-workout fatigue dialog — pokazuje se jednom dnevno pri ulasku.
+  // Ako je već odgovorila danas, dialog se ne otvara (signal važi do sledeceg
+  // process-workout-completion-a koji čisti preWorkoutFatigue flag).
+  const [fatigueDialogOpen, setFatigueDialogOpen] = useState(false);
+  useEffect(() => {
+    if (!status?.bio || fatigueDialogOpen) return;
+    const answeredAt = status.bio.preWorkoutFatigueAnsweredAt;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const answeredToday = answeredAt
+      ? new Date(answeredAt) >= startOfToday
+      : false;
+    if (!answeredToday) setFatigueDialogOpen(true);
+  }, [status?.bio, fatigueDialogOpen]);
 
   const [exerciseIdx, setExerciseIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [resting, setResting] = useState(false);
   const [restTime, setRestTime] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -90,6 +111,13 @@ const ActiveWorkout = () => {
   const [exerciseOverrides, setExerciseOverrides] = useState<Record<number, Exercise>>({});
   const [profileInjuries, setProfileInjuries] = useState<string[]>([]);
   const activeSetRef = useRef<HTMLDivElement>(null);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (finishTimerRef.current) {
+      clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!clientId) return;
@@ -137,16 +165,17 @@ const ActiveWorkout = () => {
   const activeSetIdx = sets.findIndex((s) => !s.done);
 
   useEffect(() => {
+    if (paused) return;
     const i = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(i);
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
-    if (!resting) return;
+    if (!resting || paused) return;
     if (restTime <= 0) { setResting(false); return; }
     const i = setInterval(() => setRestTime((r) => r - 1), 1000);
     return () => clearInterval(i);
-  }, [resting, restTime]);
+  }, [resting, restTime, paused]);
 
   useEffect(() => {
     if (activeSetRef.current && !resting) {
@@ -196,22 +225,47 @@ const ActiveWorkout = () => {
   // Handlers
   // ------------------------------------------------------------------
 
+  // V3 audit §9 P0 #7 — "no way to resume a workout if you accidentally hit End".
+  // Pattern: prikazi Sonner toast sa "Vrati" akcijom; nakon 5s tek fire mutation.
+  // To resava 99% slucajeva accidental Finish tap-a (citat real users docs).
   const handleFinishWorkout = useCallback(() => {
     if (!session || !clientId) return;
     haptic("success");
-    finishWorkout.mutate(
-      {
-        clientId,
-        sessionId: session.session.sessionId,
-        completedAt: new Date().toISOString(),
-      },
-      {
-        onSuccess: () => {
-          navigate("/workout/complete");
+    const sessionId = session.session.sessionId;
+
+    let cancelled = false;
+    const FINISH_DELAY_MS = 5000;
+
+    const toastId = toast(t("workout.finishingToast"), {
+      description: t("workout.finishingToastHint"),
+      duration: FINISH_DELAY_MS,
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          cancelled = true;
+          toast.dismiss(toastId);
+          haptic("light");
         },
       },
-    );
-  }, [session, clientId, haptic, finishWorkout, navigate]);
+    });
+
+    finishTimerRef.current = window.setTimeout(() => {
+      finishTimerRef.current = null;
+      if (cancelled) return;
+      finishWorkout.mutate(
+        {
+          clientId,
+          sessionId,
+          completedAt: new Date().toISOString(),
+        },
+        {
+          onSuccess: () => {
+            navigate("/workout/complete");
+          },
+        },
+      );
+    }, FINISH_DELAY_MS);
+  }, [session, clientId, haptic, finishWorkout, navigate, t]);
 
   const handleDoneSet = useCallback(
     (setIdx: number) => {
@@ -392,8 +446,31 @@ const ActiveWorkout = () => {
             }`} />
           ))}
         </div>
-        <span className="text-subhead font-mono text-muted-foreground min-w-11 text-right">{formatTime(elapsed)}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setPaused((p) => !p); haptic("light"); }}
+            className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-card/70 backdrop-blur-md border border-border/30"
+            aria-label={paused ? t("workout.resume") : t("workout.pause")}
+          >
+            {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
+          </button>
+          <span className="text-subhead font-mono text-muted-foreground min-w-11 text-right tabular-nums">{formatTime(elapsed)}</span>
+        </div>
       </div>
+
+      {paused && (
+        <div className="fixed inset-0 z-modal bg-background/85 backdrop-blur-sm flex flex-col items-center justify-center px-6 text-center">
+          <div className="w-20 h-20 rounded-full bg-card card-shadow flex items-center justify-center mb-4">
+            <Pause size={32} className="text-primary" aria-hidden="true" />
+          </div>
+          <h2 className="text-title-2 text-foreground mb-1">{t("workout.paused")}</h2>
+          <p className="text-body text-muted-foreground mb-6">{t("workout.pausedHint")}</p>
+          <GradientButton onClick={() => { setPaused(false); haptic("medium"); }} size="lg">
+            <Play size={ICON_SIZE.md} className="inline mr-1.5" aria-hidden="true" />
+            {t("workout.resume")}
+          </GradientButton>
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {resting ? (
@@ -500,6 +577,14 @@ const ActiveWorkout = () => {
                 })()}
               </div>
             )}
+
+            <ExerciseNotesField
+              exerciseId={
+                exerciseOverrides[exerciseIdx]?.id
+                  ?? slot.exerciseUuid
+                  ?? null
+              }
+            />
 
             <div className="space-y-3">
               {sets.map((set, setIdx) => {
@@ -688,6 +773,18 @@ const ActiveWorkout = () => {
           onPick={(ex) => {
             setExerciseOverrides((prev) => ({ ...prev, [exerciseIdx]: ex }));
             haptic("medium");
+          }}
+        />
+      )}
+
+      {clientId && (
+        <PreWorkoutFatigueDialog
+          open={fatigueDialogOpen}
+          onOpenChange={setFatigueDialogOpen}
+          clientId={clientId}
+          onAnswered={() => {
+            // signal je sačuvan — programGenerator/DPO će ga primeniti pri
+            // sledećoj sesiji rebuild-a (queueAdvance / refresh).
           }}
         />
       )}

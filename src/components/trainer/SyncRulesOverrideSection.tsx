@@ -164,7 +164,7 @@ export const SyncRulesOverrideSection = ({
           <Lock size={ICON_SIZE.xs} className="text-primary" />
         </div>
         <div className="flex-1">
-          <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider">
+          <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">
             {t('trainer.overrides.title')}
           </h3>
           <p className="text-caption-2 text-muted-foreground/60 mt-0.5">

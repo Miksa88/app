@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ICON_SIZE } from "@/lib/design-tokens";
+import { ICON_SIZE, IOS_SWITCH } from "@/lib/design-tokens";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp , IOS_SPRING} from "@/lib/motion";
 import {
@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, Plane, type LucideProps } from "lucide-react";
+import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, Plane, Ruler, type LucideProps } from "lucide-react";
 import type { ComponentType } from "react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -28,9 +28,18 @@ import { Button } from "@/components/ui/button";
 import { useHaptic } from "@/hooks/useHaptic";
 import QuickPauseSheet from "@/components/home/QuickPauseSheet";
 import TierBadge from "@/components/profile/TierBadge";
+import QuietHoursPicker from "@/components/profile/QuietHoursPicker";
+import UnitsPicker from "@/components/profile/UnitsPicker";
+import { PageTitle } from "@/components/PageTitle";
 import type { PackageTier } from "@/services/packageService";
+import {
+  useNotificationPreferences,
+  useSetNotificationPreferences,
+} from "@/hooks/useUserPreferences";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/services/userPreferencesService";
+import { useUndoableAction } from "@/hooks/useUndoableAction";
 
-type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis";
+type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis" | "units";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -55,9 +64,34 @@ const Profile = () => {
   const [allergies, setAllergies] = useState(["Lactose free"]);
   const allAllergies = ["Lactose free", "Gluten free", "Vegan", "Vegetarian", "Nut free", "Soy free", "Keto", "Halal"];
 
-  const [notifs, setNotifs] = useState({
-    workout: true, meals: true, water: false, progress: true, chat: true
-  });
+  // Notif categories — persistent (V3 §14: workout / meals / chat / system / achievement).
+  const { data: notifPrefs = DEFAULT_NOTIFICATION_PREFERENCES } = useNotificationPreferences(user?.id ?? null);
+  const setNotifPrefsMutation = useSetNotificationPreferences(user?.id ?? null);
+  const notifs = notifPrefs.categories;
+  const undoNotif = useUndoableAction();
+  const mutateNotif = (next: typeof notifPrefs): Promise<void> =>
+    new Promise((resolve, reject) =>
+      setNotifPrefsMutation.mutate(next, {
+        onSuccess: () => resolve(),
+        onError: (e) => reject(e),
+      }),
+    );
+  const toggleNotif = (key: keyof typeof notifs) => {
+    const previousValue = notifs[key];
+    const next = {
+      ...notifPrefs,
+      categories: { ...notifs, [key]: !previousValue },
+    };
+    void undoNotif.run({
+      title: t(previousValue ? "notifications.disabled" : "notifications.enabled"),
+      apply: () => mutateNotif(next),
+      revert: () =>
+        mutateNotif({
+          ...notifPrefs,
+          categories: { ...notifs, [key]: previousValue },
+        }),
+    });
+  };
   const [confirmAction, setConfirmAction] = useState<"logout" | "delete" | null>(null);
   const [showPauseSheet, setShowPauseSheet] = useState(false);
   const [tier, setTier] = useState<PackageTier | null>(null);
@@ -112,7 +146,7 @@ const Profile = () => {
     void (async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("current_weight, height, date_of_birth")
+        .select("current_weight, height, date_of_birth, allergies, primary_goal")
         .eq("id", user.id)
         .maybeSingle();
       if (cancelled || error || !data) return;
@@ -124,9 +158,60 @@ const Profile = () => {
           ? new Date(data.date_of_birth).toLocaleDateString(language === "sr" ? "sr-RS" : "en-GB")
           : "",
       }));
+      if (Array.isArray(data.allergies) && data.allergies.length > 0) {
+        setAllergies(data.allergies);
+      }
+      // primary_goal je single-value u DB-u; mapiraj na multi-select label.
+      const PRIMARY_GOAL_TO_LABEL: Record<string, string> = {
+        muscle_gain: "Muscle gain",
+        glute_growth: "Glute growth",
+        fat_loss: "Fat loss",
+        endurance: "Endurance",
+        flexibility: "Flexibility",
+        strength: "Strength",
+      };
+      if (data.primary_goal && PRIMARY_GOAL_TO_LABEL[data.primary_goal]) {
+        setGoals([PRIMARY_GOAL_TO_LABEL[data.primary_goal]]);
+      }
     })();
     return () => { cancelled = true; };
   }, [user?.id, language]);
+
+  // Persist allergies (text[] array) na svaku promenu — debounced via React batching.
+  useEffect(() => {
+    if (!user?.id) return;
+    const timer = setTimeout(() => {
+      void supabase
+        .from("profiles")
+        .update({ allergies })
+        .eq("id", user.id);
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allergies.join("|"), user?.id]);
+
+  // Persist primary_goal (uzimamo prvi goal kao primary; multi-select je UI-only).
+  useEffect(() => {
+    if (!user?.id || goals.length === 0) return;
+    const LABEL_TO_PRIMARY_GOAL: Record<string, string> = {
+      "Muscle gain": "muscle_gain",
+      "Glute growth": "glute_growth",
+      "Fat loss": "fat_loss",
+      "Endurance": "endurance",
+      "Flexibility": "flexibility",
+      "Strength": "strength",
+    };
+    const enumValue = LABEL_TO_PRIMARY_GOAL[goals[0]];
+    if (!enumValue) return;
+    const timer = setTimeout(() => {
+      void supabase
+        .from("profiles")
+        .update({ primary_goal: enumValue as unknown as never })
+        .eq("id", user.id);
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goals.join("|"), user?.id]);
 
   const persistProfileField = async (key: string, value: number | string): Promise<void> => {
     if (!user?.id) return;
@@ -157,6 +242,7 @@ const Profile = () => {
     { icon: Target, label: t("profile.myGoals"), sub: goals.map((g) => t(goalKeys[g] || g)).join(", ") || t("profile.notSet"), page: "goals" as SettingsPage },
     { icon: Salad, label: t("profile.allergies"), sub: allergies.join(", ") || t("profile.none"), page: "allergies" as SettingsPage },
     { icon: Bell, label: t("profile.notifications"), sub: Object.values(notifs).some(Boolean) ? t("profile.enabled") : t("profile.disabled"), page: "notifications" as SettingsPage },
+    { icon: Ruler, label: t("settings.units.title"), sub: "", page: "units" as SettingsPage },
     { icon: Scale, label: t("profile.weightHistory"), sub: "", page: "weightHistory" as SettingsPage },
   ];
 
@@ -177,7 +263,7 @@ const Profile = () => {
         <button key={label}
           onClick={() => { if (page === "analysis") { navigate("/analysis"); } else if (page) { setActivePage(page); } }}
           className={`w-full flex items-center gap-4 px-4 py-3 text-left ios-row-h ${i < items.length - 1 ? "border-b border-border" : ""}`}>
-          <Icon size={20} className="text-primary" />
+          <Icon size={20} className="text-muted-foreground" />
           <div className="flex-1 min-w-0">
             <p className="text-body text-foreground">{label}</p>
             {sub && <p className="text-footnote text-muted-foreground truncate">{sub}</p>}
@@ -192,9 +278,7 @@ const Profile = () => {
 
   return (
     <motion.div {...fadeUp()} className={`min-h-screen bg-background-secondary pb-32 relative ${activePage ? "overflow-hidden h-screen" : ""}`}>
-      <div className="px-5 pt-14 pb-2">
-        <h1 className="text-large-title text-foreground">{t("profile.title")}</h1>
-      </div>
+      <PageTitle title={t("profile.title")} />
 
       <div className="px-5 mt-3 space-y-5">
         {/* Profile card */}
@@ -229,8 +313,8 @@ const Profile = () => {
           className="w-full bg-card rounded-2xl card-shadow p-4 flex items-center gap-4 text-left"
           aria-label={t("profile.quickPause")}
         >
-          <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center shrink-0">
-            <Plane size={20} className="text-secondary" aria-hidden="true" />
+          <div className="w-12 h-12 rounded-2xl bg-warning/10 flex items-center justify-center shrink-0">
+            <Plane size={20} className="text-warning" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-body font-semibold text-foreground">{t("profile.quickPause")}</p>
@@ -278,7 +362,7 @@ const Profile = () => {
           <Card className="overflow-hidden">
             <button onClick={() => setConfirmAction("logout")}
               className="w-full flex items-center gap-4 px-4 py-3 text-left ios-row-h border-b border-border">
-              <LogOut size={20} className="text-primary" aria-hidden="true" />
+              <LogOut size={20} className="text-muted-foreground" aria-hidden="true" />
               <p className="text-body text-foreground flex-1">{t("profile.logOut")}</p>
               <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" aria-hidden="true" />
             </button>
@@ -435,13 +519,13 @@ const Profile = () => {
                     {[
                       { key: "workout" as const, label: t("notifications.workoutReminders"), desc: t("notifications.workoutRemindersDesc") },
                       { key: "meals" as const, label: t("notifications.mealReminders"), desc: t("notifications.mealRemindersDesc") },
-                      { key: "water" as const, label: t("notifications.waterReminders"), desc: t("notifications.waterRemindersDesc") },
-                      { key: "progress" as const, label: t("notifications.progressUpdates"), desc: t("notifications.progressUpdatesDesc") },
                       { key: "chat" as const, label: t("notifications.chatMessages"), desc: t("notifications.chatMessagesDesc") },
+                      { key: "system" as const, label: t("notifications.systemMessages"), desc: t("notifications.systemMessagesDesc") },
+                      { key: "achievement" as const, label: t("notifications.achievements"), desc: t("notifications.achievementsDesc") },
                     ].map(({ key, label, desc }, i, arr) => (
                       <button
                         key={key}
-                        onClick={() => setNotifs((prev) => ({ ...prev, [key]: !prev[key] }))}
+                        onClick={() => toggleNotif(key)}
                         role="switch"
                         aria-checked={notifs[key]}
                         aria-label={label}
@@ -452,12 +536,25 @@ const Profile = () => {
                           <p className="text-body text-foreground">{label}</p>
                           <p id={`notif-desc-${key}`} className="text-footnote text-muted-foreground">{desc}</p>
                         </div>
-                        <div className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-base shrink-0 ${notifs[key] ? "bg-success" : "bg-muted"}`} aria-hidden="true">
+                        <div className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 ${notifs[key] ? "bg-success" : "bg-muted"}`} aria-hidden="true">
                           <motion.div layout transition={IOS_SPRING.precise}
-                            className={`w-[27px] h-[27px] rounded-full bg-white shadow-sm ${notifs[key] ? "ml-auto" : "ml-0"}`} />
+                            className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${notifs[key] ? "ml-auto" : "ml-0"}`} />
                         </div>
                       </button>
                     ))}
+                  </div>
+
+                  <div className="bg-card rounded-xl card-shadow p-4 mt-4">
+                    <QuietHoursPicker />
+                  </div>
+                </motion.div>
+              }
+
+              {/* UNITS */}
+              {activePage === "units" &&
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="bg-card rounded-xl card-shadow p-4">
+                    <UnitsPicker />
                   </div>
                 </motion.div>
               }
@@ -509,8 +606,8 @@ const Profile = () => {
                           <p className="text-footnote text-muted-foreground">{healthConnected ? t("health.connectedSync") : t("profile.notConnected")}</p>
                         </div>
                       </div>
-                      <div className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-base shrink-0 ${healthConnected ? "bg-success" : "bg-muted"}`} aria-hidden="true">
-                        <motion.div layout transition={IOS_SPRING.precise} className={`w-[27px] h-[27px] rounded-full bg-white shadow-sm ${healthConnected ? "ml-auto" : "ml-0"}`} />
+                      <div className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 ${healthConnected ? "bg-success" : "bg-muted"}`} aria-hidden="true">
+                        <motion.div layout transition={IOS_SPRING.precise} className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${healthConnected ? "ml-auto" : "ml-0"}`} />
                       </div>
                     </button>
                   </div>
@@ -601,7 +698,7 @@ const Profile = () => {
                       return (
                         <button key={value} onClick={() => setLanguage(value)}
                           className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition-all ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
-                          <span className="text-2xl">{flag}</span>
+                          <span className="text-title-3" aria-hidden="true">{flag}</span>
                           <div className="flex-1 text-left">
                             <p className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{label}</p>
                             <p className="text-footnote text-muted-foreground">{desc}</p>

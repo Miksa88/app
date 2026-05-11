@@ -33,6 +33,14 @@ export interface WeeklyCheckInInput {
   energyAvg: number;
   /** 1–5 */
   identityScore: number;
+  /** Prosečan san poslednjih 7 dana (sati) — feeduje recoveryMultiplier. */
+  sleepHoursAvg?: number;
+  /** Prosečan stres poslednjih 7 dana (1–5). */
+  stressAvg?: number;
+  /** Subjektivni libido 1–10 (pocetnici.md §4.3: <4 → pauseSmartCut). */
+  libidoScore?: number;
+  /** Subjektivno zadržavanje vode 1–10 (>7 → waterRetentionAlert). */
+  waterRetentionScore?: number;
   notes?: string | null;
 }
 

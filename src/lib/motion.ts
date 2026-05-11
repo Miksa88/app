@@ -39,7 +39,7 @@ export const MOTION_EASE = {
   // Apple UIKit default curves (iOS-native feel)
   iosDefault: [0.32, 0.72, 0, 1] as [number, number, number, number], // easeOutExpo
   iosSpring: [0.5, 1.5, 0.5, 1] as [number, number, number, number],
-  // Apple HIG signature ease curves (Lovable reference 2026-04-26)
+  // Apple HIG signature ease curves
   // Mek ulaz, čist izlaz — page transitions, content reveals
   appleStandard: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
   // Spori start, brz kraj — staggered reveal sekvence (AnalysisReport, ProcessingScreen)
@@ -48,7 +48,7 @@ export const MOTION_EASE = {
 
 // ----------------------------------------------------------------------------
 // TAP_SCALE — whileTap preset-i (single source of truth)
-// Lovable reference: 0.97 / 0.95 / 0.9 / 0.85 hierarhija
+// Hierarchy: 0.97 / 0.95 / 0.9 / 0.85
 // ----------------------------------------------------------------------------
 
 export const TAP_SCALE = {
@@ -163,7 +163,7 @@ export const staggerItem: Variants = {
 
 // ----------------------------------------------------------------------------
 // pageTransition — uniformna page-level mount animacija
-// Lovable reference: { initial: y: 10, animate: y: 0, ease: appleStandard }
+// Pattern: { initial: y: 10, animate: y: 0, ease: appleStandard }
 // Koristi se u svakoj page root <motion.div> da App.tsx mode="wait" ima
 // konzistentan enter pattern.
 // ----------------------------------------------------------------------------

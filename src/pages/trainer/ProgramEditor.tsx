@@ -5,8 +5,7 @@
 // Flow:
 //   1. Basic info — name + description
 //   2. Program type — "fixed" (same weekly schedule) vs "calendar" (specific dates)
-//   3. Targeting — level / goal / frequency / limitations / free trial flag
-//      (uses existing ProgramTargeting component)
+//   3. Default-for-level picker — auto-assignment po onboarding nivou (Manual / Beginner / Intermediate / Advanced)
 //   4. Workout schedule — ordered list of days, each links to a workouts.id (DB)
 //      OR is a rest day. Drag-to-reorder via Reorder.Group.
 //   5. Save + Assign — "Save program" (primary) + "Assign" (navigates to /assign)
@@ -19,20 +18,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
-import { Calendar, Grid3x3, Plus, Trash2, Users, GripVertical, Dumbbell, Moon, Check } from "lucide-react";
+import { Calendar, Grid3x3, Plus, Trash2, Users, GripVertical, Dumbbell, Moon, Layers, ChevronDown, Settings2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { ICON_SIZE } from "@/lib/design-tokens";
-import { IOS_SPRING, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
-import { type Program, type ProgramDay } from "@/data/trainingMockData";
+import { Button } from "@/components/ui/button";
+import { ICON_SIZE, IOS_SWITCH } from "@/lib/design-tokens";
+import { IOS_SPRING, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
+import { type Program, type ProgramDay, type MesocycleConfig, type MesoProgression, type MesoPeriodization } from "@/data/trainingMockData";
+import { MASTER_PROGRAMS } from "@/data/masterPrograms";
+import { MASTER_WORKOUTS } from "@/data/masterWorkouts";
+import { type DefaultLevel, DEFAULT_LEVELS, getDefaultLevel, setDefaultLevel } from "@/utils/defaultAssignment";
 import { useProgram, useUpsertProgram } from "@/hooks/usePrograms";
 import { useWorkouts } from "@/hooks/useWorkouts";
-import ProgramTargeting, {
-  type ProgramSelections,
-  buildTagsFromSelections,
-  parseTagsToSelections,
-} from "@/components/trainer/ProgramTargeting";
 
 // ============================================================================
 // Main Component
@@ -43,34 +41,70 @@ const ProgramEditor = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { toast } = useToast();
-  const isNew = !id || id === "new";
+  // `default-master-*` ID = master template. Editor učitava iz hardkodirane MASTER_PROGRAMS
+  // liste, save uvek pravi NOVI red (ne update). User može da napusti bez čuvanja.
+  const isDefault = !!id?.startsWith("default-");
+  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
+  const isNew = !id || id === "new" || isDefault;
   const { data: existing } = useProgram(isNew ? null : id);
-  const { data: availableWorkouts = [] } = useWorkouts();
+  const masterTemplate = isDefault ? MASTER_PROGRAMS.find((p) => p.id === defaultSourceId) : null;
+  const { data: trainerWorkouts = [] } = useWorkouts();
+  // Trener-owned workouts + default master workouts (sa `default-` prefix-om).
+  // Day kartice u schedule-u rade lookup preko ovih ID-jeva za prikaz exercise count-a.
+  const availableWorkouts = [
+    ...trainerWorkouts,
+    ...MASTER_WORKOUTS.map((w) => ({
+      id: `default-${w.id}`,
+      trainerId: "system",
+      name: w.name,
+      description: w.description,
+      sections: w.sections,
+      isArchived: false,
+      createdAt: w.createdAt,
+      updatedAt: w.createdAt,
+    })),
+  ];
   const upsertProgramMutation = useUpsertProgram();
 
-  // Basic
+  // Basic — sve ostalo (nivo, cilj, frekvencija, povrede) algoritam
+  // čita iz client onboarding profila pri assign-u.
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<Program["type"]>("fixed");
-
-  // Targeting (derived from tags)
-  const [selections, setSelections] = useState<ProgramSelections>({
-    experience: null, goal: null, frequency: null, limitations: [], isFreeTrial: false,
-  });
+  // Auto-assign po onboarding nivou. null = trener manuelno asajnuje preko "Assign" CTA.
+  const [defaultLevel, setDefaultLevelState] = useState<DefaultLevel | null>(null);
 
   // Schedule
   const [days, setDays] = useState<ProgramDay[]>(defaultSchedule());
 
-  // Sync state when existing program loads from DB
+  // Koji mezo block je trenutno otvoren (id dana koji je mezo start). Null = svi zatvoreni.
+  const [expandedMezoDayId, setExpandedMezoDayId] = useState<string | null>(null);
+
+  const updateMesoConfig = (dayId: string, patch: Partial<MesocycleConfig>) => {
+    setDays((prev) => prev.map((d) =>
+      d.id === dayId
+        ? { ...d, mesocycleConfig: { ...(d.mesocycleConfig ?? {}), ...patch } }
+        : d
+    ));
+  };
+
+  // Sync state when existing program loads from DB. Master template hidracija
+  // se radi jednom (template je sinhron iz hardkodirane liste).
   useEffect(() => {
     if (existing) {
       setName(existing.name);
       setDescription(existing.description ?? "");
       setType(existing.type);
-      setSelections(parseTagsToSelections(existing.tags));
       setDays(existing.workoutDays);
+      setDefaultLevelState(getDefaultLevel(existing.tags));
+    } else if (masterTemplate) {
+      setName(masterTemplate.name);
+      setDescription(masterTemplate.description);
+      setType(masterTemplate.type);
+      setDays(masterTemplate.workoutDays);
+      setDefaultLevelState(getDefaultLevel(masterTemplate.tags));
     }
-  }, [existing]);
+  }, [existing, masterTemplate]);
 
   // Workout picker modal
   const [showWorkoutPicker, setShowWorkoutPicker] = useState<string | null>(null);
@@ -87,7 +121,7 @@ const ProgramEditor = () => {
         name,
         description: description || null,
         type,
-        tags: buildTagsFromSelections(selections),
+        tags: setDefaultLevel(existing?.tags ?? masterTemplate?.tags ?? [], defaultLevel),
         workoutDays: persistedDays,
       });
       toast({ title: isNew ? t("training.programCreated") : t("training.programSaved") });
@@ -108,7 +142,14 @@ const ProgramEditor = () => {
     navigate(`/trainer/program/${id || "new"}/assign`);
   };
 
+  // Fixed program — svaki mezo blok je tačno 7 dana (1 fiksni mikrociklus).
+  // Trener dodaje više mezo blokova (Add mezociklus). Cap = 7 × broj mezo blokova.
+  // Calendar — svaki mezo može imati N nedelja (microcycles), trener dodaje week-by-week.
+  const mezoCount = 1 + days.filter((d) => d.mesocycleStart).length;
+  const isFixedFull = type === "fixed" && days.length >= mezoCount * 7;
+
   const addDay = (isRest: boolean) => {
+    if (isFixedFull) return;
     const fallbackWorkout = !isRest && availableWorkouts.length > 0 ? availableWorkouts[0] : null;
     setDays([
       ...days,
@@ -123,6 +164,28 @@ const ProgramEditor = () => {
     ]);
   };
 
+  // Calendar — dodaj celu nedelju (7 odmornih dana koje trener onda popunjava)
+  const addWeek = (asMezoStart = false) => {
+    const base = Date.now();
+    const week: ProgramDay[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `pd-${base}-${i}`,
+      dayNumber: 0,
+      workoutId: null,
+      workoutName: t("training.restDay"),
+      isRest: true,
+      // Prvi dan novog mezo bloka dobija mesocycleStart marker + default config.
+      ...(i === 0 && asMezoStart
+        ? { mesocycleStart: true, mesocycleConfig: { weeks: 6, progression: "linear" as const, periodization: "linear" as const, deload: "auto" as const } }
+        : {}),
+    }));
+    setDays([...days, ...week]);
+  };
+
+  // Dodaj nov mezociklus blok (samo calendar mode) — 7 odmornih dana,
+  // prvi je mezo start sa default config-om. Trener onda otvara config card i menja.
+  const addMezoBlock = () => addWeek(true);
+
+
   const removeDay = (dayId: string) => {
     // Samo filter — ne mutiramo dayNumber da ne bi razbili Reorder identity
     setDays(days.filter((d) => d.id !== dayId));
@@ -133,6 +196,34 @@ const ProgramEditor = () => {
     // prati items preko reference equality u `value`, pa NE smemo praviti nove objekte.
     // dayNumber se računa pri render-u iz indexa.
     setDays(next);
+  };
+
+  // Grupiše dane u mezo blokove. Svaki blok počinje danom sa `mesocycleStart=true`
+  // (osim prvog bloka koji počinje na idx 0). Drag-reorder je scoped per blok —
+  // sprečava da prevučenje karte slučajno napravi novi mezo (UX bug fix).
+  const mezoBlocks: ProgramDay[][] = [];
+  {
+    let current: ProgramDay[] = [];
+    days.forEach((day, idx) => {
+      if (idx === 0 || day.mesocycleStart) {
+        if (current.length > 0) mezoBlocks.push(current);
+        current = [day];
+      } else {
+        current.push(day);
+      }
+    });
+    if (current.length > 0) mezoBlocks.push(current);
+  }
+
+  // Reorder unutar jednog mezo bloka — zamena samo tog slice-a u globalnom `days`.
+  // Prvi dan bloka (mezo-start ili idx 0) je locked, pa newOrder sadrži samo tail.
+  const reorderInBlock = (blockIdx: number, newTail: ProgramDay[]) => {
+    let startIdx = 0;
+    for (let i = 0; i < blockIdx; i++) startIdx += mezoBlocks[i].length;
+    const blockLen = mezoBlocks[blockIdx].length;
+    const nextDays = [...days];
+    nextDays.splice(startIdx + 1, blockLen - 1, ...newTail);
+    setDays(nextDays);
   };
 
   const selectWorkoutForDay = (dayId: string, workoutId: string) => {
@@ -219,27 +310,45 @@ const ProgramEditor = () => {
           </div>
         </motion.div>
 
-        {/* Targeting — ProgramTargeting accordion */}
+        {/* Default-for picker — auto-assignment po onboarding nivou. Null = manualni assign. */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: MOTION_EASE.iosDefault, delay: 0.1 }}
+          transition={{ duration: 0.3, ease: MOTION_EASE.iosDefault, delay: 0.12 }}
         >
-          <ProgramTargeting selections={selections} onChange={setSelections} />
+          <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block px-1">
+            {t("training.defaultForLevel")}
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => setDefaultLevelState(null)}
+              className={`min-h-12 rounded-xl text-footnote font-semibold transition-colors border-2 px-2 ${
+                defaultLevel === null ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-card card-shadow text-foreground"
+              }`}
+            >
+              {t("training.defaultManual")}
+            </button>
+            {DEFAULT_LEVELS.map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setDefaultLevelState(lvl)}
+                className={`min-h-12 rounded-xl text-footnote font-semibold transition-colors border-2 px-2 ${
+                  defaultLevel === lvl ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-card card-shadow text-foreground"
+                }`}
+              >
+                {t(`training.level_${lvl}`)}
+              </button>
+            ))}
+          </div>
+          <p className="text-caption-2 text-muted-foreground/80 mt-1.5 px-1 leading-snug">
+            {defaultLevel === null
+              ? t("training.defaultManualHint")
+              : t("training.defaultAutoHint").replace("{level}", t(`training.level_${defaultLevel}`))}
+          </p>
         </motion.div>
 
-        {/* Free trial flag info */}
-        {selections.isFreeTrial && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-warning/10 rounded-xl p-3 border border-warning/20"
-          >
-            <p className="text-caption-1 text-warning-foreground/80 leading-snug">
-              {t("training.freeTrialInfo")}
-            </p>
-          </motion.div>
-        )}
 
         {/* Workout schedule */}
         <motion.div
@@ -256,45 +365,204 @@ const ProgramEditor = () => {
             </span>
           </div>
 
-          <Reorder.Group
-            axis="y"
-            values={days}
-            onReorder={reorderDays}
-            className="space-y-2"
-          >
-            {days.map((day, idx) => (
-              <DayRow
-                key={day.id}
-                day={day}
-                index={idx}
-                programType={type}
-                workoutLookup={availableWorkouts}
-                onRemove={() => removeDay(day.id)}
-                onPickWorkout={() => setShowWorkoutPicker(day.id)}
-                onMarkRest={() => setDays(days.map((d) => d.id === day.id ? { ...d, workoutId: null, workoutName: t("training.restDay"), isRest: true } : d))}
-                t={t}
-              />
-            ))}
-          </Reorder.Group>
+          {/* Schedule render — hijerarhijski po mezo blokovima.
+              Svaki blok = banner + config card + lock-ovan prvi dan + Reorder.Group za ostalih.
+              Drag je scoped per blok — ne može da pređe granicu mezo-a. */}
+          {(() => {
+            let globalIdx = 0;
+            return mezoBlocks.map((block, blockIdx) => {
+              const firstDay = block[0];
+              const tail = block.slice(1);
+              const blockStartGlobalIdx = globalIdx;
+              const mesoCfg = firstDay.mesocycleConfig ?? {};
+              const isMezoOpen = expandedMezoDayId === firstDay.id;
+              const mezoNumber = blockIdx + 1;
+              const node = (
+                <div key={`mezo-${firstDay.id}`} className="space-y-2">
+                  {/* Mezo banner + config */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMezoDayId(isMezoOpen ? null : firstDay.id)}
+                    className="w-full flex items-center gap-2 px-1 mt-2 mb-1 active:opacity-60 min-h-9"
+                    aria-expanded={isMezoOpen}
+                  >
+                    <Layers size={14} className="text-primary shrink-0" aria-hidden />
+                    <span className="text-caption-1 font-bold text-primary uppercase tracking-wide">
+                      {mesoCfg.name?.trim() || `${mezoNumber}. ${t("training.mesocycle")}`}
+                    </span>
+                    {(mesoCfg.weeks || mesoCfg.progression || mesoCfg.deload) && (
+                      <span className="text-caption-2 text-primary/70 font-medium">
+                        · {mesoCfg.weeks ? `${mesoCfg.weeks}w` : ""}
+                        {mesoCfg.progression ? ` · ${t(`training.progression_${mesoCfg.progression}`)}` : ""}
+                      </span>
+                    )}
+                    <span className="flex-1 h-px bg-primary/20" aria-hidden />
+                    <Settings2 size={14} className="text-primary/70 shrink-0" aria-hidden />
+                    <motion.span
+                      animate={{ rotate: isMezoOpen ? 180 : 0 }}
+                      transition={{ duration: MOTION_DURATION.fast }}
+                      className="shrink-0"
+                    >
+                      <ChevronDown size={14} className="text-primary/70" aria-hidden />
+                    </motion.span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isMezoOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: MOTION_DURATION.base, ease: MOTION_EASE.iosDefault }}
+                        className="overflow-hidden"
+                      >
+                        <MesoConfigCard
+                          config={mesoCfg}
+                          defaultName={`${mezoNumber}. ${t("training.mesocycle")}`}
+                          onUpdate={(patch) => updateMesoConfig(firstDay.id, patch)}
+                          t={t}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            <button
-              type="button"
-              onClick={() => addDay(false)}
-              className="min-h-12 rounded-xl border-2 border-dashed border-primary/30 text-primary text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
-            >
-              <Plus size={14} />
-              {t("training.addWorkoutDay")}
-            </button>
-            <button
-              type="button"
-              onClick={() => addDay(true)}
-              className="min-h-12 rounded-xl border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
-            >
-              <Moon size={14} />
-              {t("training.addRestDay")}
-            </button>
-          </div>
+                  {/* Card kontejner za dane bloka — vizuelno ograđen mezo blok */}
+                  <div className="bg-primary/5 rounded-2xl p-2 border border-primary/15 space-y-2">
+                    {type === "calendar" && (
+                      <div className="flex items-center gap-2 px-2 pt-1">
+                        <span className="text-caption-2 font-semibold text-muted-foreground uppercase tracking-wider">
+                          {t("training.week")} 1
+                        </span>
+                        <span className="flex-1 h-px bg-border" aria-hidden />
+                      </div>
+                    )}
+                    {/* Locked first day — ne učestvuje u drag-reorder */}
+                    <StaticDayRow
+                      day={firstDay}
+                      index={blockStartGlobalIdx}
+                      programType={type}
+                      workoutLookup={availableWorkouts}
+                      onRemove={() => removeDay(firstDay.id)}
+                      onPickWorkout={() => setShowWorkoutPicker(firstDay.id)}
+                      onMarkRest={() => setDays(days.map((d) => d.id === firstDay.id ? { ...d, workoutId: null, workoutName: t("training.restDay"), isRest: true } : d))}
+                      t={t}
+                    />
+                    {/* Reorder.Group SCOPE-OVAN samo na tail bloka */}
+                    {tail.length > 0 && (
+                      <Reorder.Group
+                        axis="y"
+                        values={tail}
+                        onReorder={(newOrder: ProgramDay[]) => reorderInBlock(blockIdx, newOrder)}
+                        className="space-y-2"
+                      >
+                        {tail.map((day, tailIdx) => {
+                          const dayGlobalIdx = blockStartGlobalIdx + 1 + tailIdx;
+                          // Week divider unutar bloka (calendar mode) — za multi-week mezo blokove
+                          const showInnerWeek = type === "calendar" && (dayGlobalIdx - blockStartGlobalIdx) % 7 === 0;
+                          const innerWeekNum = Math.floor((dayGlobalIdx - blockStartGlobalIdx) / 7) + 1;
+                          return (
+                            <div key={day.id}>
+                              {showInnerWeek && (
+                                <div className="flex items-center gap-2 px-2 pb-1.5 pt-1">
+                                  <span className="text-caption-2 font-semibold text-muted-foreground uppercase tracking-wider">
+                                    {t("training.week")} {innerWeekNum}
+                                  </span>
+                                  <span className="flex-1 h-px bg-border" aria-hidden />
+                                </div>
+                              )}
+                              <DayRow
+                                day={day}
+                                index={dayGlobalIdx}
+                                programType={type}
+                                workoutLookup={availableWorkouts}
+                                onRemove={() => removeDay(day.id)}
+                                onPickWorkout={() => setShowWorkoutPicker(day.id)}
+                                onMarkRest={() => setDays(days.map((d) => d.id === day.id ? { ...d, workoutId: null, workoutName: t("training.restDay"), isRest: true } : d))}
+                                t={t}
+                              />
+                            </div>
+                          );
+                        })}
+                      </Reorder.Group>
+                    )}
+                  </div>
+                </div>
+              );
+              globalIdx += block.length;
+              return node;
+            });
+          })()}
+
+          {/* Add buttons — ponašanje zavisi od tipa programa */}
+          {type === "calendar" ? (
+            <div className="space-y-2 mt-3">
+              {/* Primary action — dodaj nov mezociklus blok (full width) */}
+              <button
+                type="button"
+                onClick={addMezoBlock}
+                className="w-full min-h-12 rounded-xl border-2 border-dashed border-primary/40 text-primary text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                <Layers size={14} />
+                {t("training.addMezoBlock")}
+              </button>
+              {/* Secondary actions — sedmica (u trenutni mezo) i pojedinačni dan */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => addWeek(false)}
+                  className="min-h-12 rounded-xl border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  {t("training.addWeek")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addDay(true)}
+                  className="min-h-12 rounded-xl border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  {t("training.addDay")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 mt-3">
+              {/* Primary action — dodaj nov mezo blok (7-dnevni mikrociklus) */}
+              <button
+                type="button"
+                onClick={addMezoBlock}
+                className="w-full min-h-12 rounded-xl border-2 border-dashed border-primary/40 text-primary text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                <Layers size={14} />
+                {t("training.addMezoBlock")}
+              </button>
+              {/* Secondary — fine-tune trenutni mezo (dodaj/izbaci dan u poslednjem) */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => addDay(false)}
+                  disabled={isFixedFull}
+                  className="min-h-12 rounded-xl border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Plus size={14} />
+                  {t("training.addWorkoutDay")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addDay(true)}
+                  disabled={isFixedFull}
+                  className="min-h-12 rounded-xl border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-footnote font-semibold active:opacity-60 flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Moon size={14} />
+                  {t("training.addRestDay")}
+                </button>
+              </div>
+            </div>
+          )}
+          {type === "fixed" && (
+            <p className="text-caption-2 text-muted-foreground/80 mt-2 px-1">
+              {t("training.fixedMicrocycleHint")}
+            </p>
+          )}
         </motion.div>
       </div>
 
@@ -304,19 +572,24 @@ const ProgramEditor = () => {
         style={{ paddingBottom: "max(env(safe-area-inset-bottom, 16px), 16px)" }}
       >
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleSave}
-            className="flex-1 min-h-12 rounded-2xl gradient-primary text-primary-foreground text-body font-semibold shadow-fab active:opacity-90 flex items-center justify-center gap-1.5"
+            variant="cta"
+            className="flex-1 rounded-2xl"
           >
             {t("training.saveProgram")}
-          </button>
-          <button
-            onClick={handleAssign}
-            className="flex-1 min-h-12 rounded-2xl border-2 border-primary text-primary text-body font-semibold active:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <Users size={16} />
-            {t("training.assign")}
-          </button>
+          </Button>
+          {/* Assign CTA samo kad je Default = Manual. Ako je auto-default po nivou,
+              algoritam dodeljuje pri onboarding-u — manual assign je ugašen. */}
+          {defaultLevel === null && (
+            <button
+              onClick={handleAssign}
+              className="flex-1 min-h-12 rounded-2xl border-2 border-primary text-primary text-body font-semibold active:bg-primary/10 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Users size={16} />
+              {t("training.assign")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -406,22 +679,13 @@ const TypeCard = ({ active, onClick, icon, label, caption }: TypeCardProps) => (
   <motion.button
     type="button"
     whileTap={{ scale: TAP_SCALE.primary }}
-    animate={{
-      scale: active ? 1 : 0.98,
-    }}
-    transition={IOS_SPRING.snappy}
     onClick={onClick}
-    className={`rounded-2xl p-4 text-left transition-colors min-h-[100px] relative overflow-hidden ${
+    className={`rounded-2xl p-4 text-left transition-colors min-h-[100px] border-2 ${
       active
-        ? "bg-primary/8 ring-2 ring-primary shadow-fab"
-        : "bg-card card-shadow active:opacity-70 ring-2 ring-transparent"
+        ? "bg-card border-primary"
+        : "bg-card border-transparent card-shadow active:opacity-70"
     }`}
   >
-    {active && (
-      <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
-        <Check size={12} strokeWidth={3} />
-      </span>
-    )}
     <div className={`mb-2 ${active ? "text-primary" : "text-muted-foreground"}`}>{icon}</div>
     <p className={`text-body font-bold ${active ? "text-primary" : "text-foreground/90"}`}>
       {label}
@@ -463,18 +727,27 @@ const DayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkou
   const exerciseCount = day.workoutId
     ? workoutLookup.find((w) => w.id === day.workoutId)?.sections.reduce((sum, s) => sum + s.exercises.length, 0) ?? 0
     : 0;
-  const dayNumber = index + 1;
-  const weekdayLabel = programType === "fixed" && index < 7 ? t(WEEKDAY_KEYS[index]) : null;
+  // Fixed: prikaz weekday-only (Mon, Tue...). Calendar: "Dan N (u nedelji X)".
+  const weekdayLabel = programType === "fixed" ? t(WEEKDAY_KEYS[index % 7]) : null;
+  const calendarLabel = programType === "calendar"
+    ? `${t("training.day")} ${(index % 7) + 1}`
+    : null;
 
   return (
     <Reorder.Item
       value={day}
       dragListener={false}
       dragControls={dragControls}
-      className={`rounded-2xl card-shadow overflow-hidden touch-manipulation ${
+      className={`relative rounded-2xl card-shadow overflow-hidden touch-manipulation ${
         day.isRest ? "bg-muted/30" : "bg-card"
       }`}
-      whileDrag={{ scale: 1.02, boxShadow: "0 12px 32px -8px rgba(0,0,0,0.18)", zIndex: 10 }}
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: "0 16px 40px -8px rgba(0,0,0,0.22)",
+        // z-modal token (100) — drži se iznad svih sibling card-ica i kontejner overlay-a
+        zIndex: 100,
+      }}
+      style={{ position: "relative" }}
       transition={{ type: "spring", stiffness: 400, damping: 28 }}
     >
       <div className="flex items-center gap-2 p-3">
@@ -501,8 +774,8 @@ const DayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkou
           className="flex-1 min-w-0 text-left active:opacity-60 transition-opacity"
         >
           <p className="text-body font-semibold text-foreground truncate">
-            {t("training.day")} {dayNumber}
-            {weekdayLabel && <span className="text-muted-foreground font-normal"> · {weekdayLabel}</span>}
+            {weekdayLabel && <span>{weekdayLabel}</span>}
+            {calendarLabel && <span>{calendarLabel}</span>}
             <span className="text-muted-foreground font-normal">: </span>
             {day.isRest ? t("training.restDay") : day.workoutName}
           </p>
@@ -543,16 +816,238 @@ const DayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkou
 };
 
 // ============================================================================
+// StaticDayRow — locked prvi dan mezo bloka (ne učestvuje u drag-reorder)
+// ============================================================================
+
+const StaticDayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkout, onMarkRest, t }: DayRowProps) => {
+  const exerciseCount = day.workoutId
+    ? workoutLookup.find((w) => w.id === day.workoutId)?.sections.reduce((sum, s) => sum + s.exercises.length, 0) ?? 0
+    : 0;
+  const weekdayLabel = programType === "fixed" ? t(WEEKDAY_KEYS[index % 7]) : null;
+  const calendarLabel = programType === "calendar"
+    ? `${t("training.day")} ${(index % 7) + 1}`
+    : null;
+
+  return (
+    <div
+      className={`rounded-2xl card-shadow overflow-hidden ${day.isRest ? "bg-muted/30" : "bg-card"}`}
+    >
+      <div className="flex items-center gap-2 p-3">
+        {/* Lock indicator umesto drag handle-a */}
+        <span
+          className="min-w-8 min-h-8 flex items-center justify-center text-primary/50 shrink-0"
+          aria-label={t("training.firstDayLocked")}
+        >
+          <Layers size={14} aria-hidden />
+        </span>
+        <span
+          className={`w-1 h-8 rounded-full shrink-0 ${day.isRest ? "bg-muted-foreground/30" : "bg-primary"}`}
+          aria-hidden
+        />
+        <button
+          type="button"
+          onClick={onPickWorkout}
+          className="flex-1 min-w-0 text-left active:opacity-60 transition-opacity"
+        >
+          <p className="text-body font-semibold text-foreground truncate">
+            {weekdayLabel && <span>{weekdayLabel}</span>}
+            {calendarLabel && <span>{calendarLabel}</span>}
+            <span className="text-muted-foreground font-normal">: </span>
+            {day.isRest ? t("training.restDay") : day.workoutName}
+          </p>
+          {!day.isRest && exerciseCount > 0 && (
+            <p className="text-caption-1 text-muted-foreground">
+              {exerciseCount} {exerciseCount === 1 ? t("training.exerciseSingular") : t("training.exercisePlural")}
+            </p>
+          )}
+          {day.isRest && (
+            <p className="text-caption-1 text-muted-foreground">{t("training.tapToAddWorkout")}</p>
+          )}
+        </button>
+        {!day.isRest && (
+          <button
+            type="button"
+            onClick={onMarkRest}
+            className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-muted/50 text-muted-foreground/70 shrink-0"
+            aria-label={t("training.markAsRest")}
+          >
+            <Moon size={14} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-destructive/10 shrink-0"
+          aria-label={t("common.delete")}
+        >
+          <Trash2 size={ICON_SIZE.xs} className="text-destructive/70" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// MesoConfigCard — config za jedan mezociklus blok
+// ============================================================================
+
+interface MesoConfigCardProps {
+  config: MesocycleConfig;
+  defaultName: string;
+  onUpdate: (patch: Partial<MesocycleConfig>) => void;
+  t: (key: string) => string;
+}
+
+const MesoConfigCard = ({ config, defaultName, onUpdate, t }: MesoConfigCardProps) => {
+  const weeks: Array<4 | 5 | 6 | 7> = [4, 5, 6, 7];
+  const progressions: MesoProgression[] = ["linear", "double", "rpe", "percentage"];
+  const periodizations: MesoPeriodization[] = ["linear", "undulating", "block", "dup"];
+
+  return (
+    <div className="bg-card border border-primary/30 rounded-2xl p-4 space-y-4 card-shadow">
+      {/* Naziv */}
+      <div>
+        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
+          {t("training.mesoName")}
+        </label>
+        <input
+          type="text"
+          value={config.name ?? ""}
+          onChange={(e) => onUpdate({ name: e.target.value || undefined })}
+          placeholder={defaultName}
+          className="w-full bg-background-secondary text-foreground rounded-xl px-3 py-2.5 text-body focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+
+      {/* Trajanje (nedelja) */}
+      <div>
+        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
+          {t("training.mesoDuration")}
+        </label>
+        <div className="flex gap-2">
+          {weeks.map((w) => {
+            const active = config.weeks === w;
+            return (
+              <button
+                key={w}
+                type="button"
+                onClick={() => onUpdate({ weeks: w })}
+                className={`flex-1 min-h-11 rounded-xl text-footnote font-bold transition-colors border-2 ${
+                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
+                }`}
+              >
+                {w}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-caption-2 text-muted-foreground/70 mt-1">{t("training.mesoDurationHint")}</p>
+      </div>
+
+      {/* Progressive overload */}
+      <div>
+        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
+          {t("training.mesoProgression")}
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {progressions.map((p) => {
+            const active = config.progression === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onUpdate({ progression: p })}
+                className={`min-h-11 rounded-xl text-footnote font-semibold transition-colors border-2 px-3 ${
+                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
+                }`}
+              >
+                {t(`training.progression_${p}`)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Periodizacija */}
+      <div>
+        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
+          {t("training.mesoPeriodization")}
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {periodizations.map((p) => {
+            const active = config.periodization === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onUpdate({ periodization: p })}
+                className={`min-h-11 rounded-xl text-footnote font-semibold transition-colors border-2 px-3 ${
+                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
+                }`}
+              >
+                {t(`training.periodization_${p}`)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Deload toggle */}
+      <div className="flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="text-body font-medium text-foreground">{t("training.mesoDeload")}</p>
+          <p className="text-caption-2 text-muted-foreground/80">{t("training.mesoDeloadHint")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onUpdate({ deload: config.deload === "off" ? "auto" : "off" })}
+          aria-pressed={config.deload !== "off"}
+          aria-label={t("training.mesoDeload")}
+          className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors shrink-0 ml-3 ${
+            config.deload !== "off" ? "bg-primary" : "bg-muted"
+          }`}
+        >
+          <motion.div
+            animate={{ x: config.deload !== "off" ? 20 : 0 }}
+            transition={IOS_SPRING.precise}
+            className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm`}
+          />
+        </button>
+      </div>
+
+      <p className="text-caption-2 text-muted-foreground/70 leading-snug border-t border-border/40 pt-3">
+        {t("training.mesoAlgorithmHint")}
+      </p>
+    </div>
+  );
+};
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
 function defaultSchedule(): ProgramDay[] {
-  // 3-day default (Mon/Wed/Fri style)
-  return [
-    { id: `pd-${Date.now()}-1`, dayNumber: 1, workoutId: null, workoutName: "Rest", isRest: false },
-    { id: `pd-${Date.now()}-2`, dayNumber: 2, workoutId: null, workoutName: "Rest", isRest: true },
-    { id: `pd-${Date.now()}-3`, dayNumber: 3, workoutId: null, workoutName: "Rest", isRest: false },
-  ];
+  // 1 mezociklus, 1 mikrociklus = 7 dana (svi rest po default-u). Trener dodaje workout-e.
+  // Dan 1 nosi mesocycleStart marker + default mesocycleConfig (6 nedelja, linear).
+  const base = Date.now();
+  return Array.from({ length: 7 }, (_, i) => ({
+    id: `pd-${base}-${i}`,
+    dayNumber: 0,
+    workoutId: null,
+    workoutName: "Rest",
+    isRest: true,
+    ...(i === 0
+      ? {
+          mesocycleStart: true,
+          mesocycleConfig: {
+            weeks: 6 as const,
+            progression: "linear" as const,
+            periodization: "linear" as const,
+            deload: "auto" as const,
+          },
+        }
+      : {}),
+  }));
 }
 
 export default ProgramEditor;

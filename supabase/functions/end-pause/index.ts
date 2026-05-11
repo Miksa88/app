@@ -218,12 +218,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const status = rowData.status_json as UserStatusShape;
 
+  // §5.3 (pocetnici.md, 2026-05-08): ako je upravo završena ILLNESS pauza,
+  // prva nedelja povratka mora biti fiksni DELOAD (bez obzira na mezo poziciju).
+  // Razlog: imuni sistem trošio glikogen + protein → mišić nije spreman za pun
+  // stimulus prvih 7 dana. Trener može da skine flag manualno ako klijentkinja
+  // pokaže pun oporavak.
+  const wasIllnessPause = updateData[0]?.pause_type === "illness";
+  const trainingPatch: Record<string, unknown> = {
+    ...status.training,
+    activePauseEvent: null,
+  };
+  if (wasIllnessPause) {
+    trainingPatch.isInDeload = true;
+    trainingPatch.illnessReentryDeloadUntil = new Date(
+      Date.now() + 7 * 86_400_000,
+    ).toISOString();
+  }
+
   const newStatus: UserStatusShape = {
     ...status,
-    training: {
-      ...status.training,
-      activePauseEvent: null,
-    },
+    training: trainingPatch,
     lastUpdatedAt: new Date().toISOString(),
   };
 

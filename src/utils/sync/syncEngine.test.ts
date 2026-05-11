@@ -458,11 +458,21 @@ describe('Macro split posle sync-a', () => {
     expect(carbsKcal / result.nutrition.currentCalorieTarget).toBeLessThanOrEqual(0.235);
   });
 
-  it('protein je vrtoglavo 2.0g/kg', async () => {
+  it('protein je 2.0g/kg za beginner pozicije', async () => {
     const status = makeStatus({
       bio: { ...makeStatus().bio, currentWeightMA5: 70 },
+      training: { ...makeStatus().training, position: 'beginner_3' },
     });
     const result = await runSyncRules(status);
     expect(result.nutrition.macros.proteinG).toBe(140);  // 70 × 2.0
+  });
+
+  it('protein je 2.2g/kg za intermediate pozicije (SREDNJE_NAPREDNE_V2 §3.3)', async () => {
+    const status = makeStatus({
+      bio: { ...makeStatus().bio, currentWeightMA5: 70 },
+      training: { ...makeStatus().training, position: 'intermediate_4' },
+    });
+    const result = await runSyncRules(status);
+    expect(result.nutrition.macros.proteinG).toBe(154);  // 70 × 2.2
   });
 });

@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
-import { Send, Paperclip, MessageCircle, Users, Search } from "lucide-react";
+import { Send, Paperclip, MessageCircle, Users, Search, Sparkles } from "lucide-react";
+import { SavedRepliesSheet } from "@/components/trainer/SavedRepliesSheet";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { NavBackButton } from "@/components/ui/nav-back-button";
 import { NavSearchBar } from "@/components/ui/nav-search-bar";
+import { PageTitle } from "@/components/PageTitle";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   listTrainerConversations,
@@ -42,6 +44,7 @@ const TrainerMessages = () => {
   const [activeChat, setActiveChat] = useState<ConversationSummary | null>(null);
   const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
+  const [showSavedReplies, setShowSavedReplies] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, send } = useMessages(
@@ -109,9 +112,7 @@ const TrainerMessages = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background-secondary pb-32">
-        <div className="px-5 pt-14 pb-4">
-          <h1 className="text-large-title text-foreground">{t("trainerMsg.title")}</h1>
-        </div>
+        <PageTitle title={t("trainerMsg.title")} />
         <div className="flex flex-col items-center pt-16">
           <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
         </div>
@@ -122,11 +123,7 @@ const TrainerMessages = () => {
   if (conversations.length === 0 || conversations.every(c => c.lastMessage === null)) {
     return (
       <div className="min-h-screen bg-background-secondary pb-32">
-        <div className="px-5 pt-14 pb-4">
-          <motion.h1 {...fadeUp()} className="text-large-title text-foreground">
-            {t("trainerMsg.title")}
-          </motion.h1>
-        </div>
+        <PageTitle title={t("trainerMsg.title")} />
         <motion.div {...fadeUp(0.08)} className="px-5 pt-12 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
             <MessageCircle size={32} className="text-primary" aria-hidden="true" />
@@ -145,11 +142,7 @@ const TrainerMessages = () => {
   return (
     <>
       <div className="min-h-screen bg-background-secondary pb-32">
-        <div className="px-5 pt-14 pb-4">
-          <motion.h1 {...fadeUp()} className="text-large-title text-foreground">
-            {t("trainerMsg.title")}
-          </motion.h1>
-        </div>
+        <PageTitle title={t("trainerMsg.title")} />
 
         <div className="px-5">
           <motion.div {...fadeUp(0.05)} className="mb-4">
@@ -303,6 +296,14 @@ const TrainerMessages = () => {
                 <button className="text-muted-foreground p-2 min-w-11 min-h-11 flex items-center justify-center">
                   <Paperclip size={20} aria-hidden="true" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSavedReplies(true)}
+                  className="text-muted-foreground p-2 min-w-11 min-h-11 flex items-center justify-center"
+                  aria-label={t("trainerMsg.savedRepliesAria")}
+                >
+                  <Sparkles size={20} aria-hidden="true" />
+                </button>
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -329,6 +330,12 @@ const TrainerMessages = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SavedRepliesSheet
+        open={showSavedReplies}
+        onOpenChange={setShowSavedReplies}
+        onPick={(text) => setInput(text)}
+      />
     </>
   );
 };

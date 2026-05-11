@@ -6,7 +6,9 @@ import { test, expect } from "@playwright/test";
 import { loginAsTestUser, TEST_USER } from "./helpers/auth";
 import { admin, countRows, resetTestUserData } from "./helpers/supabaseAdmin";
 
-test.describe("Water widget", () => {
+// Water widget UKLONJEN 2026-05-08 (Home v4 simplification per pocetnici.md):
+// klijent dashboard ima samo 3 kartice (Danas/Trening/Obrok) + check-in CTA.
+test.describe.skip("Water widget", () => {
   test.beforeEach(async () => {
     await resetTestUserData(TEST_USER.id);
   });

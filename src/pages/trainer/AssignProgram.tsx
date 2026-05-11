@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Search, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -87,10 +88,7 @@ const AssignProgram = () => {
       <PageHeader onBack={() => navigate(-1)} backLabel={t("training.title")} />
 
       {/* Static Large Title */}
-      <div className="px-5 pt-2 pb-3">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("training.assignTo")}</h1>
-        <p className="text-subhead text-muted-foreground mt-1">{program.name}</p>
-      </div>
+      <PageTitle title={t("training.assignTo")} subtitle={program.name} compact />
 
       <div className="px-5">
 

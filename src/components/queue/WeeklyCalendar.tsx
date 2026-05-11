@@ -142,7 +142,7 @@ const DayCell = ({ day, variant, onClick }: DayCellProps) => {
     />
   );
 
-  // Rest dan — suptilan dot pattern umesto plain gray
+  // Rest dan — minimal label, bez dekorativnih tačaka
   if (day.kind.type === 'rest') {
     const isTodayRest = day.isToday;
     return (
@@ -156,11 +156,6 @@ const DayCell = ({ day, variant, onClick }: DayCellProps) => {
         aria-label={`${day.dayLabel} ${day.dayNumber} — ${isTodayRest ? 'Rest (danas)' : 'Rest'}`}
       >
         {header}
-        <div className="flex gap-0.5">
-          <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-          <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-          <span className="w-1 h-1 rounded-full bg-current opacity-40" />
-        </div>
         <span className="text-caption-2 opacity-70 font-medium">Rest</span>
       </div>
     );

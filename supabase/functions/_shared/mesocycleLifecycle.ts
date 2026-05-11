@@ -81,10 +81,18 @@ export interface MesocycleQueue {
   completedAt: string | Date | null;
 }
 
-// Model B: 4 load + 1 deload = 5 nedelja po ciklusu.
-// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178.
-const DEFAULT_MESOCYCLE_WEEKS = 5;
+// pocetnici.md §2.1 (2026-05-08): 6 load + 1 deload = 7 nedelja po ciklusu.
+// KOD-FIT_Master_Protokol_SREDNJE_NAPREDNE_V2.md §2.1: 5 + 1 = 6 nedelja.
+const BEGINNER_MESOCYCLE_WEEKS = 7;
+const INTERMEDIATE_MESOCYCLE_WEEKS = 6;
+const DEFAULT_MESOCYCLE_WEEKS = BEGINNER_MESOCYCLE_WEEKS;
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+export function getMesocycleWeeks(experienceLevel: ExperienceLevel): number {
+  return experienceLevel === 'intermediate'
+    ? INTERMEDIATE_MESOCYCLE_WEEKS
+    : BEGINNER_MESOCYCLE_WEEKS;
+}
 
 // ----------------------------------------------------------------------------
 // derivePartition — verbatim port iz queueBuilder.ts
@@ -192,7 +200,7 @@ function buildMesocycleQueue(input: BuildQueueInputs): MesocycleQueue {
 // ----------------------------------------------------------------------------
 
 export type DeloadReason =
-  | 'week_5_of_mesocycle'
+  | 'last_week_of_mesocycle'
   | 'not_yet'
   | 'lean_bulk_no_deload';
 
@@ -211,7 +219,7 @@ export function shouldStartDeload(
   }
 
   if (currentMicrocycleIndex === mesocycleWeeks - 1) {
-    return { shouldStart: true, reason: 'week_5_of_mesocycle' };
+    return { shouldStart: true, reason: 'last_week_of_mesocycle' };
   }
 
   return { shouldStart: false, reason: 'not_yet' };
@@ -236,7 +244,7 @@ export function handleMesocycleEnd(
   queue: MesocycleQueue,
   profile: MesocycleEndProfile,
   skeleton: SessionSkeleton,
-  mesocycleWeeks: number = DEFAULT_MESOCYCLE_WEEKS,
+  mesocycleWeeks: number = getMesocycleWeeks(profile.experienceLevel),
 ): HandleMesocycleEndResult {
   if (queue.sessionPointer < queue.sessions.length) {
     return { newQueue: queue, mesocycleJustEnded: false };

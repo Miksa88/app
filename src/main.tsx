@@ -4,6 +4,7 @@ import "./index.css";
 import { registerAllSubscribers } from "@/services/subscribers";
 import { initSentry } from "@/lib/sentry";
 import { initNative } from "@/lib/native";
+import { registerServiceWorker } from "@/lib/webPush";
 
 // Sentry init — mora pre bilo kakvog render-a da uhvati crash-eve rano
 initSentry();
@@ -14,5 +15,8 @@ initNative();
 // Bootstrap EventBus subscribers PRE nego sto bilo koja komponenta moze da
 // emit-uje events (Spec 03 Sekcija 5.2). Idempotentno ako se HMR rerun-uje.
 registerAllSubscribers();
+
+// Web Push service worker — pasivno (nema permission request ovde, samo register)
+void registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(<App />);

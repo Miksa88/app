@@ -15,6 +15,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useSyncEvents, type SyncBanner, type SyncBannerType } from '@/hooks/useSyncEvents';
+import { safeStorage } from '@/lib/safeStorage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
@@ -133,7 +134,7 @@ const BannerCard = ({ banner, onDismiss, t }: BannerCardProps) => (
 function loadDismissedBanners(): DismissedBanner[] {
   if (typeof localStorage === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(DISMISS_STORAGE_KEY);
+    const raw = safeStorage.getItem(DISMISS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -146,7 +147,7 @@ function loadDismissedBanners(): DismissedBanner[] {
 function saveDismissedBanners(items: DismissedBanner[]): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(DISMISS_STORAGE_KEY, JSON.stringify(items));
+    safeStorage.setItem(DISMISS_STORAGE_KEY, JSON.stringify(items));
   } catch {
     // storage quota / SSR fallback — ignore
   }

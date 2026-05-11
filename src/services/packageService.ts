@@ -19,6 +19,12 @@ export interface PackageFeatures {
   metricsTracking?: boolean;
   videoCalls?: boolean;
   videoCallFrequency?: number;
+  /** Cena paketa (npr. 49.99). 0 ili undefined = besplatan. */
+  priceAmount?: number;
+  /** ISO valuta (npr. "EUR", "RSD", "USD"). Default "EUR" pri prikazu. */
+  priceCurrency?: string;
+  /** Trajanje paketa u danima (npr. 30 = mesec, 90 = 3 meseca, 365 = godina). */
+  durationDays?: number;
 }
 
 export interface PackageRecord {
@@ -172,6 +178,15 @@ export async function archivePackage(id: string): Promise<void> {
     .update({ is_archived: true, is_active: false })
     .eq("id", id);
   if (error) throw new Error(`archivePackage(${id}): ${error.message}`);
+}
+
+/** Reverts archivePackage (Undo). Restores is_archived=false + is_active=true. */
+export async function unarchivePackage(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("packages")
+    .update({ is_archived: false, is_active: true })
+    .eq("id", id);
+  if (error) throw new Error(`unarchivePackage(${id}): ${error.message}`);
 }
 
 // ============================================================================

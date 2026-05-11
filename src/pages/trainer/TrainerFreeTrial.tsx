@@ -2,7 +2,7 @@
 // Spec: design-system/MASTER.md §7 — Apple-native sticky header + no BottomNav on detail pages
 
 import { useNavigate } from "react-router-dom";
-import { ICON_SIZE } from "@/lib/design-tokens";
+import { ICON_SIZE, IOS_SWITCH } from "@/lib/design-tokens";
 import { motion } from "framer-motion";
 import { fadeUp , IOS_SPRING} from "@/lib/motion";
 import { ChevronDown, Calendar, Dumbbell, Salad, CheckCircle2, XCircle } from "lucide-react";
@@ -14,6 +14,7 @@ import { usePrograms } from "@/hooks/usePrograms";
 import { useNutritionTemplates } from "@/hooks/useNutritionTemplates";
 import { useTrialSettings, useSetTrialSettings } from "@/hooks/useTrialSettings";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 
 const ToggleSwitch = ({ value, onToggle, label }: { value: boolean; onToggle: () => void; label: string }) => (
@@ -22,10 +23,10 @@ const ToggleSwitch = ({ value, onToggle, label }: { value: boolean; onToggle: ()
     role="switch"
     aria-checked={value}
     aria-label={label}
-    className={`w-[51px] h-[31px] rounded-full p-[2px] transition-colors duration-base shrink-0 ${value ? "bg-success" : "bg-muted"}`}
+    className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 ${value ? "bg-success" : "bg-muted"}`}
   >
     <motion.div layout transition={IOS_SPRING.precise}
-      className={`w-[27px] h-[27px] rounded-full bg-white shadow-sm ${value ? "ml-auto" : "ml-0"}`} />
+      className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${value ? "ml-auto" : "ml-0"}`} />
   </button>
 );
 
@@ -85,9 +86,7 @@ const TrainerFreeTrial = () => {
       <PageHeader onBack={() => navigate(-1)} backLabel={t("nav.trainerHome")} />
 
       {/* Static Large Title */}
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("trial.settings")}</h1>
-      </div>
+      <PageTitle title={t("trial.settings")} compact />
 
       <motion.div {...fadeUp(0.05)} className="px-5 pt-1 pb-32">
         <p className="text-subhead text-muted-foreground mb-6">{t("trial.settingsSubtitle")}</p>

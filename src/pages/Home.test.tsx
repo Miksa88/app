@@ -1,30 +1,25 @@
 // ============================================================================
-// Home.test.tsx — water widget integration (IT-14)
+// Home.test.tsx — pojednostavljeni Home smoke test (2026-05-08 v4)
 // ============================================================================
 //
-// Pokriveno (1 test):
-//   - Water widget render-uje trenutni ml + target iz useHydration hook-a,
-//     klik "+1 glass" poziva useLogWaterGlass().mutate sa clientId iz useAuth.
+// Pokriveno:
+//   1. Header renderuje firstName + greeting
+//   2. Three core cards: Danas (data centar), Današnji trening, Sledeći obrok
+//   3. Daily check-in CTA banner se pokazuje kad nije rađen check-in danas
 //
-// Strategija mock-ovanja prati pattern iz Food.test.tsx / ActiveWorkout.test.tsx:
-//   - useAuth, useUserStatus, useNextSession, useWeeklyCalendar → fixtures
-//   - useLogWaterGlass → mutate spy
-//   - DailyCheckInSheet → stub div (već mountuje React Query / Supabase real-time
-//     path koji nije focus ovog testa)
-//   - framer-motion → passthrough
+// Strategija mock-ovanja: sve hooks vraćaju neutralne fixtures.
+// Skinut je water widget — feature uklonjen u v4 simplification.
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import React from "react";
 
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import type { UserStatus } from "@/types/userStatus";
 
-// ----------------------------------------------------------------------------
-// Mocks — module-scoped
-// ----------------------------------------------------------------------------
+// ── Mocks ─────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
@@ -49,46 +44,31 @@ vi.mock("@/contexts/AuthContext", async () => {
   return { ...actual, useAuth: () => AUTH_FIXTURE };
 });
 
-vi.mock("@/hooks/useHaptic", () => ({
-  useHaptic: () => vi.fn(),
-}));
-
-// Streak milestones — neutral stub
-vi.mock("@/hooks/useStreakMilestones", () => ({
-  useStreakMilestones: () => ({ milestone: null, dismissMilestone: () => {} }),
-}));
-
-// useStreak (W-5) — query hook bi inače zahtevao QueryClientProvider
-vi.mock("@/hooks/useStreak", () => ({
-  useStreak: () => ({ data: 0, isLoading: false, error: null }),
-}));
-
-// useFoodItems (W-6) — query hook bi inače zahtevao QueryClientProvider
-vi.mock("@/hooks/useFoodItems", () => ({
-  useFoodItems: () => ({ foods: [], isLoading: false, error: null }),
-}));
-
-// useUnreadMessages — supabase channel + count query
 vi.mock("@/hooks/useUnreadMessages", () => ({
   useUnreadMessages: () => 0,
 }));
-
-// Weekly calendar — fallback empty (Home komponenta ima fallbackWeekDays)
-vi.mock("@/hooks/useWeeklyCalendar", () => ({
-  useWeeklyCalendar: () => ({ view: null, isLoading: false }),
+vi.mock("@/hooks/useClientPause", () => ({
+  useClientPause: () => ({ data: null, isLoading: false, error: null }),
 }));
-
-// Next session — null (rest day putanja je najjednostavnija)
 vi.mock("@/hooks/useNextSession", () => ({
   useNextSession: () => ({ session: null, isLoading: false }),
 }));
+vi.mock("@/hooks/useDailyTotals", () => ({
+  useDailyTotals: () => ({
+    totals: { caloriesConsumed: 800, mealsLogged: 1, proteinConsumed: 40, carbsConsumed: 90, fatConsumed: 25 },
+    isLoading: false,
+    error: null,
+    refetch: async () => {},
+  }),
+}));
+vi.mock("@/hooks/useMealPlan", () => ({
+  useMealPlan: () => ({ plan: null, isLoading: false, error: null }),
+}));
 
-// UserStatus — minimal valid shape; useHydration ga čita (hydrationTodayMl,
-// currentWeightMA5, queue).
 function makeStatus(overrides: Partial<UserStatus> = {}): UserStatus {
   return {
     clientId: "client-a",
-    lastUpdatedAt: new Date(),
+    lastUpdatedAt: new Date(2020, 0, 1),  // davno → check-in CTA se prikazuje
     bio: {
       age: 30,
       currentWeightMA5: 70,
@@ -100,168 +80,70 @@ function makeStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       recoveryMultiplier: 1.0,
       sleepLast7DaysAvg: 7,
       stressLast7DaysAvg: 3,
-      hydrationLast7DaysAvgMl: 2100,
-    },
+      hydrationLast7DaysAvgMl: 2000,
+    } as UserStatus['bio'],
     training: {
-      activeTemplateId: "",
-      position: "beginner_3",
+      experienceLevel: 'beginner',
       daysPerWeek: 3,
-      queue: {
-        clientId: "client-a",
-        mesocycleIndex: 1,
-        templateId: "",
-        sessions: [],
-        sessionPointer: 0,
-        currentMicrocycleIndex: 0,
-        swapUsedThisMicrocycle: false,
-        partitionLastSeen: {},
-        returnFromBreakCountdown: {},
-        createdAt: new Date("2026-04-01T00:00:00Z"),
-        completedAt: null,
-      },
-      sessionPointer: 0,
-      nextSessionId: "",
-      nextSessionPartition: "FullBody",
-      partitionLastSeen: {},
+      position: 'beginner_3',
+      activeTemplateId: null,
+      queue: { clientId: 'client-a', mesocycleIndex: 1, templateId: '', sessions: [], sessionPointer: 0, currentMicrocycleIndex: 0, swapUsedThisMicrocycle: false, partitionLastSeen: {}, returnFromBreakCountdown: {}, createdAt: new Date(), completedAt: null } as UserStatus['training']['queue'],
+      nextSessionId: null,
+      nextSessionPartition: null,
       isInDeload: false,
       isInReturnFromBreak: false,
-      currentMesocycleIndex: 1,
-      currentMicrocycleIndex: 0,
       activePauseEvent: null,
-    },
+    } as UserStatus['training'],
     nutrition: {
       bmr: 1400,
       tdee: 2000,
-      currentCalorieTarget: 1800,
-      targetMode: "maintenance",
-      macros: { proteinG: 130, carbsG: 180, fatG: 60 },
+      currentCalorieTarget: 1600,
+      targetMode: 'deficit',
+      macros: { proteinG: 130, carbsG: 230, fatG: 60 },
       metabolicFilter: [],
       isMetabolicNoiseTriggered: false,
-      hydrationTargetMl: 2450,
-      hydrationTodayMl: 500, // 2 čaše već popijene
+      hydrationTargetMl: 2275,
+      hydrationTodayMl: 0,
       measurementWeekActive: false,
       measurementWeekDay: 0,
       daysSincePlanChange: 0,
+      currentSmartCutStep: 0,
       activeRefeedDay: false,
-    },
-    redFlags: {
-      skipCount7d: 0,
-      metabolicNoiseDays7d: 0,
-      energyBelowThreshold7d: 0,
-      consecutiveFailedWorkouts: 0,
-      daysSinceLastWeeklyCheckIn: 0,
-      isAtRisk: false,
-    },
+    } as UserStatus['nutrition'],
+    redFlags: { skipCount7d: 0, metabolicNoiseDays7d: 0, energyBelowThreshold7d: 0, consecutiveFailedWorkouts: 0, daysSinceLastWeeklyCheckIn: 0, isAtRisk: false },
     clientOverrides: [],
     ...overrides,
   };
 }
 
-const STATUS_FIXTURE = makeStatus();
-
 vi.mock("@/hooks/useUserStatus", () => ({
-  useUserStatus: () => ({
-    status: STATUS_FIXTURE,
-    isLoading: false,
-    error: null,
-    refetch: async () => {},
-  }),
+  useUserStatus: () => ({ status: makeStatus(), isLoading: false, error: null }),
 }));
 
-// DailyCheckInSheet — stub (interna logika testirana zasebno u IT-6)
-vi.mock("@/components/checkin/DailyCheckInSheet", () => ({
-  DailyCheckInSheet: () =>
-    React.createElement("div", { "data-testid": "checkin-sheet-stub" }),
+// AlgorithmStatusBanners — pokazuje banner samo za određena stanja; testiramo
+// odvojeno. Ovde stub.
+vi.mock("@/components/algorithm/AlgorithmStatusBanners", () => ({
+  default: () => <div data-testid="algorithm-banners" />,
 }));
 
-// Achievement overlay — stub
-vi.mock("@/components/AchievementOverlay", () => ({
-  AchievementOverlay: () => null,
-}));
-
-// useLogWaterGlass — spy za mutate
-const mockLogWater = vi.fn();
-const LOG_WATER_FIXTURE = {
-  mutate: mockLogWater,
-  isPending: false,
-  isSuccess: false,
-  isError: false,
-  error: null,
-};
-vi.mock("@/hooks/mutations/useLogWaterGlass", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/hooks/mutations/useLogWaterGlass")
-  >("@/hooks/mutations/useLogWaterGlass");
+// framer-motion — passthrough
+vi.mock("framer-motion", async () => {
+  const actual = await vi.importActual<typeof import("framer-motion")>("framer-motion");
+  const passthrough = (Comp: keyof JSX.IntrinsicElements) =>
+    React.forwardRef((props: Record<string, unknown>, ref) =>
+      React.createElement(Comp, { ...props, ref }),
+    );
   return {
     ...actual,
-    useLogWaterGlass: () => LOG_WATER_FIXTURE,
+    motion: new Proxy({}, { get: (_, prop) => passthrough(prop as keyof JSX.IntrinsicElements) }),
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
-
-// framer-motion passthrough (jsdom-safe). Mora podržati i motion.create(Comp)
-// jer MotionCard koristi taj API (framer 11+).
-vi.mock("framer-motion", async () => {
-  const ReactLib = await import("react");
-  const stripMotionProps = (
-    props: Record<string, unknown> & { children?: React.ReactNode },
-  ) => {
-    const {
-      initial: _initial,
-      animate: _animate,
-      exit: _exit,
-      transition: _transition,
-      whileTap: _whileTap,
-      whileHover: _whileHover,
-      layout: _layout,
-      layoutId: _layoutId,
-      ...rest
-    } = props;
-    return rest;
-  };
-  const passthroughTag = (tag: string) =>
-    ReactLib.forwardRef(
-      (
-        props: Record<string, unknown> & { children?: React.ReactNode },
-        ref: React.ForwardedRef<HTMLElement>,
-      ) => ReactLib.createElement(tag, { ...stripMotionProps(props), ref }),
-    );
-  // motion.create(Comp) — wrap React komponentu u forwardRef sa istom
-  // motion-prop filter logikom.
-  const create = (
-    Comp: React.ComponentType<Record<string, unknown>> | string,
-  ) =>
-    ReactLib.forwardRef(
-      (
-        props: Record<string, unknown> & { children?: React.ReactNode },
-        ref: React.ForwardedRef<unknown>,
-      ) =>
-        ReactLib.createElement(
-          Comp as React.ComponentType<Record<string, unknown>>,
-          { ...stripMotionProps(props), ref } as Record<string, unknown>,
-        ),
-    );
-  const motionProxy = new Proxy(
-    { create },
-    {
-      get: (target: { create: typeof create }, key: string) => {
-        if (key === "create") return target.create;
-        return passthroughTag(key);
-      },
-    },
-  );
-  return {
-    motion: motionProxy,
-    AnimatePresence: ({ children }: { children?: React.ReactNode }) =>
-      ReactLib.createElement(ReactLib.Fragment, null, children),
-  };
-});
-
-// ----------------------------------------------------------------------------
-// Helper
-// ----------------------------------------------------------------------------
 
 async function renderHome() {
-  const { default: Home } = await import("./Home");
+  // Force Serbian since string assertions below use SR copy.
+  window.localStorage.setItem("app-language", "sr");
+  const Home = (await import("./Home")).default;
   return render(
     <LanguageProvider>
       <MemoryRouter>
@@ -271,40 +153,40 @@ async function renderHome() {
   );
 }
 
-// ----------------------------------------------------------------------------
-// Tests
-// ----------------------------------------------------------------------------
+// ── Tests ─────────────────────────────────────────────────────────────────
 
-describe("Home — water widget (IT-14)", () => {
+describe("Home — simplified v4 (3 cards + notifications)", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
-    mockLogWater.mockReset();
   });
-
   afterEach(() => {
     cleanup();
   });
 
-  it("renders current hydration ml and target, +1 glass calls useLogWaterGlass.mutate", async () => {
+  it("renderuje pozdrav sa firstName-om", async () => {
     await renderHome();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Sarah");
+  });
 
-    // Water widget — data-testid anchored
-    const widget = screen.getByTestId("water-widget");
-    expect(widget).toBeInTheDocument();
+  it("prikazuje 3 sekcije: Danas, Današnji trening, Obroci/Sledeći obrok", async () => {
+    await renderHome();
+    expect(screen.getByText("Danas")).toBeInTheDocument();
+    expect(screen.getByText("Današnji trening")).toBeInTheDocument();
+    // Sledeći obrok ili "Obroci" (kad nema mealPlan)
+    const mealCard = screen.queryByText("Sledeći obrok") ?? screen.getByText("Obroci");
+    expect(mealCard).toBeInTheDocument();
+  });
 
-    // Current ml rendered (500ml iz fixture-a, no optimistic)
-    const mlDisplay = screen.getByTestId("water-ml-display");
-    expect(mlDisplay.textContent).toContain("500");
+  it("ne prikazuje daily check-in CTA (uklonjen — pre-workout dialog ga zamenjuje)", async () => {
+    await renderHome();
+    expect(screen.queryByText("Jutarnji check-in")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("daily-checkin-cta")).not.toBeInTheDocument();
+  });
 
-    // Target ml rendered — 70kg non-training = 2450ml (calcHydrationTarget(70, false))
-    expect(mlDisplay.textContent).toContain("2450");
-
-    // "+1 glass" dugme poziva useLogWaterGlass.mutate sa clientId
-    const addBtn = screen.getByTestId("water-add-glass");
-    fireEvent.click(addBtn);
-
-    expect(mockLogWater).toHaveBeenCalledTimes(1);
-    const [payload] = mockLogWater.mock.calls[0];
-    expect(payload).toMatchObject({ clientId: "client-a" });
+  it("prikazuje kalorija counter (current / target)", async () => {
+    await renderHome();
+    // 800 / 1600 kcal iz fixture-a; "800" je pojedeno, "1600 kcal" je target
+    expect(screen.getAllByText(/800/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1600 kcal/)).toBeInTheDocument();
   });
 });

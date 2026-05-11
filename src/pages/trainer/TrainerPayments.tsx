@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { CreditCard, MessageCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // TODO: integracija sa Stripe + payments tabelom u IT-25.
@@ -17,9 +18,7 @@ const TrainerPayments = () => {
     <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate(-1)} backLabel={t("nav.trainerHome")} />
 
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("payments.title")}</h1>
-      </div>
+      <PageTitle title={t("payments.title")} compact />
 
       <motion.div {...fadeUp(0.05)} className="px-5 pt-12 flex flex-col items-center text-center">
         <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">

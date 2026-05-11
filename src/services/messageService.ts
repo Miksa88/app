@@ -133,40 +133,54 @@ export async function listTrainerConversations(
     .select("id, first_name, last_name, avatar_url")
     .eq("role", "client");
 
-  if (!clients) return [];
+  if (!clients || clients.length === 0) return [];
 
-  // Paralelno fetch poslednju poruku + unread count po klijentu
-  const summaries = await Promise.all(
-    clients.map(async (c) => {
-      const [lastMsgRes, unreadRes] = await Promise.all([
-        supabase
-          .from("messages")
-          .select("body, sender_role, created_at")
-          .eq("client_id", c.id)
-          .order("created_at", { ascending: false })
-          .limit(1),
-        supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .eq("client_id", c.id)
-          .eq("sender_role", "client")
-          .is("read_at_by_trainer", null),
-      ]);
+  const clientIds = clients.map((c) => c.id);
 
-      const lastMsg = lastMsgRes.data?.[0];
-      return {
-        clientId: c.id,
-        trainerId,
-        clientFirstName: c.first_name,
-        clientLastName: c.last_name,
-        clientAvatarUrl: c.avatar_url,
-        lastMessage: lastMsg?.body ?? null,
-        lastMessageAt: lastMsg?.created_at ?? null,
-        lastMessageRole: (lastMsg?.sender_role as SenderRole) ?? null,
-        unreadCount: unreadRes.count ?? 0,
-      };
-    }),
-  );
+  // Batch fetch: jedan query za sve poruke ovih klijenata (N+1 elimination)
+  // Server vraća poruke za sve klijente ordered DESC; grupišemo u kodu.
+  const { data: messageRows } = await supabase
+    .from("messages")
+    .select("client_id, body, sender_role, created_at, read_at_by_trainer")
+    .in("client_id", clientIds)
+    .order("created_at", { ascending: false });
+
+  const lastMsgByClient = new Map<
+    string,
+    { body: string; sender_role: string; created_at: string }
+  >();
+  const unreadByClient = new Map<string, number>();
+
+  for (const row of messageRows ?? []) {
+    if (!lastMsgByClient.has(row.client_id)) {
+      lastMsgByClient.set(row.client_id, {
+        body: row.body,
+        sender_role: row.sender_role,
+        created_at: row.created_at,
+      });
+    }
+    if (row.sender_role === "client" && row.read_at_by_trainer === null) {
+      unreadByClient.set(
+        row.client_id,
+        (unreadByClient.get(row.client_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  const summaries: ConversationSummary[] = clients.map((c) => {
+    const lastMsg = lastMsgByClient.get(c.id);
+    return {
+      clientId: c.id,
+      trainerId,
+      clientFirstName: c.first_name,
+      clientLastName: c.last_name,
+      clientAvatarUrl: c.avatar_url,
+      lastMessage: lastMsg?.body ?? null,
+      lastMessageAt: lastMsg?.created_at ?? null,
+      lastMessageRole: (lastMsg?.sender_role as SenderRole) ?? null,
+      unreadCount: unreadByClient.get(c.id) ?? 0,
+    };
+  });
 
   // Sort: unread first, then by lastMessageAt DESC
   summaries.sort((a, b) => {

@@ -99,10 +99,13 @@ export type Database = {
         Row: {
           created_at: string
           cycle_day: number | null
+          daily_steps: number | null
           date: string
           energy_level: number | null
           id: string
+          mood_score: number | null
           notes: string | null
+          pump_score: number | null
           sleep_hours: number | null
           stress_level: number | null
           updated_at: string
@@ -112,10 +115,13 @@ export type Database = {
         Insert: {
           created_at?: string
           cycle_day?: number | null
+          daily_steps?: number | null
           date: string
           energy_level?: number | null
           id?: string
+          mood_score?: number | null
           notes?: string | null
+          pump_score?: number | null
           sleep_hours?: number | null
           stress_level?: number | null
           updated_at?: string
@@ -125,10 +131,13 @@ export type Database = {
         Update: {
           created_at?: string
           cycle_day?: number | null
+          daily_steps?: number | null
           date?: string
           energy_level?: number | null
           id?: string
+          mood_score?: number | null
           notes?: string | null
+          pump_score?: number | null
           sleep_hours?: number | null
           stress_level?: number | null
           updated_at?: string
@@ -141,6 +150,41 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercise_notes: {
+        Row: {
+          created_at: string
+          exercise_id: string
+          id: string
+          note: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercise_id: string
+          id?: string
+          note?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercise_id?: string
+          id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_notes_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
         ]
@@ -307,9 +351,13 @@ export type Database = {
           meal_slots: string[]
           name_en: string
           name_sr: string
+          prep_time_min: number | null
           protein_g: number
+          recipe_steps: Json
+          servings: number
           tags: string[]
           updated_at: string
+          video_url: string | null
         }
         Insert: {
           allergens?: string[]
@@ -326,9 +374,13 @@ export type Database = {
           meal_slots?: string[]
           name_en: string
           name_sr: string
+          prep_time_min?: number | null
           protein_g: number
+          recipe_steps?: Json
+          servings?: number
           tags?: string[]
           updated_at?: string
+          video_url?: string | null
         }
         Update: {
           allergens?: string[]
@@ -345,9 +397,13 @@ export type Database = {
           meal_slots?: string[]
           name_en?: string
           name_sr?: string
+          prep_time_min?: number | null
           protein_g?: number
+          recipe_steps?: Json
+          servings?: number
           tags?: string[]
           updated_at?: string
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -729,6 +785,10 @@ export type Database = {
           stress_level: number | null
           training_days: number | null
           trial_settings: Json | null
+          equipment_list: Json
+          pause_state: Json | null
+          notification_preferences: Json | null
+          preferred_units: Json | null
           updated_at: string
           work_schedule: string | null
         }
@@ -766,6 +826,10 @@ export type Database = {
           stress_level?: number | null
           training_days?: number | null
           trial_settings?: Json | null
+          equipment_list?: Json
+          pause_state?: Json | null
+          notification_preferences?: Json | null
+          preferred_units?: Json | null
           updated_at?: string
           work_schedule?: string | null
         }
@@ -803,6 +867,10 @@ export type Database = {
           stress_level?: number | null
           training_days?: number | null
           trial_settings?: Json | null
+          equipment_list?: Json
+          pause_state?: Json | null
+          notification_preferences?: Json | null
+          preferred_units?: Json | null
           updated_at?: string
           work_schedule?: string | null
         }
@@ -942,43 +1010,58 @@ export type Database = {
       weekly_check_ins: {
         Row: {
           created_at: string
+          digestion_avg: number | null
           energy_avg: number | null
           hip_cm: number | null
           id: string
           identity_score: number | null
+          libido_score: number | null
+          mood_avg: number | null
           notes: string | null
+          pump_avg: number | null
           thigh_cm: number | null
           updated_at: string
           user_id: string
           waist_cm: number | null
+          water_retention: number | null
           week_start_date: string
           weight_avg_kg: number | null
         }
         Insert: {
           created_at?: string
+          digestion_avg?: number | null
           energy_avg?: number | null
           hip_cm?: number | null
           id?: string
           identity_score?: number | null
+          libido_score?: number | null
+          mood_avg?: number | null
           notes?: string | null
+          pump_avg?: number | null
           thigh_cm?: number | null
           updated_at?: string
           user_id: string
           waist_cm?: number | null
+          water_retention?: number | null
           week_start_date: string
           weight_avg_kg?: number | null
         }
         Update: {
           created_at?: string
+          digestion_avg?: number | null
           energy_avg?: number | null
           hip_cm?: number | null
           id?: string
           identity_score?: number | null
+          libido_score?: number | null
+          mood_avg?: number | null
           notes?: string | null
+          pump_avg?: number | null
           thigh_cm?: number | null
           updated_at?: string
           user_id?: string
           waist_cm?: number | null
+          water_retention?: number | null
           week_start_date?: string
           weight_avg_kg?: number | null
         }

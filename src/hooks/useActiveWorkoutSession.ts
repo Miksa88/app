@@ -27,7 +27,7 @@ import { useNextSession } from './useNextSession';
 import { supabase } from '@/integrations/supabase/client';
 import { getTemplateById } from '@/utils/db/sessionTemplates';
 import { listSystemExercisesWithUuids } from '@/utils/db/exerciseLibrary';
-import { loadExerciseHistory } from '@/utils/db/exerciseHistory';
+import { loadExerciseHistoryBatch } from '@/utils/db/exerciseHistory';
 import { generateSessionSkeleton } from '@/utils/training/programGenerator';
 import { calcRecoveryMultiplier } from '@/utils/training/recoveryCalibration';
 import type {
@@ -233,6 +233,12 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
       }
 
       const profile = deriveTrainingProfile(clientId, profileRow);
+      // Pre-workout fatigue signal — klijent je rekla "Umorna" pre treninga.
+      // Forsira MAINTAIN u DPO (bez progressive overload). Briše se posle
+      // process-workout-completion EF-a.
+      profile.preWorkoutFatigue = status.bio.preWorkoutFatigue ?? false;
+      // Chronic DOMS — broj uzastopnih "Teško" feedback-ova; >=2 → −1 set.
+      profile.consecutiveHardWorkouts = status.bio.consecutiveHardWorkouts ?? 0;
       const skeleton = template.skeleton as SessionSkeleton;
       const { exercises: exerciseLibrary, uuidById } = libraryResult;
 
@@ -253,24 +259,35 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
         }
       }
 
+      // N+1 elimination — jedan IN query za sve kandidatne vežbe (P1-CODE-2).
       const exerciseHistoryMap = new Map<number, ExerciseHistorySample[]>();
-      await Promise.all(
-        candidateExerciseIds.map(async (id) => {
-          const uuid = uuidById.get(id);
-          if (!uuid) {
-            exerciseHistoryMap.set(id, []);
-            return;
-          }
-          try {
-            const history = await loadExerciseHistory(clientId, uuid);
-            exerciseHistoryMap.set(id, history);
-          } catch {
-            // Ako istorija ne moze da se load-uje (RLS, mreza), fallback na
-            // first-time estimate — ne blokiramo render.
-            exerciseHistoryMap.set(id, []);
-          }
-        }),
-      );
+      const uuidsToFetch: string[] = [];
+      const idByUuid = new Map<string, number>();
+      for (const id of candidateExerciseIds) {
+        const uuid = uuidById.get(id);
+        if (uuid) {
+          uuidsToFetch.push(uuid);
+          idByUuid.set(uuid, id);
+        } else {
+          exerciseHistoryMap.set(id, []);
+        }
+      }
+
+      try {
+        const batch = await loadExerciseHistoryBatch(clientId, uuidsToFetch);
+        for (const [uuid, history] of batch) {
+          const id = idByUuid.get(uuid);
+          if (id !== undefined) exerciseHistoryMap.set(id, history);
+        }
+        // Ensure svaki kandidat ima entry (prazan ako server nije vratio nista)
+        for (const id of candidateExerciseIds) {
+          if (!exerciseHistoryMap.has(id)) exerciseHistoryMap.set(id, []);
+        }
+      } catch {
+        // Ako istorija ne moze da se load-uje (RLS, mreza), fallback na
+        // first-time estimate — ne blokiramo render.
+        for (const id of candidateExerciseIds) exerciseHistoryMap.set(id, []);
+      }
 
       // 3. Full pipeline
       const result = generateSessionSkeleton({

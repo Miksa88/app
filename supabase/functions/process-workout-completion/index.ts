@@ -362,9 +362,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // mesocycle lifecycle (IT-15) će ih resetovati pri ročnom generisanju novog mezo.
 
   // 10. Compose new status + forsiraj server lastUpdatedAt
+  // Pre-workout fatigue signal važi samo za jednu sesiju — briši ga ovde.
   const nowIso = new Date().toISOString();
+  const prevBio = (status.bio ?? {}) as Record<string, unknown>;
+  const newBio = {
+    ...prevBio,
+    preWorkoutFatigue: false,
+    preWorkoutFatigueAnsweredAt: null,
+  };
   const newStatus: UserStatusShape = {
     ...status,
+    bio: newBio,
     training: newTraining,
     lastUpdatedAt: nowIso,
   };

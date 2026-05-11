@@ -204,41 +204,50 @@ describe("ActiveWorkout (IT-9 wiring)", () => {
   });
 
   it("Done Set klik okida useCompleteSet.mutate + useFinishWorkout.mutate + navigate", async () => {
-    await renderActiveWorkout();
+    // Fake timers — handleFinishWorkout delays mutation by 5s (Undo window).
+    vi.useFakeTimers();
+    try {
+      await renderActiveWorkout();
 
-    mockFinishWorkout.mockImplementation(
-      (
-        _input: unknown,
-        opts?: { onSuccess?: () => void },
-      ) => {
-        opts?.onSuccess?.();
-      },
-    );
+      mockFinishWorkout.mockImplementation(
+        (
+          _input: unknown,
+          opts?: { onSuccess?: () => void },
+        ) => {
+          opts?.onSuccess?.();
+        },
+      );
 
-    const doneBtn = screen.getByRole("button", { name: /Done Set 1/i });
-    fireEvent.click(doneBtn);
+      const doneBtn = screen.getByRole("button", { name: /Done Set 1/i });
+      fireEvent.click(doneBtn);
 
-    expect(mockCompleteSet).toHaveBeenCalledTimes(1);
-    const [completeArgs] = mockCompleteSet.mock.calls[0];
-    expect(completeArgs).toMatchObject({
-      userId: "client-a",
-      exerciseId: "uuid-ex-1",
-      setNumber: 1,
-      weightKg: 40,
-      reps: 10,
-      rir: 2,
-    });
+      expect(mockCompleteSet).toHaveBeenCalledTimes(1);
+      const [completeArgs] = mockCompleteSet.mock.calls[0];
+      expect(completeArgs).toMatchObject({
+        userId: "client-a",
+        exerciseId: "uuid-ex-1",
+        setNumber: 1,
+        weightKg: 40,
+        reps: 10,
+        rir: 2,
+      });
 
-    expect(mockHaptic).toHaveBeenCalledWith("medium");
-    expect(mockHaptic).toHaveBeenCalledWith("success");
+      expect(mockHaptic).toHaveBeenCalledWith("medium");
+      expect(mockHaptic).toHaveBeenCalledWith("success");
 
-    expect(mockFinishWorkout).toHaveBeenCalledTimes(1);
-    const [finishArgs] = mockFinishWorkout.mock.calls[0];
-    expect(finishArgs).toMatchObject({
-      clientId: "client-a",
-      sessionId: "sess-A1",
-    });
+      // Advance 5s — Undo window closes, finishWorkout actually fires.
+      vi.advanceTimersByTime(5000);
 
-    expect(mockNavigate).toHaveBeenCalledWith("/workout/complete");
+      expect(mockFinishWorkout).toHaveBeenCalledTimes(1);
+      const [finishArgs] = mockFinishWorkout.mock.calls[0];
+      expect(finishArgs).toMatchObject({
+        clientId: "client-a",
+        sessionId: "sess-A1",
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/workout/complete");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

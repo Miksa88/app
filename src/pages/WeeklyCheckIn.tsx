@@ -32,6 +32,7 @@ import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/PageHeader';
+import { PageTitle } from '@/components/PageTitle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +46,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useHaptic } from '@/hooks/useHaptic';
 import { useWeeklyCheckIn } from '@/hooks/mutations/useWeeklyCheckIn';
+import { usePreferredUnits } from '@/hooks/useUserPreferences';
+import {
+  cmToIn,
+  inToCm,
+  kgToLb,
+  lbToKg,
+  DEFAULT_UNITS,
+} from '@/services/userPreferencesService';
 import { supabase } from '@/integrations/supabase/client';
 
 // ============================================================================
@@ -93,14 +102,27 @@ export default function WeeklyCheckIn() {
   const { clientId } = useAuth();
   const haptic = useHaptic();
   const mutation = useWeeklyCheckIn(clientId);
+  const { data: units = DEFAULT_UNITS } = usePreferredUnits(clientId);
+  const isLb = units.weight === 'lb';
+  const isInch = units.length === 'in';
+  const weightUnitLabel = isLb ? 'lb' : 'kg';
+  const lengthUnitLabel = isInch ? 'in' : 'cm';
 
   // Forma state
   const [weightStr, setWeightStr] = useState<string>('');
   const [waistStr, setWaistStr] = useState<string>('');
   const [hipStr, setHipStr] = useState<string>('');
   const [thighStr, setThighStr] = useState<string>('');
+  const [lastKnownWeight, setLastKnownWeight] = useState<string>('');
   const [energyAvg, setEnergyAvg] = useState<number>(7);
   const [identityScore, setIdentityScore] = useState<number>(4);
+  // Recovery inputs (recoveryMultiplier feeder — bez ovog su statični posle onboardinga)
+  const [sleepHoursAvg, setSleepHoursAvg] = useState<number>(7);
+  const [stressAvg, setStressAvg] = useState<number>(3);
+  // Biofeedback (pocetnici.md §4.3) — libido pad → STOP Smart Cut;
+  // water retention >7 → waterRetentionAlert
+  const [libidoScore, setLibidoScore] = useState<number>(7);
+  const [waterRetentionScore, setWaterRetentionScore] = useState<number>(3);
   const [notes, setNotes] = useState<string>('');
 
   const [prefillLoading, setPrefillLoading] = useState<boolean>(true);
@@ -143,10 +165,13 @@ export default function WeeklyCheckIn() {
           return;
         }
 
-        const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        const rounded = Math.round(avg * 10) / 10;
+        const avgKg = values.reduce((a, b) => a + b, 0) / values.length;
+        const avgInDisplayUnit = isLb ? kgToLb(avgKg) : avgKg;
+        const rounded = Math.round(avgInDisplayUnit * 10) / 10;
+        const roundedStr = String(rounded);
+        setLastKnownWeight(roundedStr);
         if (weightStr === '') {
-          setWeightStr(String(rounded));
+          setWeightStr(roundedStr);
         }
       } catch {
         // Silent — prefill je nice-to-have, ne blokira formu
@@ -163,12 +188,19 @@ export default function WeeklyCheckIn() {
   }, [clientId]);
 
   // ============================================================================
-  // Validation
+  // Validation — value entered in user-preferred unit, converted to canonical
+  // (kg / cm) before validation + DB persist.
   // ============================================================================
-  const weightKg = parseDecimal(weightStr);
-  const waistCm = parseDecimal(waistStr);
-  const hipCm = parseDecimal(hipStr);
-  const thighCm = parseDecimal(thighStr);
+  const weightInput = parseDecimal(weightStr);
+  const weightKg = weightInput === null ? null : isLb ? lbToKg(weightInput) : weightInput;
+  const measurementInputToCm = (str: string): number | null => {
+    const v = parseDecimal(str);
+    if (v === null) return null;
+    return isInch ? inToCm(v) : v;
+  };
+  const waistCm = measurementInputToCm(waistStr);
+  const hipCm = measurementInputToCm(hipStr);
+  const thighCm = measurementInputToCm(thighStr);
 
   const isWeightValid =
     weightKg !== null && weightKg >= WEIGHT_KG_MIN && weightKg <= WEIGHT_KG_MAX;
@@ -201,6 +233,10 @@ export default function WeeklyCheckIn() {
         thighCm: thighCm,
         energyAvg,
         identityScore,
+        sleepHoursAvg,
+        stressAvg,
+        libidoScore,
+        waterRetentionScore,
         notes: notes.trim() || null,
       },
       {
@@ -225,14 +261,7 @@ export default function WeeklyCheckIn() {
     <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate(-1)} />
 
-      <div className="px-5 pt-2">
-        <h1 className="text-large-title text-foreground tracking-tight">
-          {t('weeklyCheckIn.title')}
-        </h1>
-        <p className="text-body text-muted-foreground mt-1">
-          {t('weeklyCheckIn.subtitle')}
-        </p>
-      </div>
+      <PageTitle title={t('weeklyCheckIn.title')} subtitle={t('weeklyCheckIn.subtitle')} compact />
 
       <form
         onSubmit={(e) => {
@@ -251,10 +280,7 @@ export default function WeeklyCheckIn() {
             >
               {t('weeklyCheckIn.fields.weight')}{' '}
               <span className="text-muted-foreground font-normal">
-                ({t('weeklyCheckIn.fields.weightUnit')})
-              </span>
-              <span className="text-destructive ml-0.5" aria-hidden="true">
-                *
+                ({weightUnitLabel})
               </span>
             </Label>
             <Input
@@ -271,11 +297,19 @@ export default function WeeklyCheckIn() {
               value={weightStr}
               onChange={(e) => setWeightStr(e.target.value)}
               aria-invalid={weightStr !== '' && !isWeightValid}
-              aria-required
             />
             <p className="text-caption-1 text-muted-foreground">
               {t('weeklyCheckIn.fields.weightHint')}
             </p>
+            {lastKnownWeight && weightStr !== lastKnownWeight && (
+              <button
+                type="button"
+                onClick={() => setWeightStr(lastKnownWeight)}
+                className="self-start text-caption-1 text-primary font-medium underline underline-offset-2 min-h-9"
+              >
+                {t('weeklyCheckIn.skipWeight')} ({lastKnownWeight}{weightUnitLabel})
+              </button>
+            )}
           </div>
         </Card>
 
@@ -289,7 +323,7 @@ export default function WeeklyCheckIn() {
             <MeasurementField
               id="weekly-waist"
               label={t('weeklyCheckIn.fields.waist')}
-              unit={t('weeklyCheckIn.fields.cmUnit')}
+              unit={lengthUnitLabel}
               value={waistStr}
               onChange={setWaistStr}
               invalid={waistStr !== '' && !isMeasurementValid(waistCm)}
@@ -297,7 +331,7 @@ export default function WeeklyCheckIn() {
             <MeasurementField
               id="weekly-hip"
               label={t('weeklyCheckIn.fields.hip')}
-              unit={t('weeklyCheckIn.fields.cmUnit')}
+              unit={lengthUnitLabel}
               value={hipStr}
               onChange={setHipStr}
               invalid={hipStr !== '' && !isMeasurementValid(hipCm)}
@@ -305,7 +339,7 @@ export default function WeeklyCheckIn() {
             <MeasurementField
               id="weekly-thigh"
               label={t('weeklyCheckIn.fields.thigh')}
-              unit={t('weeklyCheckIn.fields.cmUnit')}
+              unit={lengthUnitLabel}
               value={thighStr}
               onChange={setThighStr}
               invalid={thighStr !== '' && !isMeasurementValid(thighCm)}
@@ -340,6 +374,111 @@ export default function WeeklyCheckIn() {
               onValueChange={(vals) => setEnergyAvg(vals[0] ?? 1)}
               aria-label={t('weeklyCheckIn.fields.energyAvg')}
             />
+          </div>
+
+          {/* Sleep avg slider — feeduje recoveryMultiplier */}
+          <div className="flex flex-col gap-2 mt-5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="weekly-sleep"
+                className="text-subhead font-semibold text-foreground"
+              >
+                {t('weeklyCheckIn.fields.sleepAvg')}
+              </Label>
+              <span className="text-footnote font-semibold text-foreground tabular-nums">
+                {sleepHoursAvg.toFixed(1)} h
+              </span>
+            </div>
+            <Slider
+              id="weekly-sleep"
+              min={4}
+              max={11}
+              step={0.5}
+              value={[sleepHoursAvg]}
+              onValueChange={(vals) => setSleepHoursAvg(vals[0] ?? 7)}
+              aria-label={t('weeklyCheckIn.fields.sleepAvg')}
+            />
+          </div>
+
+          {/* Stress avg slider 1-5 */}
+          <div className="flex flex-col gap-2 mt-5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="weekly-stress"
+                className="text-subhead font-semibold text-foreground"
+              >
+                {t('weeklyCheckIn.fields.stressAvg')}
+              </Label>
+              <span className="text-footnote font-semibold text-foreground tabular-nums">
+                {stressAvg} / 5
+              </span>
+            </div>
+            <Slider
+              id="weekly-stress"
+              min={1}
+              max={5}
+              step={1}
+              value={[stressAvg]}
+              onValueChange={(vals) => setStressAvg(vals[0] ?? 3)}
+              aria-label={t('weeklyCheckIn.fields.stressAvg')}
+            />
+            <p className="text-caption-2 text-muted-foreground">
+              {t('weeklyCheckIn.fields.stressHint')}
+            </p>
+          </div>
+
+          {/* Libido score slider 1-10 — pocetnici.md §4.3 */}
+          <div className="flex flex-col gap-2 mt-5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="weekly-libido"
+                className="text-subhead font-semibold text-foreground"
+              >
+                {t('weeklyCheckIn.fields.libido')}
+              </Label>
+              <span className="text-footnote font-semibold text-foreground tabular-nums">
+                {libidoScore} / 10
+              </span>
+            </div>
+            <Slider
+              id="weekly-libido"
+              min={1}
+              max={10}
+              step={1}
+              value={[libidoScore]}
+              onValueChange={(vals) => setLibidoScore(vals[0] ?? 7)}
+              aria-label={t('weeklyCheckIn.fields.libido')}
+            />
+            <p className="text-caption-2 text-muted-foreground">
+              {t('weeklyCheckIn.fields.libidoHint')}
+            </p>
+          </div>
+
+          {/* Water retention slider 1-10 — pocetnici.md §4.3 */}
+          <div className="flex flex-col gap-2 mt-5">
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="weekly-water-retention"
+                className="text-subhead font-semibold text-foreground"
+              >
+                {t('weeklyCheckIn.fields.waterRetention')}
+              </Label>
+              <span className="text-footnote font-semibold text-foreground tabular-nums">
+                {waterRetentionScore} / 10
+              </span>
+            </div>
+            <Slider
+              id="weekly-water-retention"
+              min={1}
+              max={10}
+              step={1}
+              value={[waterRetentionScore]}
+              onValueChange={(vals) => setWaterRetentionScore(vals[0] ?? 3)}
+              aria-label={t('weeklyCheckIn.fields.waterRetention')}
+            />
+            <p className="text-caption-2 text-muted-foreground">
+              {t('weeklyCheckIn.fields.waterRetentionHint')}
+            </p>
           </div>
 
           {/* Identity score — segmented 1–5 */}

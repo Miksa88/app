@@ -3,9 +3,10 @@
 // `buildNutritionReasoning`) ostaje nepromenjen radi backward compat
 // sa AnalysisReport.tsx i drugim postojecim komponentama.
 import { calcBMR, calcTDEE } from "@/utils/nutrition/bmrTdee";
-import { recalcCalorieTarget, CALORIE_FLOOR } from "@/utils/nutrition/calorieTarget";
+import { recalcCalorieTarget, CALORIE_FLOOR, HASHIMOTO_MAX_DEFICIT } from "@/utils/nutrition/calorieTarget";
 import { calcMacroSplit } from "@/utils/nutrition/macroSplit";
 import type { CalorieTargetMode } from "@/types/nutrition";
+import type { MetabolicCondition } from "@/types/training";
 
 export interface OnboardingData {
   firstName?: string;
@@ -95,15 +96,25 @@ export function computePersonalizedPlan(data: OnboardingData): PersonalizedPlan 
 
   // Calorie target — idempotentno (Spec 03 Sekcija 3.3)
   const targetMode = mapOnboardingGoalToTargetMode(goal);
-  let dailyCalories = recalcCalorieTarget({ tdee, targetMode });
+  const metabolicConditions = (data.metabolicProfile ?? []) as MetabolicCondition[];
+  let dailyCalories = recalcCalorieTarget({ tdee, targetMode, metabolicConditions });
 
   // Beginner protection — agresivni deficit za pocetnice je rizican
   if ((goal === "fat_loss" || goal === "figure") && experience === "beginner") {
     dailyCalories = Math.max(Math.round(tdee * 0.88), CALORIE_FLOOR);  // -12% (blagi)
   }
 
-  // Macro split sa novim formulama (Spec 02 Sekcija 4)
-  const macros = calcMacroSplit({ weightKg: weight, totalCalories: dailyCalories });
+  // Hashimoto cap (pocetnici.md §1.1) — re-clamp posle beginner override-a
+  if (metabolicConditions.includes('hashimoto')) {
+    dailyCalories = Math.max(dailyCalories, Math.round(tdee * HASHIMOTO_MAX_DEFICIT));
+  }
+
+  // Macro split sa novim formulama (Spec 02 §4 + SREDNJE_NAPREDNE_V2 §3.3)
+  const macros = calcMacroSplit({
+    weightKg: weight,
+    totalCalories: dailyCalories,
+    experienceLevel: experience === 'intermediate' ? 'intermediate' : 'beginner',
+  });
   const protein = macros.proteinG;
   const carbs = macros.carbsG;
   const fat = macros.fatG;

@@ -91,6 +91,7 @@ export type MetabolicCondition =
   | 'hashimoto'
   | 'hypertension'
   | 'pcos'
+  | 'anemia'         // pocetnici.md §1.1 — Fe deficit (E-2, 2026-05-08)
   | 'other';
 
 export type StrengthTier = 'novice' | 'learner' | 'competent' | 'proficient' | 'advanced';
@@ -138,6 +139,20 @@ export interface ClientTrainingProfile {
   // Izvedeni
   recoveryMultiplier: number;  // 0.7 – 1.1
   strengthTier: StrengthTier;
+
+  /**
+   * Pre-workout fatigue signal (klijent je rekla "Umorna" pre treninga).
+   * Kad je true, DPO forsira MAINTAIN — bez progressive overload.
+   * Briše se posle završetka treninga (process-workout-completion EF).
+   */
+  preWorkoutFatigue?: boolean;
+
+  /**
+   * Counter uzastopnih "Teško" post-workout feedback-ova. Kad >= 2,
+   * calibrateVolume smanjuje serije za 1 (chronic DOMS protection,
+   * pocetnici.md §4.4).
+   */
+  consecutiveHardWorkouts?: number;
 }
 
 // ============================================================================
@@ -151,6 +166,19 @@ export interface ExerciseSlot {
   setsRange: [min: number, max: number];
   repRange: [min: number, max: number];
   priority: SlotPriority;
+
+  // pocetnici.md §2.2.C — Tempo string "ekc-pause_dno-konc-pause_vrh"
+  // Default 2-0-2-0 za compound, 2-1-2-1 za Hip Thrust pause variant,
+  // 3-0-1-0 za RDL stretch emphasis, 2-0-2-2 za abdukcija sustained tension.
+  tempo?: string;
+
+  // pocetnici.md §2.2.B — Ramp-up serije (50%×10-12, 75%×4-6) pre prve radne.
+  // Generišu se runtime u programGenerator-u za compound vežbe.
+  rampUpSets?: Array<{
+    weightPct: number;        // 0.50 ili 0.75 — % radne težine
+    reps: number;             // ciljani broj ponavljanja
+    targetRest: number;       // pauza posle, u sekundama
+  }>;
 
   // Popunjava se runtime u algoritmu (nije deo template-a)
   chosenExerciseId?: number;

@@ -9,12 +9,14 @@ import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Sparkles, Crown, Zap, Trash2, Check } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   archivePackage,
+  unarchivePackage,
   createPackage,
   getPackageById,
   updatePackage,
@@ -55,6 +57,9 @@ const PackageEditor = () => {
   const [tier, setTier] = useState<PackageTier>("entry");
   const [defaultFrequency, setDefaultFrequency] = useState<string>("");
   const [targetExperience, setTargetExperience] = useState<PackageTargetExperience>("any");
+  const [priceAmount, setPriceAmount] = useState<string>("");
+  const [priceCurrency, setPriceCurrency] = useState<string>("EUR");
+  const [durationDays, setDurationDays] = useState<string>("30");
 
   const [features, setFeatures] = useState<PackageFeatures>({
     trainingProgram: true,
@@ -83,6 +88,9 @@ const PackageEditor = () => {
         );
         setTargetExperience(pkg.targetExperience);
         setFeatures(pkg.features);
+        if (pkg.features.priceAmount !== undefined) setPriceAmount(String(pkg.features.priceAmount));
+        if (pkg.features.priceCurrency) setPriceCurrency(pkg.features.priceCurrency);
+        if (pkg.features.durationDays !== undefined) setDurationDays(String(pkg.features.durationDays));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -101,12 +109,18 @@ const PackageEditor = () => {
     }
     setSaving(true);
     try {
+      const featuresWithPricing: typeof features = {
+        ...features,
+        priceAmount: priceAmount ? Number(priceAmount) : undefined,
+        priceCurrency: priceAmount ? priceCurrency : undefined,
+        durationDays: durationDays ? Number(durationDays) : undefined,
+      };
       const payload = {
         trainerId: clientId,
         name: name.trim(),
         description: description.trim() || undefined,
         tier,
-        features,
+        features: featuresWithPricing,
         defaultWorkoutFrequency: defaultFrequency ? Number(defaultFrequency) : undefined,
         targetExperience,
       };
@@ -128,9 +142,21 @@ const PackageEditor = () => {
   const handleArchive = async () => {
     if (!existing) return;
     setSaving(true);
+    const packageId = existing.id;
     try {
-      await archivePackage(existing.id);
-      toast.success(t("packages.archived") ?? "Arhivirano");
+      await archivePackage(packageId);
+      // V3 §11: Undo toast — 5s window to un-archive.
+      toast(t("packages.archived") ?? "Arhivirano", {
+        duration: 5000,
+        action: {
+          label: t("common.undo"),
+          onClick: () => {
+            void unarchivePackage(packageId).catch((err) =>
+              toast.error(err instanceof Error ? err.message : String(err)),
+            );
+          },
+        },
+      });
       navigate("/trainer/packages");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -166,11 +192,10 @@ const PackageEditor = () => {
         }
       />
 
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">
-          {isNew ? t("trainerPackages.create") : (existing?.name ?? "")}
-        </h1>
-      </div>
+      <PageTitle
+        title={isNew ? t("trainerPackages.create") : (existing?.name ?? "")}
+        compact
+      />
 
       <div className="px-5 pt-4 space-y-4">
         <motion.div {...fadeUp(0.05)}>
@@ -212,28 +237,101 @@ const PackageEditor = () => {
 
         <motion.div {...fadeUp(0.08)}>
           <label className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-            Naziv
+            {t("packages.fieldName")}
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="npr. Beginner Self-Serve"
+            placeholder={t("packages.namePlaceholder")}
             className={inputClass}
           />
         </motion.div>
 
         <motion.div {...fadeUp(0.1)}>
           <label className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-            Opis
+            {t("packages.fieldDescription")}
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            placeholder="Kratki pitch za korisnike"
+            placeholder={t("packages.descriptionPlaceholder")}
             className={`${inputClass} resize-none`}
           />
+        </motion.div>
+
+        {/* Pricing & duration — JSONB stored u features (no DB migracija) */}
+        <motion.div {...fadeUp(0.11)}>
+          <Card className="p-4 space-y-3">
+            <p className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">
+              {t("packages.pricingTitle")}
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="text-caption-2 text-muted-foreground mb-1 block">
+                  {t("packages.priceLabel")}
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={priceAmount}
+                  onChange={(e) => setPriceAmount(e.target.value)}
+                  placeholder="0.00"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="text-caption-2 text-muted-foreground mb-1 block">
+                  {t("packages.currencyLabel")}
+                </label>
+                <select
+                  value={priceCurrency}
+                  onChange={(e) => setPriceCurrency(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="EUR">EUR</option>
+                  <option value="RSD">RSD</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-caption-2 text-muted-foreground mb-1 block">
+                {t("packages.durationLabel")}
+              </label>
+              <div className="flex gap-2">
+                {[
+                  { value: "7", label: "7 d" },
+                  { value: "30", label: "30 d" },
+                  { value: "90", label: "3 m" },
+                  { value: "180", label: "6 m" },
+                  { value: "365", label: "1 g" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setDurationDays(opt.value)}
+                    aria-pressed={durationDays === opt.value}
+                    className={`flex-1 py-2 rounded-xl text-callout font-semibold min-h-11 ${
+                      durationDays === opt.value
+                        ? "gradient-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-caption-2 text-muted-foreground/70 mt-1.5">
+                {t("packages.durationHint")}
+              </p>
+            </div>
+          </Card>
         </motion.div>
 
         <motion.div {...fadeUp(0.12)}>

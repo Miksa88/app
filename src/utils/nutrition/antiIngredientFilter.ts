@@ -19,7 +19,7 @@ import type { MetabolicCondition } from '@/types/training';
 // ============================================================================
 //
 // Apstrakcija da filter moze da radi sa nasim novim FoodItem tipom (nutrition.ts)
-// ali i sa legacy FoodItem iz data/foodDatabase.ts (postojeci Lovable kod).
+// ali i sa legacy FoodItem iz data/foodDatabase.ts.
 
 export interface FoodLike {
   ingredientsList?: string[];      // novi tip

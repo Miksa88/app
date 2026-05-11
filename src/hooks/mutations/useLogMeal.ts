@@ -299,7 +299,10 @@ export function useSkipMeal(options: UseLogMealOptions = {}) {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["userStatus", vars.clientId] });
       if (!options.silent) {
-        toast.success(t("food.mealSkipped"));
+        // Skipped meal — zero-guilt (pocetnici.md §5.2). Bez kompenzacije.
+        toast.success("Bez brige.", {
+          description: "Sledeći obrok je opet po planu. Bez kompenzacije.",
+        });
       }
     },
     onError: (err) => {
@@ -338,7 +341,12 @@ export function useReplaceMeal(options: UseLogMealOptions = {}) {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["userStatus", vars.clientId] });
       if (!options.silent) {
-        toast.success(t("food.mealReplaced"));
+        // Mental Reset (pocetnici.md §5.2) — zero-guilt poruka kad klijent
+        // zameni plan obrok. NE kažnjavamo, NE preporučujemo kompenzaciju.
+        toast.success("Sve je u redu.", {
+          description:
+            "Sledeći obrok je opet po planu. Jedan dan ne menja ništa — 30 dana menja sve.",
+        });
       }
     },
     onError: (err) => {

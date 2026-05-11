@@ -11,6 +11,8 @@ import { MOTION_DURATION } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages } from "@/hooks/useMessages";
 import { findTrainerForClient } from "@/services/messageService";
+import { EmptyState } from "@/components/ui/empty-state";
+import TrainerVacationBanner from "@/components/chat/TrainerVacationBanner";
 
 const Chat = () => {
   const [input, setInput] = useState("");
@@ -74,11 +76,14 @@ const Chat = () => {
           <NavBackButton onClick={() => navigate("/home")} />
           <UserAvatar imageUrl={trainerAvatar} alt="Trainer" size="sm" />
           <div>
-            <h1 className="text-headline text-foreground">Trainer <span aria-hidden="true">💜</span></h1>
+            <h1 className="text-headline text-foreground">{t("chat.trainerHeader")} <span aria-hidden="true">💜</span></h1>
             <p className="text-caption-1 text-muted-foreground">{t("chat.repliesWithin")}</p>
           </div>
         </div>
       </div>
+
+      {/* Vacation banner — V3 §12 */}
+      <TrainerVacationBanner trainerId={trainerId} />
 
       {/* Messages */}
       <div
@@ -88,18 +93,14 @@ const Chat = () => {
         className="flex-1 min-h-0 px-5 py-4 space-y-3 overflow-y-auto hide-scrollbar"
       >
         {messages.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="h-full flex flex-col items-center justify-center text-center px-6"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-              <MessageCircle size={28} className="text-primary" aria-hidden="true" />
-            </div>
-            <h2 className="text-title-3 font-bold text-foreground mb-2">{t("chat.emptyTitle")}</h2>
-            <p className="text-body text-muted-foreground max-w-xs">{t("chat.emptyBody")}</p>
-          </motion.div>
+          <div className="h-full flex items-center justify-center px-6">
+            <EmptyState
+              icon={MessageCircle}
+              title={t("chat.emptyTitle")}
+              description={t("chat.emptyBody")}
+              className="w-full max-w-sm"
+            />
+          </div>
         ) : (
           messages.map((msg, i) => {
             const isMe = msg.senderRole === "client";

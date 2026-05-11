@@ -85,7 +85,7 @@ export const PageHeader = ({
       {/* Safe-area top inset (Dynamic Island / notch) */}
       <div style={{ height: "env(safe-area-inset-top, 0px)" }} aria-hidden="true" className="relative" />
 
-      {/* Action bar — Liquid Glass circular buttons only, NO title (title ide u content kao <h1>) */}
+      {/* Action bar — Liquid Glass circular buttons only, NO title (title ide u content kao <h1>). */}
       <div className="relative h-11 flex items-center justify-between px-4">
         {/* Left: Back button (Liquid Glass, chevron-only, WhatsApp/TikTok stil) */}
         <div className="flex items-center min-w-0">
@@ -114,6 +114,9 @@ export const PageHeader = ({
           )}
         </div>
       </div>
+
+      {/* Breathing room below back button — sprečava da H1/content izgleda zalepljen za nav. */}
+      <div className="relative h-2" aria-hidden="true" />
     </header>
   );
 };

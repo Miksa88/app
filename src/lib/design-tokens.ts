@@ -89,3 +89,46 @@ export const STATUS_SOFT = {
 } as const;
 
 export type StatusSoftKey = keyof typeof STATUS_SOFT;
+
+// ============================================================================
+// RADIUS — 3-tier scale (UI audit 2026-05-11 Pillar 2)
+// Card-level surfaces, pill controls, chip/icon containers.
+// Koristi ove utility-je umesto inline rounded-* da bi svuda imao istu skalu.
+// ============================================================================
+
+export const RADIUS = {
+  /** Hero surfaces, signature paywall/analysis cards — rounded-3xl. */
+  hero: "rounded-3xl",
+  /** Cards, modals, large sheets — rounded-2xl. */
+  card: "rounded-2xl",
+  /** Pills, status badges — rounded-full. */
+  pill: "rounded-full",
+  /** Chips, icon containers, sub-buttons — rounded-xl. */
+  chip: "rounded-xl",
+  /** Inline tags, small icons — rounded-lg. */
+  inline: "rounded-lg",
+} as const;
+
+export type RadiusKey = keyof typeof RADIUS;
+
+// ============================================================================
+// IOS_SWITCH — track + thumb sizing (UI audit 2026-05-11 Pillar 5)
+// Apple iOS HIG metrics; jedan source-of-truth za sve switch toggle UI.
+// ============================================================================
+
+export const IOS_SWITCH = {
+  track: "w-[51px] h-[31px]",
+  thumb: "w-[27px] h-[27px]",
+} as const;
+
+// ============================================================================
+// HERO_PADDING — top-of-page hero block padding (UI audit 2026-05-11 Pillar 5)
+// Uniformno koristi `pt-3` posle PageHeader, `pt-14` kad nema PageHeader-a.
+// ============================================================================
+
+export const HERO_PADDING = {
+  /** Kad ekran ima PageHeader iznad — vec ima safe-area + sticky chrome. */
+  afterHeader: "pt-2",
+  /** Kad ekran nema PageHeader (Home) — treba safe-area inset. */
+  standalone: "pt-14",
+} as const;

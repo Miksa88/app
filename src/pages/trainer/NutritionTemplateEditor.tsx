@@ -4,37 +4,39 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp , MOTION_DURATION, IOS_SPRING} from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
-import { ArrowLeft, Check, ChevronDown, Info, Star, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Check, ChevronDown, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useHaptic } from "@/hooks/useHaptic";
 import { type NutritionTemplate, type TemplateMealSlot, MEAL_PRESETS, DEFAULT_5_MEAL_SLOTS } from "@/utils/mealPlanGenerator";
+import { MASTER_NUTRITION } from "@/data/masterNutrition";
+import { type DefaultLevel, DEFAULT_LEVELS, getDefaultLevel, setDefaultLevel } from "@/utils/defaultAssignment";
 import { useNutritionTemplate, useUpsertNutritionTemplate } from "@/hooks/useNutritionTemplates";
-import ProgramTargeting, { ProgramSelections, buildTagsFromSelections, parseTagsToSelections } from "@/components/trainer/ProgramTargeting";
 
 const MACRO_PRESETS = [
-  { id: "highProtein", label: "nutrition.highProtein", p: 40, c: 35, f: 25, desc: "Best for fat loss and muscle retention" },
-  { id: "balanced", label: "nutrition.balanced", p: 30, c: 40, f: 30, desc: "Sustainable for general fitness" },
-  { id: "highCarb", label: "nutrition.highCarb", p: 25, c: 50, f: 25, desc: "Best for high-intensity training and bulking" },
-  { id: "custom", label: "nutrition.custom", p: 30, c: 40, f: 30, desc: "" },
+  { id: "highProtein", labelKey: "nutrition.highProtein", p: 40, c: 35, f: 25, descKey: "nutrition.highProteinDesc" },
+  { id: "balanced", labelKey: "nutrition.balanced", p: 30, c: 40, f: 30, descKey: "nutrition.balancedDesc" },
+  { id: "highCarb", labelKey: "nutrition.highCarb", p: 25, c: 50, f: 25, descKey: "nutrition.highCarbDesc" },
+  { id: "custom", labelKey: "nutrition.custom", p: 30, c: 40, f: 30, descKey: "" },
 ];
 
-const GOAL_TYPES: { id: NutritionTemplate['goalType']; labelKey: string; desc: string }[] = [
-  { id: "cut", labelKey: "nutrition.cut", desc: "Caloric deficit to reduce body fat" },
-  { id: "bulk", labelKey: "nutrition.bulk", desc: "Caloric surplus for muscle growth" },
-  { id: "maintain", labelKey: "nutrition.maintain", desc: "Maintain weight, improve composition" },
-  { id: "health", labelKey: "nutrition.health", desc: "Balanced nutrition for overall health" },
+const GOAL_TYPES: { id: NutritionTemplate['goalType']; labelKey: string; descKey: string }[] = [
+  { id: "cut", labelKey: "nutrition.cut", descKey: "nutrition.cutDesc" },
+  { id: "bulk", labelKey: "nutrition.bulk", descKey: "nutrition.bulkDesc" },
+  { id: "maintain", labelKey: "nutrition.maintain", descKey: "nutrition.maintainDesc" },
+  { id: "health", labelKey: "nutrition.health", descKey: "nutrition.healthDesc" },
 ];
 
 const RESTRICTION_OPTIONS = [
-  { id: "lactose", label: "Lactose free" },
-  { id: "gluten", label: "Gluten free" },
-  { id: "vegetarian", label: "Vegetarian" },
-  { id: "vegan", label: "Vegan" },
-  { id: "no_pork", label: "No pork" },
-  { id: "no_seafood", label: "No seafood" },
-  { id: "low_sugar", label: "Low sugar" },
-  { id: "low_sodium", label: "Low sodium" },
+  { id: "lactose", labelKey: "nutrition.restLactose" },
+  { id: "gluten", labelKey: "nutrition.restGluten" },
+  { id: "vegetarian", labelKey: "nutrition.restVegetarian" },
+  { id: "vegan", labelKey: "nutrition.restVegan" },
+  { id: "no_pork", labelKey: "nutrition.restNoPork" },
+  { id: "no_seafood", labelKey: "nutrition.restNoSeafood" },
+  { id: "low_sugar", labelKey: "nutrition.restLowSugar" },
+  { id: "low_sodium", labelKey: "nutrition.restLowSodium" },
 ];
 
 const SLOT_TYPE_LABELS: Record<string, string> = {
@@ -67,9 +69,13 @@ const NutritionTemplateEditor = () => {
   const { t } = useLanguage();
   const { toast } = useToast();
   const haptic = useHaptic();
-  const isNew = !id || id === "new";
+  // `default-master-*` ID = master template iz hardkodirane liste. Save uvek pravi NOVI red.
+  const isDefault = !!id?.startsWith("default-");
+  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
+  const isNew = !id || id === "new" || isDefault;
 
   const { data: existing } = useNutritionTemplate(isNew ? null : id);
+  const masterTemplate = isDefault ? MASTER_NUTRITION.find((tmpl) => tmpl.id === defaultSourceId) : null;
   const upsertMutation = useUpsertNutritionTemplate();
 
   const [name, setName] = useState("");
@@ -87,30 +93,27 @@ const NutritionTemplateEditor = () => {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [mealCount, setMealCount] = useState(5);
   const [mealSlots, setMealSlots] = useState<TemplateMealSlot[]>([...DEFAULT_5_MEAL_SLOTS]);
-
-  const [selections, setSelections] = useState<ProgramSelections>({
-    experience: null, goal: null, frequency: null, limitations: [], isFreeTrial: false,
-  });
+  const [defaultLevel, setDefaultLevelState] = useState<DefaultLevel | null>(null);
 
   useEffect(() => {
-    if (existing) {
-      setName(existing.name);
-      setDescription(existing.description ?? "");
-      setGoalType(existing.goalType);
-      setMacroPreset(existing.macroPreset);
-      setMacros(existing.macroRatio);
-      setCalorieStrategy(existing.calorieStrategy);
-      if (existing.fixedCalories) setFixedCalories(existing.fixedCalories);
-      if (existing.calorieRange) setCalorieRange(existing.calorieRange);
-      setDifferentOnTrainingDays(existing.differentOnTrainingDays);
-      if (existing.trainingDayModifier !== undefined) setTrainingDayMod(existing.trainingDayModifier);
-      if (existing.restDayModifier !== undefined) setRestDayMod(existing.restDayModifier);
-      setRestrictions(existing.restrictions);
-      setMealCount(existing.mealCount);
-      setMealSlots(existing.mealSlots);
-      setSelections(parseTagsToSelections(existing.tags));
-    }
-  }, [existing]);
+    const src = existing ?? masterTemplate;
+    if (!src) return;
+    setName(src.name);
+    setDescription(src.description ?? "");
+    setGoalType(src.goalType);
+    setMacroPreset(src.macroPreset);
+    setMacros(src.macroRatio);
+    setCalorieStrategy(src.calorieStrategy);
+    if (src.fixedCalories) setFixedCalories(src.fixedCalories);
+    if (src.calorieRange) setCalorieRange(src.calorieRange);
+    setDifferentOnTrainingDays(src.differentOnTrainingDays);
+    if (src.trainingDayModifier !== undefined) setTrainingDayMod(src.trainingDayModifier);
+    if (src.restDayModifier !== undefined) setRestDayMod(src.restDayModifier);
+    setRestrictions(src.restrictions);
+    setMealCount(src.mealCount);
+    setMealSlots(src.mealSlots);
+    setDefaultLevelState(getDefaultLevel(src.tags));
+  }, [existing, masterTemplate]);
 
   const toggle = (section: string) => setOpenSection(prev => prev === section ? null : section);
 
@@ -152,7 +155,7 @@ const NutritionTemplateEditor = () => {
         restDayModifier: differentOnTrainingDays ? restDayMod : undefined,
         differentOnTrainingDays,
         restrictions,
-        tags: buildTagsFromSelections(selections),
+        tags: setDefaultLevel(existing?.tags ?? masterTemplate?.tags ?? [], defaultLevel),
         mealCount,
         mealSlots,
       });
@@ -215,6 +218,41 @@ const NutritionTemplateEditor = () => {
           />
         </motion.div>
 
+        {/* Default-for picker — auto-assignment po onboarding nivou */}
+        <motion.div {...fadeUp(0.07)}>
+          <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block px-1">
+            {t("training.defaultForLevel")}
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => setDefaultLevelState(null)}
+              className={`min-h-12 rounded-xl text-footnote font-semibold transition-colors border-2 px-2 ${
+                defaultLevel === null ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-card card-shadow text-foreground"
+              }`}
+            >
+              {t("training.defaultManual")}
+            </button>
+            {DEFAULT_LEVELS.map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => setDefaultLevelState(lvl)}
+                className={`min-h-12 rounded-xl text-footnote font-semibold transition-colors border-2 px-2 ${
+                  defaultLevel === lvl ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-card card-shadow text-foreground"
+                }`}
+              >
+                {t(`training.level_${lvl}`)}
+              </button>
+            ))}
+          </div>
+          <p className="text-caption-2 text-muted-foreground/80 mt-1.5 px-1 leading-snug">
+            {defaultLevel === null
+              ? t("training.defaultManualHint")
+              : t("training.defaultAutoHint").replace("{level}", t(`training.level_${defaultLevel}`))}
+          </p>
+        </motion.div>
+
         {/* Section 2: Goal Type */}
         <motion.div {...fadeUp(0.1)} className="bg-card rounded-xl card-shadow overflow-hidden">
           <SectionHeader id="goal" title={t("nutrition.goalType")} summary={t(GOAL_TYPES.find(g => g.id === goalType)?.labelKey || "")} />
@@ -239,7 +277,7 @@ const NutritionTemplateEditor = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-body font-medium text-foreground">{t(g.labelKey)}</p>
-                          <p className="text-caption-1 text-muted-foreground">{g.desc}</p>
+                          <p className="text-caption-1 text-muted-foreground">{t(g.descKey)}</p>
                         </div>
                         {goalType === g.id && (
                           <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0">
@@ -283,14 +321,14 @@ const NutritionTemplateEditor = () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-body font-medium text-foreground">
-                            {t(preset.label)}
+                            {t(preset.labelKey)}
                             {preset.id !== "custom" && (
                               <span className="text-caption-1 text-muted-foreground ml-2">
                                 P:{preset.p}% C:{preset.c}% F:{preset.f}%
                               </span>
                             )}
                           </p>
-                          {preset.desc && <p className="text-caption-1 text-muted-foreground">{preset.desc}</p>}
+                          {preset.descKey && <p className="text-caption-1 text-muted-foreground">{t(preset.descKey)}</p>}
                         </div>
                         {macroPreset === preset.id && (
                           <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0">
@@ -336,9 +374,18 @@ const NutritionTemplateEditor = () => {
                     <div className="bg-destructive" style={{ width: `${macros.fat}%` }} />
                   </div>
                   <div className="flex justify-between text-caption-2 text-muted-foreground">
-                    <span>🟦 Protein {macros.protein}%</span>
-                    <span>🟨 Carbs {macros.carbs}%</span>
-                    <span>🟥 Fat {macros.fat}%</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-info" aria-hidden="true" />
+                      {t("nutrition.protein")} {macros.protein}%
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-warning" aria-hidden="true" />
+                      {t("nutrition.carbs")} {macros.carbs}%
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-destructive" aria-hidden="true" />
+                      {t("nutrition.fat")} {macros.fat}%
+                    </span>
                   </div>
                 </div>
               </motion.div>
@@ -364,9 +411,9 @@ const NutritionTemplateEditor = () => {
               >
                 <div className="px-4 pb-4 space-y-2">
                   {([
-                    { id: "auto" as const, label: t("nutrition.autoByProfile"), desc: "Algorithm calculates BMR × activity ± goal adjustment" },
-                    { id: "fixed" as const, label: t("nutrition.fixedTarget"), desc: "Set a specific calorie target" },
-                    { id: "range" as const, label: t("nutrition.calorieRange"), desc: "Set a calorie range" },
+                    { id: "auto" as const, label: t("nutrition.autoByProfile"), desc: t("nutrition.autoByProfileDesc") },
+                    { id: "fixed" as const, label: t("nutrition.fixedTarget"), desc: t("nutrition.fixedTargetDesc") },
+                    { id: "range" as const, label: t("nutrition.calorieRange"), desc: t("nutrition.calorieRangeDesc") },
                   ]).map(opt => (
                     <button
                       key={opt.id}
@@ -498,7 +545,7 @@ const NutritionTemplateEditor = () => {
                         restrictions.includes(r.id) ? "bg-primary/5 border-2 border-primary" : "bg-muted/50 border-2 border-transparent"
                       }`}
                     >
-                      <span className="text-body text-foreground">{r.label}</span>
+                      <span className="text-body text-foreground">{t(r.labelKey)}</span>
                       {restrictions.includes(r.id) && (
                         <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center">
                           <Check size={ICON_SIZE.xs} className="text-primary-foreground" />
@@ -515,12 +562,8 @@ const NutritionTemplateEditor = () => {
           </AnimatePresence>
         </motion.div>
 
-        {/* Section 6: Target Audience — hide limitations for nutrition */}
-        <motion.div {...fadeUp(0.3)}>
-          <ProgramTargeting selections={selections} onChange={setSelections} hideLimitations />
-        </motion.div>
-
-        {/* Section 7: Meal Structure — interactive */}
+        {/* Section 6: Meal Structure — interactive (targeting accordion uklonjen;
+            algoritam čita nivo/cilj/frekvenciju/restrikcije iz client onboarding-a). */}
         <motion.div {...fadeUp(0.35)} className="bg-card rounded-xl card-shadow overflow-hidden">
           <SectionHeader
             id="meals"
@@ -640,12 +683,9 @@ const NutritionTemplateEditor = () => {
 
         {/* Save button */}
         <motion.div {...fadeUp(0.4)} className="pt-2 pb-8">
-          <button
-            onClick={handleSave}
-            className="w-full gradient-primary text-primary-foreground py-4 rounded-xl text-body font-semibold ios-row-h shadow-fab"
-          >
+          <Button onClick={handleSave} variant="cta" size="xl">
             {isNew ? t("nutrition.saveTemplate") : t("nutrition.saveTemplate")}
-          </button>
+          </Button>
         </motion.div>
       </div>
     </div>

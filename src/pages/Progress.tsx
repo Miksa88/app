@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import CircularProgress from '@/components/CircularProgress';
+import { PageTitle } from '@/components/PageTitle';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserStatus } from '@/hooks/useUserStatus';
@@ -84,9 +85,7 @@ const Progress = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
-      <div className="px-5 pt-14 pb-2">
-        <h1 className="text-large-title text-foreground">{t('progress.title')}</h1>
-      </div>
+      <PageTitle title={t('progress.title')} />
 
       <div className="px-5 space-y-3 mt-3">
         {/* Compact level card */}
@@ -278,7 +277,7 @@ const AdaptationTimeline = ({ status }: AdaptationTimelineProps) => {
     return (
       <Card className="p-6 text-center">
         <Sparkles size={28} className="text-muted-foreground/40 mx-auto mb-2" />
-        <p className="text-body text-foreground">Nema podataka o adaptaciji</p>
+        <p className="text-body text-foreground">{t("progress.adaptation.noData")}</p>
       </Card>
     );
   }
@@ -289,40 +288,40 @@ const AdaptationTimeline = ({ status }: AdaptationTimelineProps) => {
     events.push({
       icon: RefreshCcw,
       iconColor: 'text-info',
-      title: 'Deload nedelja aktivna',
-      description: 'Telu je potreban oporavak. Kalorije na maintenance, volume na -50%.',
+      title: t("progress.adaptation.deloadTitle"),
+      description: t("progress.adaptation.deloadDesc"),
     });
   }
   if (status.training.isInReturnFromBreak) {
     events.push({
       icon: RotateCcw,
       iconColor: 'text-info',
-      title: 'Return from Break',
-      description: 'Polako se vraćamo u ritam — laganije sledećih nekoliko sesija.',
+      title: t("progress.adaptation.returnFromBreakTitle"),
+      description: t("progress.adaptation.returnFromBreakDesc"),
     });
   }
   if (status.bio.cyclePhase === 'luteal') {
     events.push({
       icon: Moon,
       iconColor: 'text-secondary',
-      title: 'Lutealna faza',
-      description: 'Algoritam je dodao +150 kcal carbs i smanjio intenzitet treninga 5%.',
+      title: t("progress.adaptation.lutealTitle"),
+      description: t("progress.adaptation.lutealDesc"),
     });
   }
   if (status.bio.cyclePhase === 'menstrual') {
     events.push({
       icon: Droplets,
       iconColor: 'text-destructive',
-      title: 'Menstrualna faza',
-      description: 'Težina danas nije pouzdan signal — adaptaciju prebacujemo za sledeću nedelju.',
+      title: t("progress.adaptation.menstrualTitle"),
+      description: t("progress.adaptation.menstrualDesc"),
     });
   }
   if (status.training.activePauseEvent?.type === 'illness') {
     events.push({
       icon: Thermometer,
       iconColor: 'text-warning',
-      title: 'Oporavak od bolesti',
-      description: 'Recovery -0.15 i kalorije -5% (ne -20%) dok telo ne stabilizuje.',
+      title: t("progress.adaptation.illnessTitle"),
+      description: t("progress.adaptation.illnessDesc"),
     });
   }
 

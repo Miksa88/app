@@ -44,6 +44,8 @@ export type DPOReason =
   | 'hit_top'
   | 'missed_top'
   | 'rfb_deload'
+  | 'rfb_maintain_90pct'
+  | 'rfb_progress_90pct'
   | 'maintain';
 
 export interface DPOResult {
@@ -62,6 +64,11 @@ const COMPOUND_UNILATERAL_RATIO = 0.3;
 // (Bilo 0.9 / -10% — silent drift; usklađeno sa spec-om 2026-05-04.)
 const MINI_DELOAD_MULTIPLIER = 0.8;
 const MINI_DELOAD_RFB_MULTIPLIER = 0.8;
+// pocetnici.md §5.4 (A-5, 2026-05-08): pauza <7 dana → re-entry sa 90%
+// snage prve nedelje. Primenjuje se u PROGRESS i MAINTAIN modovima dok je
+// `returnFromBreakActive` true. Klijentkinja ne sme da forsira full intensity
+// odmah po povratku — tetive i CNS treba 1 nedelju za reaktivaciju.
+const RFB_PROGRESS_MULTIPLIER = 0.90;
 
 function estimateInitialWeight(
   profile: ClientProfileSnapshot,
@@ -77,6 +84,18 @@ function estimateInitialWeight(
 function roundToIncrement(weight: number, increment: number): number {
   if (increment <= 0) return weight;
   return Math.round(weight / increment) * increment;
+}
+
+// SREDNJE_NAPREDNE_V2 §0.3 + §2.2.F: intermediate ima manje skokove
+// (Hip Thrust +2.5 vs +5 beginner, RDL +2.5 vs +5, DB +1 vs +2 itd.).
+// Halve the increment, floor at 1kg (mikro-plate / DB granular minimum).
+function getEffectiveIncrement(
+  exercise: ExerciseMeta,
+  experienceLevel: ClientProfileSnapshot['experienceLevel'],
+): number {
+  if (experienceLevel !== 'intermediate') return exercise.weight_increment;
+  const halved = exercise.weight_increment / 2;
+  return Math.max(1, halved);
 }
 
 /**
@@ -151,19 +170,32 @@ export function calcNextWeight(
   }
 
   if (loadingMode === 'MAINTAIN') {
+    const w = returnFromBreakActive ? baseWeight * RFB_PROGRESS_MULTIPLIER : baseWeight;
     return {
-      targetWeight: Math.max(0, roundToIncrement(baseWeight, exercise.weight_increment)),
+      targetWeight: Math.max(0, roundToIncrement(w, exercise.weight_increment)),
       targetReps: slotRepsTop,
       targetRIR: slotTargetRIR,
       loadingMode,
-      reason: 'maintain',
+      reason: returnFromBreakActive ? 'rfb_maintain_90pct' : 'maintain',
     };
   }
 
-  // PROGRESS
-  if (topSet.reps >= slotRepsTop) {
+  // PROGRESS — pocetnici.md §5.4: ako je return from break, clamp na 90% čak i
+  // kad je topSet hit. Tek druge nedelje ide pun progres.
+  if (returnFromBreakActive) {
     return {
-      targetWeight: Math.max(0, roundToIncrement(baseWeight + exercise.weight_increment, exercise.weight_increment)),
+      targetWeight: Math.max(0, roundToIncrement(baseWeight * RFB_PROGRESS_MULTIPLIER, exercise.weight_increment)),
+      targetReps: slotRepsTop,
+      targetRIR: slotTargetRIR,
+      loadingMode,
+      reason: 'rfb_progress_90pct',
+    };
+  }
+
+  if (topSet.reps >= slotRepsTop) {
+    const effInc = getEffectiveIncrement(exercise, profile.experienceLevel);
+    return {
+      targetWeight: Math.max(0, roundToIncrement(baseWeight + effInc, effInc)),
       targetReps: slotRepsTop,
       targetRIR: slotTargetRIR,
       loadingMode,

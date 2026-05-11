@@ -44,6 +44,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
+  getMesocycleWeeks,
   handleMesocycleEnd,
   hasMesocycleEnded,
   shouldStartDeload,
@@ -59,9 +60,10 @@ declare const Deno: {
   env: { get: (key: string) => string | undefined };
 };
 
-// Model B (Mihajlo/Ivana, 2026-05-04): 4 load + 1 deload = 5 nedelja po ciklusu.
-// Spec 01_TRAINING_FLOW_MASTER.md §6.1 line 1178.
-const MESOCYCLE_WEEKS = 5;
+// pocetnici.md §2.1: beginner = 7 nedelja (6+1).
+// SREDNJE_NAPREDNE_V2 §2.1: intermediate = 6 nedelja (5+1).
+// Per-row weeks count se izvodi iz status.bio.experienceLevel preko
+// getMesocycleWeeks().
 
 // ----------------------------------------------------------------------------
 // Types — opaque shape koji citamo iz status_json JSONB-a
@@ -75,6 +77,10 @@ interface UserStatusTrainingShape {
   isInDeload: boolean;
   currentMesocycleIndex: number;
   currentMicrocycleIndex: number;
+  // SREDNJE_NAPREDNE_V2 §5.4: Diet Break tracking
+  dietBreakActive?: boolean;
+  dietBreakStartedAt?: string | null;
+  mesocyclesSinceDietBreak?: number;
   [key: string]: unknown;
 }
 
@@ -286,6 +292,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       try {
         const experienceLevel: ExperienceLevel =
           status.bio?.experienceLevel ?? "intermediate";
+        const mesocycleWeeks = getMesocycleWeeks(experienceLevel);
         const { newQueue, mesocycleJustEnded } = handleMesocycleEnd(
           queue,
           {
@@ -294,10 +301,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
             activeTemplateId: training.activeTemplateId,
           },
           template.skeleton,
-          MESOCYCLE_WEEKS,
+          mesocycleWeeks,
         );
 
         if (mesocycleJustEnded) {
+          // SREDNJE_NAPREDNE_V2 §5.4: brojač mezociklusa od poslednjeg Diet Break-a.
+          // Posle 4. mezociklusa (intermediate) → auto-trigger 2-nedeljni Diet Break.
+          const prevCount = training.mesocyclesSinceDietBreak ?? 0;
+          const newCount = prevCount + 1;
+          const triggerDietBreak =
+            experienceLevel === "intermediate" && newCount >= 4 && !training.dietBreakActive;
+
           newStatus = {
             ...status,
             training: {
@@ -307,6 +321,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
               currentMesocycleIndex: training.currentMesocycleIndex + 1,
               currentMicrocycleIndex: 0,
               isInDeload: false,
+              mesocyclesSinceDietBreak: triggerDietBreak ? 0 : newCount,
+              dietBreakActive: triggerDietBreak ? true : training.dietBreakActive,
+              dietBreakStartedAt: triggerDietBreak
+                ? new Date().toISOString()
+                : training.dietBreakStartedAt ?? null,
             },
           };
           mesocyclesRolled += 1;
@@ -322,9 +341,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     } else {
       // 3b. Deload flag management (samo ako nismo upravo rollovali)
+      const experienceLevel: ExperienceLevel =
+        status.bio?.experienceLevel ?? "intermediate";
       const deloadDecision = shouldStartDeload(
         training.currentMicrocycleIndex,
-        MESOCYCLE_WEEKS,
+        getMesocycleWeeks(experienceLevel),
         targetMode,
       );
 
@@ -342,6 +363,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
           training: { ...training, isInDeload: false },
         };
         deloadsEnded += 1;
+      }
+    }
+
+    // 3d. Diet Break auto-clear posle 14 dana (SREDNJE_NAPREDNE_V2 §5.4)
+    const trainingForDb =
+      (newStatus?.training ?? training) as UserStatusTrainingShape;
+    if (trainingForDb.dietBreakActive && trainingForDb.dietBreakStartedAt) {
+      const startedAt = new Date(trainingForDb.dietBreakStartedAt);
+      const daysElapsed =
+        (Date.now() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysElapsed >= 14) {
+        newStatus = {
+          ...(newStatus ?? status),
+          training: {
+            ...trainingForDb,
+            dietBreakActive: false,
+            dietBreakStartedAt: null,
+          },
+        };
       }
     }
 

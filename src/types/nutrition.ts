@@ -34,6 +34,9 @@ export interface MacroTarget {
   omega3MinG?: number;          // za PCOS
   maxAllowedGI?: number;        // za IR/PCOS
   antiInflammatoryFlag?: boolean; // za Hashimoto
+  ironMinMg?: number;           // za anemiju (pocetnici.md §1.1, E-2)
+  hemeIronPriority?: boolean;   // crveno meso 2-3x ned + Vit C kombinacija
+  vitaminCRequiredWithIron?: boolean;
 
   // Privremeni modifikatori (sync rule overrides — bonus/buffer)
   fatBonus?: number;
@@ -271,18 +274,6 @@ export interface MealLog {
 // ============================================================================
 // Check-in modeli (Sekcija 14)
 // ============================================================================
-
-export interface DailyCheckIn {
-  clientId: string;
-  date: Date;
-  weightKg: number;
-  energyLevel: number;          // 1–10
-  stressLevel: number;          // 1–5
-  sleepHours: number;
-  waterIntakeMl: number;
-  cycleDay?: number;
-  notes?: string;
-}
 
 export interface WeeklyCheckIn {
   clientId: string;

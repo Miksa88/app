@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { IOS_SWITCH } from "@/lib/design-tokens";
 import ScrollWheelPicker from "./ScrollWheelPicker";
 
 interface HeightWeightStepProps {
@@ -66,12 +67,12 @@ const HeightWeightStep = ({
         </span>
         <button
           onClick={() => setIsMetric(!isMetric)}
-          className={`relative w-[51px] h-[31px] rounded-full transition-colors duration-fast ${
+          className={`relative ${IOS_SWITCH.track} rounded-full transition-colors duration-fast ${
             isMetric ? "bg-primary" : "bg-muted-foreground/30"
           }`}
         >
           <div
-            className={`absolute top-[2px] w-[27px] h-[27px] rounded-full bg-white shadow-md transition-transform duration-fast ${
+            className={`absolute top-[2px] ${IOS_SWITCH.thumb} rounded-full bg-white shadow-md transition-transform duration-fast ${
               isMetric ? "translate-x-[22px]" : "translate-x-[2px]"
             }`}
           />

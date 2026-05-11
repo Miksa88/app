@@ -294,7 +294,7 @@ const PlanSection = ({ icon, label, title, meta }: PlanSectionProps) => (
 
 function mapLegacyGoalToPrimary(goal?: string): PrimaryGoal {
   if (goal === 'glute_focus' || goal === 'figure') return 'glute_focus';
-  if (goal === 'tone' || goal === 'muscle_gain') return 'tone';
+  if (goal === 'tone' || goal === 'muscle_gain' || goal === 'health') return 'tone';
   return 'fat_loss';
 }
 

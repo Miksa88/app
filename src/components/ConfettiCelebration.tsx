@@ -1,4 +1,5 @@
-// ConfettiCelebration — reused confetti burst za PostWorkout + AchievementOverlay
+// ConfettiCelebration — confetti burst za WeeklyCheckIn (mezo / weekly milestones).
+// V3 §1: confetti samo na mezo-end / weekly milestone, nikad na svaku akciju.
 // Spec: WS-8 D7 + D15 — reduced-motion guard (WCAG SC 2.3.3).
 //
 // Boje koriste CSS vars (design tokens), ne hex literale.

@@ -173,12 +173,12 @@ export async function saveUserStatus(status: UserStatus): Promise<void> {
 // initUserStatus — kreiraj default status posle završetka onboarding-a
 // ============================================================================
 //
-// Ova funkcija STAVLJA klijentkinju u "valid empty" stanje. Algoritamske
-// kalkulacije (recoveryMultiplier, BMR/TDEE, queue generation) ovde su
-// PLACEHOLDER vrednosti — Faza 2 ih popunjava kroz prave engine pozive.
-//
-// Marker u kodu: `// TODO Faza 2:` — sve takve linije moraju da se zamene
-// sa pravim engine pozivom pre nego što sistem ide u Beta.
+// Ova funkcija STAVLJA klijentkinju u "valid empty" stanje. Pozivalac
+// (`onboardingService.completeOnboarding`) popunjava prave vrednosti odmah
+// posle ovog poziva — recoveryMultiplier preko `calcRecoveryMultiplier`,
+// BMR/TDEE preko `calcBmrTdeeFromProfile`, queue preko `buildMesocycleQueue`,
+// position/targetMode iz onboarding input-a. Ne menjati default-e ovde bez
+// odgovarajuce promene u onboardingService.
 
 export interface InitUserStatusInput {
   clientId: string;
@@ -200,18 +200,18 @@ export async function initUserStatus(input: InitUserStatusInput): Promise<UserSt
     cycleDay: null,
     cyclePhase: null,
     weightDataReliable: true,
-    recoveryMultiplier: 1.0, // TODO Faza 3: calcRecoveryMultiplier(profile) sa onboarding bio
-    sleepLast7DaysAvg: 7,    // TODO Faza 3: čitaj iz onboarding-a / DailyCheckIn
-    stressLast7DaysAvg: 3,
+    recoveryMultiplier: 1.0, // overwritten by onboardingService.calcRecoveryMultiplier
+    sleepLast7DaysAvg: 7,    // overwritten by onboardingService from input.sleepHoursAvg
+    stressLast7DaysAvg: 3,   // overwritten by onboardingService from input.stressLevel
     hydrationLast7DaysAvgMl: input.weight * 35, // 35ml/kg approximation
   };
 
   const training: UserStatusTraining = {
-    activeTemplateId: '',     // TODO Faza 2: selectTemplate(profile).id
-    position: 'beginner_3',   // TODO Faza 2: derive from profile
-    daysPerWeek: 3,           // TODO Faza 2: derive from skeleton.daysPerWeek
+    activeTemplateId: '',     // overwritten by onboardingService.getActiveTemplate
+    position: 'beginner_3',   // overwritten by onboardingService from experienceLevel + trainingDays
+    daysPerWeek: 3,           // overwritten by onboardingService from input.trainingDays
     queue: {
-      // TODO Faza 2: buildMesocycleQueue(template, profile)
+      // overwritten by onboardingService.buildMesocycleQueue
       clientId: input.clientId,
       mesocycleIndex: 1,
       templateId: '',
@@ -233,6 +233,9 @@ export async function initUserStatus(input: InitUserStatusInput): Promise<UserSt
     currentMesocycleIndex: 1,
     currentMicrocycleIndex: 0,
     activePauseEvent: null,
+    dietBreakActive: false,
+    dietBreakStartedAt: null,
+    mesocyclesSinceDietBreak: 0,
   };
 
   // Mifflin-St Jeor BMR placeholder — pravi calcBMR ide u Fazu 2
@@ -244,9 +247,9 @@ export async function initUserStatus(input: InitUserStatusInput): Promise<UserSt
     bmr: bmrPlaceholder,
     tdee: Math.round(bmrPlaceholder * 1.375), // sedentary baseline
     currentCalorieTarget: Math.max(Math.round(bmrPlaceholder * 1.375), 1400),
-    targetMode: 'maintenance', // TODO Faza 2: derive from primary_goal
+    targetMode: 'maintenance', // overwritten by onboardingService.resolveTargetMode
     macros: {
-      // TODO Faza 2: pun macro split (protein 2.0g/kg, fat min 0.9g/kg, carbs ostatak)
+      // overwritten by onboardingService with full split via calcBmrTdee
       proteinG: Math.round(input.weight * 2.0),
       carbsG: 0,
       fatG: Math.round(input.weight * 0.9),
@@ -258,6 +261,7 @@ export async function initUserStatus(input: InitUserStatusInput): Promise<UserSt
     measurementWeekActive: true, // prva nedelja je uvek measurement week
     measurementWeekDay: 1,
     daysSincePlanChange: 0,
+    currentSmartCutStep: 0,            // pocetnici.md §3.8: baseline maintenance
     activeRefeedDay: false,
   };
 

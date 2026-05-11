@@ -43,3 +43,47 @@ export async function loadExerciseHistory(
     completed_at: r.completed_at,
   }));
 }
+
+/**
+ * Batch verzija — jedan IN query za N vežbi (N+1 elimination).
+ * Vraca Map<exerciseUuid, ExerciseHistoryRow[]> sortiran DESC po completed_at;
+ * limit se primjenjuje per exercise (heuristika: limit * N rows ukupno,
+ * onda truncate per exercise u kodu — server-side per-group limit nije
+ * trivijalan u Supabase REST API-u bez RPC funkcije).
+ */
+export async function loadExerciseHistoryBatch(
+  userId: string,
+  exerciseIds: string[],
+  limitPerExercise = 10,
+): Promise<Map<string, ExerciseHistoryRow[]>> {
+  const out = new Map<string, ExerciseHistoryRow[]>();
+  if (exerciseIds.length === 0) return out;
+
+  const { data, error } = await supabase
+    .from('exercise_progress')
+    .select('exercise_id, weight_kg, reps, set_number, rir, completed_at')
+    .eq('user_id', userId)
+    .in('exercise_id', exerciseIds)
+    .order('completed_at', { ascending: false })
+    .limit(limitPerExercise * exerciseIds.length);
+
+  if (error) throw new Error(`loadExerciseHistoryBatch: ${error.message}`);
+
+  for (const id of exerciseIds) out.set(id, []);
+
+  for (const r of data ?? []) {
+    const arr = out.get(r.exercise_id);
+    if (!arr) continue;
+    if (arr.length < limitPerExercise) {
+      arr.push({
+        weight_kg: Number(r.weight_kg),
+        reps: r.reps,
+        set_number: r.set_number,
+        rir: r.rir,
+        completed_at: r.completed_at,
+      });
+    }
+  }
+
+  return out;
+}

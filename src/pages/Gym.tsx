@@ -35,6 +35,7 @@ import { canSwapNextTwoSessions } from '@/utils/training/sessionResolver';
 import { fadeUp } from '@/lib/motion';
 import { AlertBanner } from '@/components/ui/alert-banner';
 import { MotionCard } from '@/components/ui/motion-card';
+import { PageTitle } from '@/components/PageTitle';
 
 const Gym = () => {
   const navigate = useNavigate();
@@ -57,11 +58,11 @@ const Gym = () => {
           {t('trial.lockedGymMessage')}
         </p>
         <Button
-          onClick={() => navigate('/subscription')}
+          onClick={() => navigate('/chat')}
           variant="cta"
           className="px-6 min-h-11 rounded-2xl"
         >
-          {t('trial.subscribe')}
+          {t('subscription.contactTrainer')}
         </Button>
       </div>
     );
@@ -80,17 +81,17 @@ const Gym = () => {
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
-      {/* Header */}
-      <div className="px-5 pt-14 pb-2">
-        <motion.h1 {...fadeUp()} className="text-large-title text-foreground">
-          {t('gym.title')}
-        </motion.h1>
-        {totalSessions > 0 && (
-          <motion.p {...fadeUp(0.05)} className="text-caption-1 text-muted-foreground mt-0.5">
-            Mezociklus {queue?.mesocycleIndex ?? 1} · {completedSessions} od {totalSessions} sesija
-          </motion.p>
-        )}
-      </div>
+      <PageTitle
+        title={t('gym.title')}
+        subtitle={
+          totalSessions > 0
+            ? t('gym.mesocycleProgress')
+                .replace('{m}', String(queue?.mesocycleIndex ?? 1))
+                .replace('{x}', String(completedSessions))
+                .replace('{y}', String(totalSessions))
+            : undefined
+        }
+      />
 
       <div className="px-5 space-y-3">
         {/* Sync banner (luteal/deload/illness/...) */}
@@ -102,7 +103,7 @@ const Gym = () => {
         <MotionCard {...fadeUp(0.1)} className="p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-caption-1 text-muted-foreground uppercase tracking-wider">
-              Tvoja nedelja
+              {t('gym.weeklyLabel')}
             </p>
             {swapAvailable && (
               <button
@@ -138,7 +139,7 @@ const Gym = () => {
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <p className="text-caption-1 text-muted-foreground uppercase tracking-wider">
-                  Sledeća sesija
+                  {t('gym.nextSessionLabel')}
                 </p>
                 <h2 className="text-title-2 text-foreground mt-0.5">{nextSession.label}</h2>
               </div>
@@ -207,11 +208,14 @@ interface SlotPreviewProps {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const SlotPreview = ({ clientId: _clientId, sessionDayType: _sessionDayType }: SlotPreviewProps) => (
-  <p className="text-footnote text-muted-foreground/70 italic">
-    Vežbe se prikazuju kad pokreneš trening.
-  </p>
-);
+const SlotPreview = ({ clientId: _clientId, sessionDayType: _sessionDayType }: SlotPreviewProps) => {
+  const { t } = useLanguage();
+  return (
+    <p className="text-footnote text-muted-foreground/70 italic">
+      {t('gym.exercisesShownAfterStart')}
+    </p>
+  );
+};
 
 // ============================================================================
 // PartitionBadge — vizuelna ikona za particiju (Lower/Upper/FullBody)

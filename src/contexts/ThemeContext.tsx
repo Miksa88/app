@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { syncStatusBarWithTheme } from "@/lib/native";
+import { safeStorage } from "@/lib/safeStorage";
 
 type Theme = "light" | "dark" | "system";
 
@@ -19,7 +20,7 @@ export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem("app-theme") as Theme | null;
+    const saved = safeStorage.getItem("app-theme") as Theme | null;
     return saved || "light";
   });
 
@@ -31,7 +32,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   const setTheme = (t: Theme) => {
     setThemeState(t);
-    localStorage.setItem("app-theme", t);
+    safeStorage.setItem("app-theme", t);
   };
 
   useEffect(() => {

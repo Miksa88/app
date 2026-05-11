@@ -105,6 +105,68 @@ describe('recalcCalorieTarget — kombinacije sync rules', () => {
   });
 });
 
+describe('recalcCalorieTarget — Hashimoto deficit cap (pocetnici.md §1.1)', () => {
+  it('Hashimoto + deficit clamp na ≥85% TDEE (max -15% deficit)', () => {
+    // Bez Hashimoto: 2000 × 0.80 = 1600 (-20%)
+    // Sa Hashimoto: clamp na 2000 × 0.85 = 1700 (-15% max)
+    const result = recalcCalorieTarget({
+      tdee: 2000,
+      targetMode: 'deficit',
+      metabolicConditions: ['hashimoto'],
+    });
+    expect(result).toBe(1700);
+  });
+
+  it('Hashimoto + recomposition clamp ne menja (recomp je -10% < 15%)', () => {
+    const result = recalcCalorieTarget({
+      tdee: 2000,
+      targetMode: 'recomposition',
+      metabolicConditions: ['hashimoto'],
+    });
+    expect(result).toBe(1800); // -10% bez clamp-a
+  });
+
+  it('Hashimoto + lean_bulk netaknut (bulk nije deficit)', () => {
+    const result = recalcCalorieTarget({
+      tdee: 2000,
+      targetMode: 'lean_bulk',
+      metabolicConditions: ['hashimoto'],
+    });
+    expect(result).toBe(2150); // +7.5% bez interferencije
+  });
+
+  it('PCOS bez hashimoto — deficit ostaje agresivan (PCOS nema deficit cap)', () => {
+    const result = recalcCalorieTarget({
+      tdee: 2000,
+      targetMode: 'deficit',
+      metabolicConditions: ['pcos'],
+    });
+    expect(result).toBe(1600); // -20%
+  });
+
+  it('Hashimoto + Luteal — luteal bonus već iznad cap-a, clamp ne menja', () => {
+    // 1600 (deficit -20%) + 150 (luteal) = 1750.
+    // 1750 > 1700 (Hashimoto cap), pa clamp ne radi. Final = 1750.
+    const result = recalcCalorieTarget({
+      tdee: 2000,
+      targetMode: 'deficit',
+      metabolicConditions: ['hashimoto'],
+      cyclePhase: 'luteal',
+    });
+    expect(result).toBe(1750);
+  });
+
+  it('Hashimoto cap aktivan kad je čist deficit (bez luteal-a) ispod 85%', () => {
+    // 2200 × 0.80 = 1760 (-20%); 2200 × 0.85 = 1870 (-15% cap). Clamp na 1870.
+    const result = recalcCalorieTarget({
+      tdee: 2200,
+      targetMode: 'deficit',
+      metabolicConditions: ['hashimoto'],
+    });
+    expect(result).toBe(1870);
+  });
+});
+
 describe('recalcCalorieTarget — IDEMPOTENT (KRITIČNO za Sync Engine)', () => {
   it('5x poziv sa istim ulazom = identičan rezultat', () => {
     const inputs = {

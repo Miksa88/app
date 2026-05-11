@@ -87,6 +87,12 @@ interface WeeklyCheckInPayload {
   thighCm?: number | null;
   energyAvg: number;
   identityScore: number;
+  /** Recovery feeders (opcioni za backward compat). */
+  sleepHoursAvg?: number;
+  stressAvg?: number;
+  /** Biofeedback inputs (pocetnici.md §4.3) — libido <4 → pauseSmartCut. */
+  libidoScore?: number;
+  waterRetentionScore?: number;
   notes?: string | null;
 }
 
@@ -163,6 +169,28 @@ function validatePayload(p: unknown): WeeklyCheckInPayload | string {
     return "Invalid `notes` (string or null expected)";
   }
 
+  // Recovery inputs su opcioni — validacija ako su poslati
+  if (o.sleepHoursAvg !== undefined &&
+      (typeof o.sleepHoursAvg !== "number" || o.sleepHoursAvg < 0 || o.sleepHoursAvg > 14)) {
+    return "Invalid `sleepHoursAvg` (0–14)";
+  }
+  if (o.stressAvg !== undefined &&
+      (typeof o.stressAvg !== "number" || o.stressAvg < 1 || o.stressAvg > 5)) {
+    return "Invalid `stressAvg` (1–5)";
+  }
+
+  // Biofeedback inputs su opcioni — validacija ako su poslati (1–10)
+  if (o.libidoScore !== undefined &&
+      (typeof o.libidoScore !== "number" || !Number.isInteger(o.libidoScore) ||
+       o.libidoScore < 1 || o.libidoScore > 10)) {
+    return "Invalid `libidoScore` (integer 1–10)";
+  }
+  if (o.waterRetentionScore !== undefined &&
+      (typeof o.waterRetentionScore !== "number" || !Number.isInteger(o.waterRetentionScore) ||
+       o.waterRetentionScore < 1 || o.waterRetentionScore > 10)) {
+    return "Invalid `waterRetentionScore` (integer 1–10)";
+  }
+
   return {
     clientId: o.clientId,
     weekStartDate: o.weekStartDate,
@@ -172,6 +200,10 @@ function validatePayload(p: unknown): WeeklyCheckInPayload | string {
     thighCm: (o.thighCm as number | null | undefined) ?? null,
     energyAvg: o.energyAvg,
     identityScore: o.identityScore,
+    sleepHoursAvg: o.sleepHoursAvg as number | undefined,
+    stressAvg: o.stressAvg as number | undefined,
+    libidoScore: o.libidoScore as number | undefined,
+    waterRetentionScore: o.waterRetentionScore as number | undefined,
     notes: (o.notes as string | null | undefined) ?? null,
   };
 }
@@ -258,6 +290,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       thigh_cm: payload.thighCm,
       energy_avg: payload.energyAvg,
       identity_score: payload.identityScore,
+      libido_score: payload.libidoScore ?? null,
+      water_retention: payload.waterRetentionScore ?? null,
       notes: payload.notes,
     })
     .select()
@@ -340,12 +374,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
-  // 9. Patch status
+  // 9. Patch status — recovery feeders refresh-uju 7-day avg-ove iz weekly
+  // (jedini izvor sad kad daily check-in više nije aktivan)
   const newStatus: UserStatusShape = {
     ...status,
     bio: {
       ...status.bio,
       weeklyWeightDelta: weeklyWeightDelta ?? 0,
+      ...(payload.sleepHoursAvg !== undefined
+        ? { sleepLast7DaysAvg: payload.sleepHoursAvg }
+        : {}),
+      ...(payload.stressAvg !== undefined
+        ? { stressLast7DaysAvg: payload.stressAvg }
+        : {}),
+      // pocetnici.md §4.3: biofeedback inputs feed applyBiofeedbackReactiveRules
+      // u syncEngine — libido <4 → pauseSmartCut; waterRetention >7 → alert
+      ...(payload.libidoScore !== undefined
+        ? { latestLibidoScore: payload.libidoScore }
+        : {}),
+      ...(payload.waterRetentionScore !== undefined
+        ? { latestWaterRetentionScore: payload.waterRetentionScore }
+        : {}),
     },
     nutrition: {
       ...status.nutrition,

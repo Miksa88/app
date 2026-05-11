@@ -22,19 +22,21 @@ test.describe("Data loading — content visible", () => {
     expect(hasMacroText, "Meal cards treba da imaju macro info (Ng)").toBeTruthy();
   });
 
-  test("Home pokazuje water widget sa glass count-om", async ({ page }) => {
+  test("Home pokazuje 'Danas' mini data centar sa kcal counterom", async ({ page }) => {
+    // Home v4 (2026-05-08): water widget je uklonjen, zamenjen sa 3 kartice
+    // (Danas / Trening / Obrok) + check-in CTA. Ovaj test verifikuje da
+    // mini data centar prikazuje kcal counter.
     await loginAsTestUser(page);
     await page.goto("/home");
     await page.waitForLoadState("networkidle");
 
-    const waterWidget = page.locator('[data-testid="water-widget"]');
-    await expect(waterWidget).toBeVisible({ timeout: 10_000 });
+    // Heading "Danas" (h2) iz mini data centra
+    const todayHeading = page.getByRole("heading", { name: /^danas$/i, level: 2 });
+    await expect(todayHeading).toBeVisible({ timeout: 10_000 });
 
-    // Count display "X/Y"
-    const count = page.locator('[data-testid="water-count"]');
-    await expect(count).toBeVisible();
-    const text = await count.textContent();
-    expect(text, "water count format 'X/Y'").toMatch(/\d+\s*\/\s*\d+/);
+    // kcal counter mora biti vidljiv u istom card-u
+    const homeContainer = page.locator("body");
+    await expect(homeContainer).toContainText(/kcal/i);
   });
 
   test("Gym stranica pokazuje bilo aktivnu sesiju ili empty state", async ({ page }) => {

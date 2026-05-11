@@ -4,12 +4,14 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, MOTION_DURATION, MOTION_EASE } from "@/lib/motion";
-import { ArrowLeft, Flame, ChevronRight, Dumbbell, UtensilsCrossed, AlertTriangle, Ban, Cake, Briefcase, Clock, Brain, Moon, Frown, CheckCircle2, MessageSquare, Camera, Activity, Award, Target, Ruler, Scale as ScaleIcon } from "lucide-react";
+import { ArrowLeft, Flame, ChevronRight, ChevronLeft, Dumbbell, UtensilsCrossed, AlertTriangle, Ban, Cake, Briefcase, Clock, Brain, Moon, Frown, CheckCircle2, MessageSquare, Camera, Activity, Award, Target, Ruler, Scale as ScaleIcon } from "lucide-react";
+import { useTrainerClients } from "@/hooks/useTrainerClients";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ClientData } from "@/data/trainerMockData";
 import { supabase } from "@/integrations/supabase/client";
 import { useClientActivity } from "@/hooks/useClientActivity";
 import { useClientNotes, useCreateClientNote, useDeleteClientNote } from "@/hooks/useClientNotes";
+import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useProgram } from "@/hooks/usePrograms";
 import { useQuery } from "@tanstack/react-query";
@@ -25,6 +27,8 @@ import type { PackageTier } from "@/services/packageService";
 import { TabControl } from "@/components/ui/tab-control";
 import { Card } from "@/components/ui/card";
 import { MotionCard } from "@/components/ui/motion-card";
+import EquipmentEditor from "@/components/trainer/EquipmentEditor";
+import PauseClientCard from "@/components/trainer/PauseClientCard";
 
 const TABS = ['overview', 'training', 'nutrition', 'checkins', 'settings'] as const;
 type Tab = typeof TABS[number];
@@ -42,10 +46,39 @@ const ClientProfile = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+
+  // Prev/next client navigation — Quick Win #14 (TrueCoach parity)
+  const { clients: trainerClients } = useTrainerClients();
+  const currentIdx = trainerClients.findIndex((c) => c.id === id);
+  const prevClientId = currentIdx > 0 ? trainerClients[currentIdx - 1].id : null;
+  const nextClientId =
+    currentIdx >= 0 && currentIdx < trainerClients.length - 1
+      ? trainerClients[currentIdx + 1].id
+      : null;
   // Notes — real DB-backed (client_notes tabela, W-3 finishing)
   const { data: notes = [] } = useClientNotes(id ?? null);
   const createNoteMutation = useCreateClientNote(id ?? null);
   const deleteNoteMutation = useDeleteClientNote(id ?? null);
+  const undoNote = useUndoableAction();
+  const handleDeleteNote = (note: { id: string; body: string }) => {
+    void undoNote.run({
+      title: t("clients.notes.deleted"),
+      apply: () =>
+        new Promise<void>((resolve, reject) =>
+          deleteNoteMutation.mutate(note.id, {
+            onSuccess: () => resolve(),
+            onError: (e) => reject(e),
+          }),
+        ),
+      revert: () =>
+        new Promise<void>((resolve, reject) => {
+          createNoteMutation.mutate(note.body, {
+            onSuccess: () => resolve(),
+            onError: (e) => reject(e),
+          });
+        }),
+    });
+  };
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showTierSheet, setShowTierSheet] = useState(false);
@@ -208,18 +241,39 @@ const ClientProfile = () => {
     <div className="min-h-screen bg-background-secondary pb-32">
       {/* iOS-native shell: PageHeader sa contextual "Clients" back label — breadcrumbs uklonjen (WS-8.5 D23) */}
       {/* Identity page — samo sticky Liquid Glass back. Ime je u hero kartici ispod. */}
-      <PageHeader onBack={() => navigate("/trainer/clients")} backLabel={t("clients.title")} />
+      <PageHeader
+        onBack={() => navigate("/trainer/clients")}
+        backLabel={t("clients.title")}
+        rightAction={
+          (prevClientId || nextClientId) ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => prevClientId && navigate(`/trainer/clients/${prevClientId}`)}
+                disabled={!prevClientId}
+                className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-xl border border-border/30 flex items-center justify-center disabled:opacity-30"
+                aria-label={t("clients.prev")}
+              >
+                <ChevronLeft size={18} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+              <button
+                onClick={() => nextClientId && navigate(`/trainer/clients/${nextClientId}`)}
+                disabled={!nextClientId}
+                className="w-9 h-9 rounded-full bg-card/70 backdrop-blur-xl border border-border/30 flex items-center justify-center disabled:opacity-30"
+                aria-label={t("clients.next")}
+              >
+                <ChevronRight size={18} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* Premium Client Header — gradient hero (content area, ne shell) */}
       <motion.div {...fadeUp()} className="px-5 pt-4 pb-5">
         <div
-          className="relative overflow-hidden rounded-3xl p-5 text-primary-foreground shadow-fab"
+          className="relative overflow-hidden rounded-2xl p-5 text-primary-foreground shadow-fab"
           style={{ background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)" }}
         >
-          {/* Decorative blobs */}
-          <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
-          <div className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full bg-white/5 blur-2xl" aria-hidden="true" />
-
           <div className="relative">
             <div className="flex items-center gap-4">
               <UserAvatar
@@ -293,10 +347,10 @@ const ClientProfile = () => {
             {/* Stat cells */}
             <div className="grid grid-cols-4 gap-2 mt-4">
               {[
-                { icon: Target, label: 'Goal', value: client.goals[0] || '—' },
-                { icon: Ruler, label: 'Height', value: `${client.height}cm` },
-                { icon: ScaleIcon, label: 'Weight', value: `${client.weight}kg` },
-                { icon: Cake, label: 'Age', value: String(age) },
+                { icon: Target, label: t("clients.statGoal"), value: client.goals[0] || '—' },
+                { icon: Ruler, label: t("clients.statHeight"), value: `${client.height}cm` },
+                { icon: ScaleIcon, label: t("clients.statWeight"), value: `${client.weight}kg` },
+                { icon: Cake, label: t("clients.statAge"), value: String(age) },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="bg-white/10 backdrop-blur-sm rounded-xl py-2 px-1 text-center">
                   <Icon size={ICON_SIZE.xs} className="mx-auto mb-1 opacity-80" aria-hidden="true" />
@@ -336,14 +390,13 @@ const ClientProfile = () => {
               </motion.div>
             )}
 
-            {/* Quick stats */}
+            {/* Quick stats — only show real data; mock Body Fat removed (V3 anti-bloat). */}
             <motion.div {...fadeUp(0.05)} className="grid grid-cols-2 gap-3">
               {[
-                { label: t("clientDetail.weight"), value: `${client.weight}`, unit: 'kg', trend: '↓ 3%', positive: true, color: 'text-success' },
-                { label: 'Body Fat', value: '24', unit: '%', trend: '↓ 2%', positive: true, color: 'text-info' },
+                client.weight > 0 ? { label: t("clientDetail.weight"), value: `${client.weight}`, unit: 'kg', trend: '', positive: true, color: 'text-foreground' } : null,
                 { label: t("progress.workouts"), value: String(client.totalWorkoutsCompleted), unit: '', trend: '', positive: true, color: 'text-warning' },
-                { label: t("progress.streak"), value: String(client.streak), unit: 'days', trend: '', positive: true, color: 'text-primary', hasFlame: true },
-              ].map(s => (
+                { label: t("progress.streak"), value: String(client.streak), unit: t("clients.statDaysUnit"), trend: '', positive: true, color: 'text-primary', hasFlame: true },
+              ].filter((s): s is NonNullable<typeof s> => s !== null).map(s => (
                 <Card key={s.label} className="p-4">
                   <div className="flex items-baseline gap-1">
                     <p className={`text-title-2 font-bold ${s.color}`}>{s.value}</p>
@@ -360,7 +413,7 @@ const ClientProfile = () => {
 
             {/* Assigned programs */}
             <MotionCard {...fadeUp(0.1)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.assignedPrograms")}</h3>
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.assignedPrograms")}</h3>
               <button onClick={() => setActiveTab('training')} className="w-full flex items-center gap-4 text-left mb-3">
                 <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
                   <Dumbbell size={ICON_SIZE.md} className="text-warning" />
@@ -411,7 +464,7 @@ const ClientProfile = () => {
             {/* Activity log */}
             <MotionCard {...fadeUp(0.15)} className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider">{t("clients.activityLog")}</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">{t("clients.activityLog")}</h3>
                 <button className="text-primary text-caption-1 font-semibold">{t("clients.viewAll")}</button>
               </div>
               <div className="space-y-2.5">
@@ -437,7 +490,7 @@ const ClientProfile = () => {
             {/* Notes */}
             <MotionCard {...fadeUp(0.2)} className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider">{t("clients.notes")}</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">{t("clients.notes")}</h3>
                 <button onClick={() => setShowNoteInput(true)} className="text-primary text-caption-1 font-semibold">+ {t("clients.addNote")}</button>
               </div>
               {showNoteInput && (
@@ -450,8 +503,8 @@ const ClientProfile = () => {
                     autoFocus
                   />
                   <div className="flex gap-2">
-                    <Button onClick={handleAddNote} variant="cta" size="sm" className="rounded-xl">Save</Button>
-                    <button onClick={() => { setShowNoteInput(false); setNewNote(''); }} className="text-muted-foreground text-caption-1 px-4 py-2">Cancel</button>
+                    <Button onClick={handleAddNote} variant="cta" size="sm" className="rounded-xl">{t("common.save")}</Button>
+                    <button onClick={() => { setShowNoteInput(false); setNewNote(''); }} className="text-muted-foreground text-caption-1 px-4 py-2">{t("common.cancel")}</button>
                   </div>
                 </div>
               )}
@@ -464,11 +517,11 @@ const ClientProfile = () => {
                         — {new Date(n.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
                       <button
-                        onClick={() => deleteNoteMutation.mutate(n.id)}
+                        onClick={() => handleDeleteNote({ id: n.id, body: n.body })}
                         className="text-caption-2 text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                        aria-label="Delete note"
+                        aria-label={t("clients.notes.deleteAria")}
                       >
-                        Delete
+                        {t("common.delete")}
                       </button>
                     </div>
                   </div>
@@ -481,7 +534,7 @@ const ClientProfile = () => {
             <motion.div {...fadeUp(0.25)} className="space-y-3">
               {/* Physical */}
               <Card className="p-4">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">Physical</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.sections.physical")}</h3>
                 {[
                   { icon: AlertTriangle, color: "text-warning", bg: "bg-warning/10", label: t("clientDetail.injuries"), value: client.injuries || 'None' },
                   { icon: Brain, color: "text-secondary", bg: "bg-secondary/10", label: 'Metabolic', value: client.metabolicProfile.join(', ') || 'None' },
@@ -505,7 +558,7 @@ const ClientProfile = () => {
 
               {/* Dietary */}
               <Card className="p-4">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">Dietary</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.sections.dietary")}</h3>
                 {[
                   { icon: Ban, color: "text-destructive", bg: "bg-destructive/10", label: t("clientDetail.allergies"), value: client.allergies.length > 0 ? client.allergies.join(', ') : 'None' },
                   { icon: Cake, color: "text-muted-foreground", bg: "bg-muted", label: t("clientDetail.foodDislikes"), value: client.foodDislikes.length > 0 ? client.foodDislikes.join(', ') : 'None' },
@@ -527,7 +580,7 @@ const ClientProfile = () => {
 
               {/* Lifestyle */}
               <Card className="p-4">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">Lifestyle</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.sections.lifestyle")}</h3>
                 {[
                   { icon: Briefcase, color: "text-info", bg: "bg-info/10", label: t("clientDetail.jobType"), value: client.jobType },
                   { icon: Clock, color: "text-success", bg: "bg-success/10", label: t("clientDetail.workSchedule"), value: client.workSchedule },
@@ -561,7 +614,9 @@ const ClientProfile = () => {
                   <Dumbbell size={ICON_SIZE.md} className="text-warning" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-body font-semibold text-foreground">PPL Split — 12 Weeks</h3>
+                  <h3 className="text-body font-semibold text-foreground">
+                    {assignedProgram?.name ?? t("clients.noProgramAssigned")}
+                  </h3>
                   <p className="text-caption-1 text-muted-foreground">{t("clients.weekOf")} {client.programWeek} {t("clients.of")} {client.programTotalWeeks}</p>
                 </div>
               </div>
@@ -574,48 +629,23 @@ const ClientProfile = () => {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-caption-2 text-muted-foreground">{Math.round((client.programWeek / client.programTotalWeeks) * 100)}% complete</p>
+                <p className="text-caption-2 text-muted-foreground tabular-nums">{Math.round((client.programWeek / client.programTotalWeeks) * 100)}% {t("clients.complete")}</p>
                 <button className="text-primary text-caption-1 font-semibold">{t("clients.changeProgram")}</button>
               </div>
             </MotionCard>
 
             <MotionCard {...fadeUp(0.1)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.thisWeek")}</h3>
-              {['Mon: Push Day', 'Tue: Pull Day', 'Wed: Legs', 'Thu: Push Day', 'Fri: Pull Day', 'Sat: Rest', 'Sun: Rest'].map((day, i) => {
-                const status = i < 2 ? 'done' : i === 2 ? 'today' : i < 5 ? 'upcoming' : 'rest';
-                return (
-                  <div key={i} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
-                    <span className={`text-footnote ${status === 'rest' ? 'text-muted-foreground/50' : 'text-foreground'}`}>{day}</span>
-                    <span className={`text-caption-1 font-semibold px-2 py-0.5 rounded-full ${
-                      status === 'done' ? 'bg-success/10 text-success' :
-                      status === 'today' ? 'bg-info/10 text-info' :
-                      status === 'upcoming' ? 'text-muted-foreground/40' :
-                      'text-muted-foreground/30'
-                    }`}>
-                      {status === 'done' ? '✓ Done' : status === 'today' ? '● Today' : status === 'upcoming' ? 'Upcoming' : '—'}
-                    </span>
-                  </div>
-                );
-              })}
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.thisWeek")}</h3>
+              <p className="text-caption-1 text-muted-foreground py-3">
+                {t("clients.weekScheduleEmpty")}
+              </p>
             </MotionCard>
 
             <MotionCard {...fadeUp(0.15)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.workoutHistory")}</h3>
-              {[
-                { name: 'Push Day', date: 'Mon Apr 7', dur: '45 min', ex: 6 },
-                { name: 'Pull Day', date: 'Sat Apr 5', dur: '38 min', ex: 7 },
-                { name: 'Legs', date: 'Thu Apr 3', dur: '52 min', ex: 8 },
-              ].map((w, i) => (
-                <div key={i} className="flex items-center gap-3 py-3 border-b border-border/50 last:border-0">
-                  <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={ICON_SIZE.xs} className="text-success" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-footnote font-medium text-foreground">{w.name}</p>
-                    <p className="text-caption-2 text-muted-foreground">{w.date} · {w.dur} · {w.ex} exercises</p>
-                  </div>
-                </div>
-              ))}
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.workoutHistory")}</h3>
+              <p className="text-caption-1 text-muted-foreground py-3">
+                {t("clients.workoutHistoryEmpty")}
+              </p>
             </MotionCard>
           </div>
         )}
@@ -628,57 +658,23 @@ const ClientProfile = () => {
 
         {activeTab === 'checkins' && (
           <div role="tabpanel" id="client-panel-checkins" aria-labelledby="client-tab-checkins" className="space-y-3">
-            {/* Pending */}
-            <MotionCard {...fadeUp(0.05)} className="p-4 border-l-4 border-primary">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <MessageSquare size={ICON_SIZE.md} className="text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-body font-semibold text-foreground">Weekly Check-In</p>
-                    <p className="text-caption-1 text-muted-foreground">Submitted 2 hours ago</p>
-                  </div>
-                </div>
-                <button className="text-primary text-footnote font-bold flex items-center gap-1 min-h-11 px-2">
-                  {t("clients.review")} <ChevronRight size={ICON_SIZE.xs} />
-                </button>
-              </div>
-            </MotionCard>
-
-            {/* History */}
-            <MotionCard {...fadeUp(0.1)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">History</h3>
-              {[
-                { date: 'Apr 11', status: 'Reviewed' },
-                { date: 'Apr 4', status: 'Reviewed' },
-                { date: 'Mar 28', status: 'Reviewed' },
-              ].map((ci, i) => (
-                <div key={i} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                      <CheckCircle2 size={ICON_SIZE.xs} className="text-success" />
-                    </div>
-                    <p className="text-footnote text-foreground">Weekly Check-In · {ci.date}</p>
-                  </div>
-                  <span className="text-caption-2 font-semibold text-success">{ci.status}</span>
-                </div>
-              ))}
+            {/* History — empty state until weekly_check_ins integration */}
+            <MotionCard {...fadeUp(0.05)} className="p-4">
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.history")}</h3>
+              <p className="text-caption-1 text-muted-foreground py-3">
+                {t("clients.checkInsEmpty")}
+              </p>
             </MotionCard>
 
             {/* Progress photos */}
             <MotionCard {...fadeUp(0.15)} className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider">{t("clients.progressPhotos")}</h3>
+                <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">{t("clients.progressPhotos")}</h3>
                 <button className="text-primary text-caption-1 font-semibold">{t("clients.viewAll")}</button>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {['Front', 'Side', 'Front', 'Side'].map((label, i) => (
-                  <div key={i} className="w-16 h-20 bg-muted/50 rounded-xl flex items-center justify-center shrink-0 border border-border/30">
-                    <p className="text-caption-2 text-muted-foreground/50">{label}</p>
-                  </div>
-                ))}
-              </div>
+              <p className="text-caption-1 text-muted-foreground py-3">
+                {t("clients.photosEmpty")}
+              </p>
               <button className="text-primary text-caption-1 font-semibold mt-3 flex items-center gap-1 min-h-11 px-1">
                 <Camera size={16} /> {t("clients.uploadPhoto")}
               </button>
@@ -686,18 +682,15 @@ const ClientProfile = () => {
 
             {/* Metrics */}
             <MotionCard {...fadeUp(0.2)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.metrics")}</h3>
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.metrics")}</h3>
               {[
-                { label: t("clientDetail.weight"), value: `${client.weight} kg`, trend: '↓ 3%', color: 'text-success' },
-                { label: 'Body Fat', value: '24%', trend: '↓ 2%', color: 'text-info' },
-                { label: 'Waist', value: '87 cm', trend: '↓ 4%', color: 'text-secondary' },
-              ].map((m, i) => (
+                client.weight > 0 ? { label: t("clientDetail.weight"), value: `${client.weight} kg`, color: 'text-foreground' } : null,
+              ].filter(Boolean).map((m, i) => (
                 <div key={i} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
                   <div>
-                    <p className="text-footnote font-medium text-foreground">{m.label}</p>
+                    <p className="text-footnote font-medium text-foreground">{m!.label}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-caption-1 font-bold ${m.color}`}>{m.value}</span>
-                      <span className="text-caption-2 font-semibold text-success">{m.trend}</span>
+                      <span className={`text-caption-1 font-bold ${m!.color}`}>{m!.value}</span>
                     </div>
                   </div>
                   <button className="text-primary text-caption-1 font-semibold min-h-11 px-2">{t("clients.viewGraph")}</button>
@@ -714,7 +707,7 @@ const ClientProfile = () => {
           <div role="tabpanel" id="client-panel-settings" aria-labelledby="client-tab-settings" className="space-y-3">
             {/* Profile info */}
             <MotionCard {...fadeUp(0.05)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.profileInfo")}</h3>
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.profileInfo")}</h3>
               {[
                 { label: t("addClient.name"), value: client.name },
                 { label: t("addClient.email"), value: client.email },
@@ -734,10 +727,10 @@ const ClientProfile = () => {
 
             {/* Program settings */}
             <MotionCard {...fadeUp(0.1)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.programSettings")}</h3>
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.programSettings")}</h3>
               <div className="space-y-4">
                 <div>
-                  <p className="text-caption-2 text-muted-foreground/60 mb-1.5">Type</p>
+                  <p className="text-caption-2 text-muted-foreground/60 mb-1.5">{t("clients.fieldType")}</p>
                   <div className="flex gap-2">
                     {(['online', 'in_person', 'hybrid'] as const).map(tp => (
                       <span key={tp} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition-all ${
@@ -749,7 +742,7 @@ const ClientProfile = () => {
                   </div>
                 </div>
                 <div>
-                  <p className="text-caption-2 text-muted-foreground/60 mb-1.5">Status</p>
+                  <p className="text-caption-2 text-muted-foreground/60 mb-1.5">{t("clients.fieldStatus")}</p>
                   <div className="flex gap-2">
                     {(['active', 'paused', 'finished'] as const).map(st => (
                       <span key={st} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition-all ${
@@ -761,8 +754,10 @@ const ClientProfile = () => {
                   </div>
                 </div>
                 <div>
-                  <p className="text-caption-2 text-muted-foreground/60">Duration</p>
-                  <p className="text-footnote font-medium text-foreground mt-0.5">{client.programTotalWeeks} weeks</p>
+                  <p className="text-caption-2 text-muted-foreground/60">{t("clients.fieldDuration")}</p>
+                  <p className="text-footnote font-medium text-foreground mt-0.5">
+                    {t("clients.weeks").replace("{n}", String(client.programTotalWeeks))}
+                  </p>
                 </div>
               </div>
             </MotionCard>
@@ -774,22 +769,23 @@ const ClientProfile = () => {
               </motion.div>
             )}
 
-            {/* Notifications */}
-            <MotionCard {...fadeUp(0.15)} className="p-4">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider mb-3">{t("clients.notifications")}</h3>
-              {['Workout reminders', 'Meal reminders', 'Check-in reminders'].map((n, i) => (
-                <div key={i} className="flex items-center justify-between py-3 border-b border-border/50 last:border-0">
-                  <span className="text-footnote text-foreground">{n}</span>
-                  <div className="w-12 h-7 rounded-full bg-success flex items-center justify-end px-0.5 transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-card shadow-sm" />
-                  </div>
-                </div>
-              ))}
-            </MotionCard>
+            {/* Equipment — V3 §10 */}
+            {id && (
+              <MotionCard {...fadeUp(0.13)} className="p-4">
+                <EquipmentEditor clientId={id} />
+              </MotionCard>
+            )}
+
+            {/* Pause client — V3 §10 (Saved client = saved revenue) */}
+            {id && (
+              <MotionCard {...fadeUp(0.16)} className="p-4">
+                <PauseClientCard clientId={id} />
+              </MotionCard>
+            )}
 
             {/* Danger zone */}
             <motion.div {...fadeUp(0.2)} className="mt-6 space-y-3">
-              <h3 className="text-caption-1 font-bold text-muted-foreground uppercase tracking-wider">{t("clients.dangerZone")}</h3>
+              <h3 className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">{t("clients.dangerZone")}</h3>
               <button className="w-full bg-card rounded-2xl p-4 card-shadow text-left border border-warning/20">
                 <p className="text-body text-warning font-semibold">{t("clients.archive")}</p>
               </button>

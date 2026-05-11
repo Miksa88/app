@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Users, AlertTriangle, Activity, Moon, Crown, Sparkles, Zap, TrendingUp } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionLabel } from "@/components/ui/section-label";
@@ -49,9 +50,7 @@ const TrainerAnalytics = () => {
     <div className="min-h-screen bg-background-secondary pb-32">
       <PageHeader onBack={() => navigate(-1)} backLabel={t("nav.trainerHome")} />
 
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">{t("analytics.title")}</h1>
-      </div>
+      <PageTitle title={t("analytics.title")} compact />
 
       <div className="px-5 space-y-4 pt-2">
         <motion.div {...fadeUp(0.05)}>

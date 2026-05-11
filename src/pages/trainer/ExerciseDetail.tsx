@@ -213,13 +213,6 @@ const ExerciseDetail = () => {
         }
       />
 
-      {/* Static H1 — naziv exercise-a */}
-      <div className="px-5 pt-2 pb-2">
-        <h1 className="text-large-title text-foreground tracking-tight">
-          {name || (isNew ? t("training.newExercise") : t("training.exercise"))}
-        </h1>
-      </div>
-
       <div className="px-5 pt-4 space-y-4">
         {/* Info banner for default exercises */}
         {existing && (

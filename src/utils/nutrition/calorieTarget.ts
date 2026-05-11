@@ -16,12 +16,14 @@
 
 import type { CalorieTargetMode } from '@/types/nutrition';
 import type { NutritionCyclePhase } from '@/types/nutrition';
+import type { MetabolicCondition } from '@/types/training';
 import { assertCalorieFloor } from './invariants';
 
 export const CALORIE_FLOOR = 1400;
 export const LUTEAL_CARB_BONUS_KCAL = 150;     // Spec 03 Sekcija 3.2 Rule 1
 export const RETURN_FROM_BREAK_DEFICIT = 0.92; // Spec 03 Sekcija 3.2 Rule 4
 export const ILLNESS_DEFICIT = 0.95;           // Spec 03 Sekcija 3.2 Rule 7
+export const HASHIMOTO_MAX_DEFICIT = 0.85;     // pocetnici.md §1.1: ZABRANJEN deficit >15%
 
 const TARGET_MODE_MULTIPLIER: Record<CalorieTargetMode, number> = {
   deficit: 0.80,        // -20% TDEE (fat_loss)
@@ -48,8 +50,15 @@ export interface CalorieTargetInputs {
   isInIllnessPause?: boolean;       // Rule 7 → tdee × 0.95
   fatigueSyncActive?: boolean;      // Rule 2 → maintenance (san+stres)
 
+  // SREDNJE_NAPREDNE_V2 §5.4: OBAVEZAN Diet Break posle 4 mezociklusa.
+  // Override → maintenance kalorije za 2 nedelje, T3/leptin reset.
+  isInDietBreak?: boolean;
+
   // Cycle modifier (Rule 1)
   cyclePhase?: NutritionCyclePhase | null;
+
+  // Metabolic conditions koje cap-uju deficit (pocetnici.md §1.1)
+  metabolicConditions?: MetabolicCondition[];
 }
 
 // ============================================================================
@@ -93,9 +102,25 @@ export function recalcCalorieTarget(input: CalorieTargetInputs): number {
     target = input.tdee * ILLNESS_DEFICIT;
   }
 
+  // SREDNJE_NAPREDNE_V2 §5.4 Diet Break — override ka maintenance svaki put
+  // kad je flag aktivan, bez obzira na targetMode (osim lean_bulk koji ostaje).
+  if (input.isInDietBreak && input.targetMode !== 'lean_bulk') {
+    target = input.tdee * TARGET_MODE_MULTIPLIER.maintenance;
+  }
+
   // Rule 1 Luteal phase bonus (Sekcija 3.2 Rule 1)
   if (input.cyclePhase === 'luteal') {
     target += LUTEAL_CARB_BONUS_KCAL;
+  }
+
+  // Hashimoto deficit cap (pocetnici.md §1.1) — ZABRANJEN agresivan deficit (>15%).
+  // Clamp ka ≥ TDEE×0.85. Primenjuje se SAMO ako je target ispod tog plafona;
+  // bulk i maintenance ostaju netaknuti.
+  if (input.metabolicConditions?.includes('hashimoto')) {
+    const hashimotoFloor = input.tdee * HASHIMOTO_MAX_DEFICIT;
+    if (target < hashimotoFloor) {
+      target = hashimotoFloor;
+    }
   }
 
   // Floor — ne ide ispod fizioloskog minimuma

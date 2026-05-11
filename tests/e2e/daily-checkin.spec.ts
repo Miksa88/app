@@ -12,7 +12,11 @@ import {
   resetTestUserData,
 } from "./helpers/supabaseAdmin";
 
-test.describe("Daily Check-in", () => {
+// SKIP: Daily check-in je uklonjen u Maj 2026 redizajnu — feedback se sad
+// prikuplja kroz PreWorkoutFatigueDialog (pre treninga, 2-button) i WeeklyCheckIn
+// (1×/nedeljno, sa sleep+stress sliderima). Daily 9-polja sheet više ne postoji.
+// Test ostaje za referencu ako se feature ikad reaktivira.
+test.describe.skip("Daily Check-in (uklonjen)", () => {
   test.beforeEach(async () => {
     await resetTestUserData(TEST_USER.id);
   });
@@ -35,10 +39,11 @@ test.describe("Daily Check-in", () => {
 
     await loginAsTestUser(page);
 
-    // CTA visible (assumes hasCheckInToday=false since we reset)
-    const cta = page.getByRole("button", { name: /jutarnji check-in|morning check-in/i });
+    // CTA visible (assumes hasCheckInToday=false since we reset).
+    const cta = page.getByTestId("daily-checkin-cta");
     await expect(cta).toBeVisible({ timeout: 5_000 });
-    await cta.click();
+    await page.waitForTimeout(500);
+    await cta.click({ force: true });
 
     // Sheet opens
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -47,9 +52,10 @@ test.describe("Daily Check-in", () => {
     const weightInput = page.locator('#checkin-weight');
     await weightInput.fill("60.5");
 
-    // Submit — type="submit" unutar sheet
-    const submitBtn = page.locator('[role="dialog"] button[type="submit"]');
-    await submitBtn.click();
+    // Submit — type="submit" unutar sheet (sheet je dovoljno visok da treba scroll).
+    // Sa novim pump/mood/steps poljima sheet je iznad viewport-a — Enter key
+    // unutar weight input-a triggeruje form submit pouzdanije nego klik.
+    await weightInput.press('Enter');
 
     // Wait for success (sheet closes OR toast appears)
     await page.waitForTimeout(3_000);

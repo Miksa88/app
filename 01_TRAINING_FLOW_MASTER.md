@@ -1175,7 +1175,7 @@ Ovo je sloj "iznad" treninga — kako se plan menja **kroz nedelje**.
 - DELOAD: nedelja 10
 - Mezociklus 3: nedelje 11–12 (re-test, potencijalno level-up provera)
 
-> **Napomena o trajanju mezociklusa:** Tvoji materijali kažu 6–16 nedelja. Za MVP držimo **4 nedelje + 1 deload = 5 nedelja po ciklusu** jer je to standardni RP/Israetel pristup i najbolji balans između progresа i sveže motivacije. Kasnije možemo napraviti dinamičko trajanje (produži mezociklus ako klijentkinja i dalje napreduje).
+> **Napomena o trajanju mezociklusa (UPDATE 2026-05-08):** Originalni MVP plan je bio 4+1=5 nedelja (RP/Israetel). Posle pocetnici.md spec-a, **default je 6+1=7 nedelja po ciklusu** — početnice trebaju 14-20 dana neuralne adaptacije; 4-nedeljni blok se završi pre nego što stvarno počne stimulus. Lifestyle adjustment: san <6h prosečno → mezo se produžava na 8 nedelja sa Overreach blokom (videti `src/utils/training/lifestyleAdjustments.ts`).
 
 ### 6.2 Deload protokol — konkretna pravila
 
@@ -1650,7 +1650,7 @@ Da ne dođe do scope creep-a, sledeće eksplicitno **nije u MVP**:
 | **Strength Tier** | Klasifikacija snage na osnovu dignutih kilaža relativno na bw (novice/learner/competent/proficient) |
 | **Double Progression** | Progresija gde prvo raste broj reps-a unutar range-a, zatim težina, pa se reps resetuju |
 | **Macrocycle** | 12 nedelja (MVP default) |
-| **Mesocycle** | 4 nedelje akumulacije + 1 deload = 5 nedelja |
+| **Mesocycle** | 6 nedelja akumulacije + 1 deload = 7 nedelja (pocetnici.md §2.1, 2026-05-08 update) |
 | **Microcycle** | Jedna nedelja treninga |
 
 ---

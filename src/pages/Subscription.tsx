@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
 import { Crown, MessageCircle, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // TODO: integrisati sa Stripe / RevenueCat backend-om u IT-25.
@@ -15,11 +16,12 @@ const Subscription = () => {
     <div className="min-h-screen bg-background-secondary pb-12">
       <PageHeader onBack={() => navigate(-1)} backLabel={t("profile.title")} />
 
+      <PageTitle
+        title={t("subscription.chooseYourPlan")}
+        subtitle={t("subscription.comingSoonBody")}
+        compact
+      />
       <div className="px-5 pt-3">
-        <motion.div {...fadeUp()} className="mb-6">
-          <h1 className="text-large-title text-foreground font-bold mb-1">{t("subscription.chooseYourPlan")}</h1>
-          <p className="text-body text-muted-foreground">{t("subscription.comingSoonBody")}</p>
-        </motion.div>
 
         <motion.div
           {...fadeUp(0.08)}
