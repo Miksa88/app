@@ -134,11 +134,13 @@ export const SyncRulesOverrideSection = ({
         return next;
       });
 
-      // Audit log (alpha-level)
-      // eslint-disable-next-line no-console
-      console.log(
-        `[trainer-audit] ${trainerId ?? 'unknown'} changed ${rule} to ${newState} for ${clientId}`,
-      );
+      // Audit trail — gate u dev-u only; prod-u nije korisno (treba real audit table).
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[trainer-audit] ${trainerId ?? 'unknown'} changed ${rule} to ${newState} for ${clientId}`,
+        );
+      }
 
       // Debounce server call
       const existing = timers.current.get(rule);

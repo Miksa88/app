@@ -135,7 +135,7 @@ const Home = () => {
       <div className="px-5 space-y-4 pb-[100px]">
         {/* Skeleton loading — pre nego što useUserStatus vrati podatke */}
         {!status && (
-          <div className="space-y-4" aria-busy="true" aria-label="Učitavanje">
+          <div className="space-y-4" aria-busy="true" aria-label={t("a11y.loading")}>
             <div className="h-20 bg-muted/40 rounded-2xl animate-pulse" />
             <div className="h-32 bg-muted/40 rounded-2xl animate-pulse" />
             <div className="h-24 bg-muted/40 rounded-2xl animate-pulse" />

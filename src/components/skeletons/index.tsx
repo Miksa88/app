@@ -6,12 +6,15 @@
 // Svi se oslanjaju na isti scrollable wrapper kao realne stranice.
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 /**
  * HomeSkeleton — dashboard loading (greeting, weekly strip, today hero, bio rings, fueling, water).
  */
-export const HomeSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const HomeSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-14 pb-2 flex items-center justify-between">
       <div className="space-y-2">
         <Skeleton className="h-3.5 w-24" />
@@ -45,13 +48,16 @@ export const HomeSkeleton = () => (
       <Skeleton className="h-52 rounded-2xl" />
     </div>
   </div>
-);
+  );
+};
 
 /**
  * GymSkeleton — queue-based training screen loading.
  */
-export const GymSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const GymSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-14 pb-2">
       <Skeleton className="h-9 w-32" />
     </div>
@@ -67,13 +73,16 @@ export const GymSkeleton = () => (
       <Skeleton className="h-48 rounded-3xl" />
     </div>
   </div>
-);
+  );
+};
 
 /**
  * FoodSkeleton — meal list loading.
  */
-export const FoodSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const FoodSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-14 pb-2">
       <Skeleton className="h-9 w-40" />
     </div>
@@ -86,13 +95,16 @@ export const FoodSkeleton = () => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 /**
  * ProgressSkeleton — tabs + stat cards loading.
  */
-export const ProgressSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const ProgressSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-14 pb-2">
       <Skeleton className="h-9 w-32" />
     </div>
@@ -113,13 +125,16 @@ export const ProgressSkeleton = () => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 /**
  * TrainerDashboardSkeleton — trainer home loading.
  */
-export const TrainerDashboardSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const TrainerDashboardSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-14 pb-2 flex items-center justify-between">
       <div className="space-y-2">
         <Skeleton className="h-3.5 w-20" />
@@ -141,13 +156,16 @@ export const TrainerDashboardSkeleton = () => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 /**
  * ClientProfileSkeleton — trainer client detail loading.
  */
-export const ClientProfileSkeleton = () => (
-  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label="Loading">
+export const ClientProfileSkeleton = () => {
+  const { t } = useLanguage();
+  return (
+  <div className="min-h-screen bg-background-secondary pb-24" aria-busy="true" aria-label={t("a11y.loading")}>
     <div className="px-5 pt-4 pb-2">
       <Skeleton className="h-10 w-20" />
     </div>
@@ -163,15 +181,19 @@ export const ClientProfileSkeleton = () => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 /**
  * ListSkeleton — generic list skeleton (trainer clients, nutrition templates, etc.).
  */
-export const ListSkeleton = ({ rows = 5 }: { rows?: number }) => (
-  <div className="space-y-2" aria-busy="true" aria-label="Loading">
+export const ListSkeleton = ({ rows = 5 }: { rows?: number }) => {
+  const { t } = useLanguage();
+  return (
+  <div className="space-y-2" aria-busy="true" aria-label={t("a11y.loading")}>
     {[...Array(rows)].map((_, i) => (
       <Skeleton key={i} className="h-18 rounded-2xl" />
     ))}
   </div>
-);
+  );
+};

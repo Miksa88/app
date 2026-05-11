@@ -592,6 +592,7 @@ const translations: Record<string, Record<Language, string>> = {
   "packages.created": { en: "Package created", sr: "Paket kreiran" },
   "packages.nameRequired": { en: "Name is required", sr: "Naziv je obavezan" },
   "packages.saved": { en: "Package saved", sr: "Paket sačuvan" },
+  "a11y.loading": { en: "Loading", sr: "Učitavanje" },
   "clients.fieldType": { en: "Type", sr: "Tip" },
   "clients.fieldStatus": { en: "Status", sr: "Status" },
   "clients.fieldDuration": { en: "Duration", sr: "Trajanje" },

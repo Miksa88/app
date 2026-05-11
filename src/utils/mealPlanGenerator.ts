@@ -419,6 +419,28 @@ export function generateMealPlan(
       });
     }
 
+    // Anti-inflammatory priority for Hashimoto (pocetnici.md §1.1)
+    if (metabolicAdjustments.includes('hashimoto')) {
+      slotFoods = [...slotFoods].sort((a, b) => {
+        const score = (f: FoodItem) => (f.tags?.includes('anti-inflammatory') || f.tags?.includes('omega-3')) ? -1 : 0;
+        return score(a) - score(b);
+      });
+    }
+
+    // Anemija: prioritet heme iron izvori (crveno meso, jetra) + vit-C
+    // pairing za bolju resorpciju (pocetnici.md §1.1).
+    if (metabolicAdjustments.includes('anemia')) {
+      slotFoods = [...slotFoods].sort((a, b) => {
+        const score = (f: FoodItem) => {
+          let s = 0;
+          if (f.tags?.includes('heme_iron') || f.tags?.includes('red-meat') || f.tags?.includes('liver')) s -= 2;
+          if (f.tags?.includes('vitamin_c') || f.tags?.includes('vitamin-c')) s -= 1;
+          return s;
+        };
+        return score(a) - score(b);
+      });
+    }
+
     // A/B/C rotacija — top 3 kandidata, biramo po dnevnom rotation index-u.
     // Iste makroe, različita jela; ako je rotationIndex undefined, biramo prvi.
     const topMatches = findTopMatches(slotFoods, targetCal, targetProtein, slotConfig.minProtein, 3);
