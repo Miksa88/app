@@ -66,8 +66,68 @@ describe('runStartPause', () => {
       clientId: 'c1',
       pauseType: 'illness',
       startDate: '2026-04-23',
+      pauseUntil: undefined,
       notes: undefined,
     });
+  });
+
+  it('pauseUntil passthrough — duration picker vrednost ide u EF body', async () => {
+    const deps = makeDeps();
+    await runStartPause(
+      {
+        clientId: 'c1',
+        pauseType: 'travel',
+        startDate: '2026-06-11',
+        pauseUntil: '2026-06-18',
+      },
+      deps,
+    );
+
+    expect(deps.invoke).toHaveBeenCalledWith({
+      clientId: 'c1',
+      pauseType: 'travel',
+      startDate: '2026-06-11',
+      pauseUntil: '2026-06-18',
+      notes: undefined,
+    });
+  });
+
+  it('pauseUntil null ("dok se ne vratim") — salje undefined, ne null', async () => {
+    const deps = makeDeps();
+    await runStartPause(
+      {
+        clientId: 'c1',
+        pauseType: 'travel',
+        startDate: '2026-06-11',
+        pauseUntil: null,
+      },
+      deps,
+    );
+
+    expect(deps.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ pauseUntil: undefined }),
+    );
+  });
+
+  it('server validacija — EF vraca 400 za pauzu duzu od 30 dana, mutation throw-a', async () => {
+    const deps = makeDeps({
+      invoke: vi.fn(async () => ({
+        data: { ok: false, error: 'Pauza moze trajati najvise 30 dana' },
+        error: null,
+      })),
+    });
+
+    await expect(
+      runStartPause(
+        {
+          clientId: 'c1',
+          pauseType: 'travel',
+          startDate: '2026-06-11',
+          pauseUntil: '2026-08-01',
+        },
+        deps,
+      ),
+    ).rejects.toThrow(/30 dana/);
   });
 
   it('error path — Edge Function vraca 409 konflikt, mutation throw-a', async () => {

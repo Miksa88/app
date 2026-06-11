@@ -30,6 +30,8 @@ import { useUserStatus } from '@/hooks/useUserStatus';
 import { useNextSession } from '@/hooks/useNextSession';
 import { useMesocycleQueue } from '@/hooks/useMesocycleQueue';
 import { useSwapNextSessions } from '@/hooks/mutations/useSwapNextSessions';
+import { useClientPause } from '@/hooks/useClientPause';
+import { isPauseExpired } from '@/services/clientPauseService';
 import { WeeklyCalendar } from '@/components/queue/WeeklyCalendar';
 import { SyncEventBanner } from '@/components/queue/SyncEventBanner';
 import { canSwapNextTwoSessions } from '@/utils/training/sessionResolver';
@@ -47,6 +49,11 @@ const Gym = () => {
   const { queue } = useMesocycleQueue(clientId);
   const swapMutation = useSwapNextSessions(clientId, { t });
   const [trialExpired] = useState(false);
+
+  // Pause/Freeze (MVP_PRESET gap #1): tokom aktivne pauze start treninga je
+  // blokiran — queue je zamrznut, sesija čeka da se pauza završi.
+  const { data: pauseState } = useClientPause(clientId);
+  const isPaused = !!pauseState && !isPauseExpired(pauseState);
 
   if (trialExpired) {
     return (
@@ -173,11 +180,21 @@ const Gym = () => {
               onClick={() => navigate('/workout/active')}
               className="w-full mt-4"
               size="lg"
+              disabled={isPaused}
             >
               <Flame size={ICON_SIZE.md} className="inline mr-1.5" aria-hidden="true" />
               {t('gym.startWorkout')}
               <ChevronRight size={ICON_SIZE.md} className="inline ml-1" aria-hidden="true" />
             </GradientButton>
+
+            {/* Poruka tokom aktivne pauze — zašto je start blokiran */}
+            {isPaused && (
+              <p className="text-footnote text-muted-foreground text-center mt-2" role="status">
+                {pauseState?.pause_until
+                  ? t('gym.pausedUntil').replace('{date}', pauseState.pause_until)
+                  : t('gym.pausedIndefinite')}
+              </p>
+            )}
           </MotionCard>
         )}
 

@@ -13,6 +13,9 @@
 //   3. Ako je `isInDeload=true` a trenutni mikrociklus vise nije poslednji
 //      (znaci rollover se desio) → skini flag.
 //
+// Pauzirane klijentkinje (Pause/Freeze, MVP_PRESET gap #1) se preskaču —
+// mezo nedelje ne teku tokom pauze.
+//
 // Ulaz (POST JSON, svi polja opcionalna):
 //   { clientIds?: string[] }
 //
@@ -32,6 +35,7 @@
 //     mesocyclesRolled: <int>,
 //     deloadsStarted: <int>,
 //     deloadsEnded: <int>,
+//     skippedPaused: <int>,
 //     errors: [{ clientId, reason }]   // neblokirajuce greske po klijentkinji
 //   }
 //
@@ -71,6 +75,8 @@ declare const Deno: {
 // ----------------------------------------------------------------------------
 
 interface UserStatusTrainingShape {
+  /** Pause/Freeze (MVP_PRESET gap #1): aktivna klijent-pauza — tick skip */
+  activePauseEvent?: unknown;
   activeTemplateId: string;
   daysPerWeek: 3 | 4 | 5;
   queue: MesocycleQueue;
@@ -217,6 +223,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       mesocyclesRolled: 0,
       deloadsStarted: 0,
       deloadsEnded: 0,
+      skippedPaused: 0,
       errors: [],
     });
   }
@@ -250,10 +257,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
+  // 2b. Pause/Freeze (MVP_PRESET gap #1): pauzirane klijentkinje se preskaču —
+  //     mezo nedelje/deload flagovi NE smeju da teku dok je plan zamrznut.
+  //     Izvori pauze: user_status.training.activePauseEvent (klijent) +
+  //     profiles.pause_state (trener).
+  const allClientIds = (statusRows as Array<{ client_id: string }>).map(
+    (r) => r.client_id,
+  );
+  const pausedByTrainer = new Set<string>();
+  {
+    const { data: profileRows, error: profilesErr } = await admin
+      .from("profiles")
+      .select("id, pause_state")
+      .in("id", allClientIds);
+    if (profilesErr) {
+      console.error("[mesocycle-tick] profiles fetch failed", profilesErr.message);
+      return jsonResponse(HDRS, { error: "profiles fetch failed" }, 500);
+    }
+    for (const p of profileRows ?? []) {
+      if (p.pause_state != null) pausedByTrainer.add(p.id as string);
+    }
+  }
+
   // 3. Iteriraj po klijentkinjama
   let mesocyclesRolled = 0;
   let deloadsStarted = 0;
   let deloadsEnded = 0;
+  let skippedPaused = 0;
   const errors: Array<{ clientId: string; reason: string }> = [];
 
   for (const row of statusRows as Array<{
@@ -266,6 +296,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         clientId: row.client_id,
         reason: "Missing training section",
       });
+      continue;
+    }
+
+    // Skip pauzirane (bilo koji izvor pauze)
+    if (status.training.activePauseEvent || pausedByTrainer.has(row.client_id)) {
+      skippedPaused += 1;
       continue;
     }
 
@@ -408,6 +444,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     mesocyclesRolled,
     deloadsStarted,
     deloadsEnded,
+    skippedPaused,
     errors,
   });
 });

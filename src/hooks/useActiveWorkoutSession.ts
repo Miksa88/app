@@ -30,6 +30,9 @@ import { listSystemExercisesWithUuids } from '@/utils/db/exerciseLibrary';
 import { loadExerciseHistoryBatch } from '@/utils/db/exerciseHistory';
 import { generateSessionSkeleton } from '@/utils/training/programGenerator';
 import { calcRecoveryMultiplier } from '@/utils/training/recoveryCalibration';
+import { applyPermanentSwaps } from '@/utils/training/applyPermanentSwaps';
+import { getClientExerciseSwaps } from '@/services/exerciseSwapService';
+import { isFeatureEnabled } from '@/tenant.config';
 import type {
   ClientTrainingProfile,
   ExerciseSlot,
@@ -222,11 +225,16 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
         throw new Error('useActiveWorkoutSession: missing prerequisites');
       }
 
-      // 1. Load profile + template + exercises paralelno
-      const [profileRow, template, libraryResult] = await Promise.all([
+      // 1. Load profile + template + exercises + trajne zamene paralelno.
+      // Trajne zamene (client_exercise_swaps) su gated feature flag-om;
+      // greška pri učitavanju NE blokira trening (fallback prazna mapa).
+      const [profileRow, template, libraryResult, permanentSwaps] = await Promise.all([
         loadProfileRow(clientId),
         getTemplateById(status.training.activeTemplateId),
         listSystemExercisesWithUuids(),
+        isFeatureEnabled('exerciseSubstitution')
+          ? getClientExerciseSwaps(clientId).catch(() => new Map<string, string>())
+          : Promise.resolve(new Map<string, string>()),
       ]);
 
       if (!profileRow) {
@@ -313,7 +321,16 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
         (d) => d.dayType === session.dayType,
       ) ?? result.skeleton.days[0];
 
-      const slots: ActiveWorkoutSlot[] = dayForSession.exerciseSlots.map((slot) => {
+      // Trajne zamene ("Zameni trajno") — primena PRE UI mapiranja, tako da
+      // se ime, UUID i previousMaxWeight izvode za zamenjenu vežbu.
+      const slotsAfterSwaps = applyPermanentSwaps(
+        dayForSession.exerciseSlots,
+        permanentSwaps,
+        exerciseLibrary,
+        uuidById,
+      );
+
+      const slots: ActiveWorkoutSlot[] = slotsAfterSwaps.map((slot) => {
         const exercise = exerciseLibrary.find((e) => e.id === slot.chosenExerciseId);
         const uuid = slot.chosenExerciseId !== undefined
           ? uuidById.get(slot.chosenExerciseId) ?? null

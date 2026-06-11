@@ -25,6 +25,11 @@ export interface StartPauseInput {
   pauseType: PauseType;
   /** ISO string ili YYYY-MM-DD. Default: poziv-ovi mogu prosledi new Date().toISOString(). */
   startDate: string;
+  /**
+   * Planirani kraj pauze (YYYY-MM-DD). null/undefined = "dok se ne vratim".
+   * Server validira max 30 dana za klijent-iniciranu pauzu.
+   */
+  pauseUntil?: string | null;
   notes?: string;
 }
 
@@ -39,6 +44,7 @@ export interface StartPauseDeps {
     clientId: string;
     pauseType: PauseType;
     startDate: string;
+    pauseUntil?: string;
     notes?: string;
   }) => Promise<{ data: unknown; error: { message?: string } | null }>;
 }
@@ -60,6 +66,7 @@ export async function runStartPause(
     clientId: input.clientId,
     pauseType: input.pauseType,
     startDate: input.startDate,
+    pauseUntil: input.pauseUntil ?? undefined,
     notes: input.notes,
   });
 
@@ -108,6 +115,9 @@ export function useStartPause(
     onSuccess: () => {
       if (clientId) {
         queryClient.invalidateQueries({ queryKey: ['userStatus', clientId] });
+        // start-pause EF mirror-uje pauzu u profiles.pause_state —
+        // osvezi i banner/Gym blokadu (useClientPause cache).
+        queryClient.invalidateQueries({ queryKey: ['clientPause', clientId] });
       }
     },
 

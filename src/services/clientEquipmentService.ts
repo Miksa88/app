@@ -71,3 +71,62 @@ export function hasRequiredEquipment(
   const owned = new Set(clientEquipment);
   return required.every((e) => e === "Bodyweight" || owned.has(e));
 }
+
+// ----------------------------------------------------------------------------
+// Normalizacija: EQUIPMENT_OPTIONS (Title Case, profiles.equipment_list)
+// → training Equipment tokeni (lowercase, types/training.ts `Equipment`).
+// "Cable Machine" → 'cable'; ostalo je 1:1 lowercase.
+// ----------------------------------------------------------------------------
+
+const OPTION_TO_TRAINING_TOKEN: Record<string, string> = {
+  "barbell": "barbell",
+  "dumbbell": "dumbbell",
+  "kettlebell": "kettlebell",
+  "cable machine": "cable",
+  "machine": "machine",
+  "bench": "bench",
+  "rack": "rack",
+  "bodyweight": "bodyweight",
+};
+
+/** Klijentova lista (Title Case opcije) → set lowercase training tokena. */
+export function toTrainingEquipmentTokens(
+  clientEquipment: readonly string[],
+): Set<string> {
+  const tokens = new Set<string>();
+  for (const item of clientEquipment) {
+    const key = item.toLowerCase();
+    tokens.add(OPTION_TO_TRAINING_TOKEN[key] ?? key);
+  }
+  return tokens;
+}
+
+/**
+ * Da li klijentkinja ima opremu za vežbu (Exercise.equipment lowercase tokeni).
+ * Bodyweight uvek prolazi; vežba bez ikakvog equipment zahteva uvek prolazi.
+ * Tokeni bez klijent-opcije (npr. 'band', 'smith') prolaze samo ako su
+ * eksplicitno u listi klijenta.
+ */
+export function hasTrainingEquipment(
+  required: readonly string[] | null | undefined,
+  clientEquipment: readonly string[],
+): boolean {
+  if (!required || required.length === 0) return true;
+  const owned = toTrainingEquipmentTokens(clientEquipment);
+  return required.every(
+    (e) => e.toLowerCase() === "bodyweight" || owned.has(e.toLowerCase()),
+  );
+}
+
+/**
+ * Filtrira vežbe po opremi koju klijentkinja ima.
+ * Ako klijent NEMA equipment profil (prazna lista) → bez filtera, vraćamo
+ * sve (nikad prazan spisak zbog nepopunjenog profila).
+ */
+export function filterExercisesByEquipment<T extends { equipment: readonly string[] }>(
+  exercises: T[],
+  clientEquipment: readonly string[],
+): T[] {
+  if (clientEquipment.length === 0) return exercises;
+  return exercises.filter((ex) => hasTrainingEquipment(ex.equipment, clientEquipment));
+}

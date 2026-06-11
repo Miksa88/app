@@ -1,5 +1,6 @@
 // ============================================================================
 // SwapExerciseSheet — bottom sheet sa alternativama iste movement_pattern
+// MVP_PRESET gap #2 — klijent-facing exercise substitution
 // ============================================================================
 //
 // Korisnik klikne "Zameni vežbu" na ActiveWorkout slot. Sheet učitava
@@ -7,21 +8,29 @@
 // ako je dostupan), filtrira out:
 //   - trenutnu (currentExerciseUuid)
 //   - kontraindikovane za injury (Sloj 2 safety filter)
-// Pokazuje top-5 alternativa sortirane po istoj scoring logici.
+//   - vežbe za koje klijentkinja NEMA opremu (profiles.equipment_list);
+//     bodyweight / bez zahteva uvek prolaze, prazan equipment profil = bez filtera
+// Pokazuje top-5 alternativa rangirane istom scoring logikom kao automatski
+// surgical swap (rankExerciseCandidates: tension profile / CNS / variety).
 //
 // Pick = update local state u ActiveWorkout (per-session override; ne
-// menja queue u DB-u). Korisnik može da završi sesiju sa zamenjenom
-// vežbom, sledeći put će biti default.
+// menja queue u DB-u). Toggle "Zameni trajno" → ActiveWorkout dodatno
+// upiše mapiranje u client_exercise_swaps (važi za sve buduće treninge).
 // ============================================================================
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRightLeft, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useClientEquipment } from "@/hooks/useClientEquipment";
 import { listExercisesByPattern } from "@/utils/db/exerciseLibrary";
+import { filterExercisesByEquipment } from "@/services/clientEquipmentService";
+import { rankExerciseCandidates } from "@/utils/training/exerciseSubstitution";
 import type { Exercise, MovementPattern, MuscleGroup } from "@/types/training";
 import { IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
+import { Switch } from "@/components/ui/switch";
 
 interface SwapExerciseSheetProps {
   open: boolean;
@@ -32,8 +41,8 @@ interface SwapExerciseSheetProps {
   currentExerciseId: number | null;
   /** Profile injuries za safety filter (exclude contraindicated) */
   injuries: string[];
-  /** Callback kad korisnik izabere alternativu */
-  onPick: (exercise: Exercise) => void;
+  /** Callback kad korisnik izabere alternativu; permanent = "Zameni trajno" */
+  onPick: (exercise: Exercise, opts: { permanent: boolean }) => void;
 }
 
 const SwapExerciseSheet = ({
@@ -46,8 +55,17 @@ const SwapExerciseSheet = ({
   onPick,
 }: SwapExerciseSheetProps) => {
   const { t, language } = useLanguage();
+  const { clientId } = useAuth();
+  // Equipment profil se učitava samo dok je sheet otvoren (open → enabled).
+  const { data: clientEquipment = [] } = useClientEquipment(open ? clientId : null);
   const [alternatives, setAlternatives] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(false);
+  const [permanent, setPermanent] = useState(false);
+
+  // Reset toggle-a pri svakom otvaranju — trajna zamena je svesna odluka.
+  useEffect(() => {
+    if (open) setPermanent(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +76,7 @@ const SwapExerciseSheet = ({
         const all = await listExercisesByPattern(movementPattern, muscleGroup);
         if (cancelled) return;
         const safeInjuries = injuries.filter((i) => i !== "none");
-        const filtered = all
+        const candidates = all
           .filter((ex) => ex.id !== currentExerciseId)
           .filter((ex) =>
             // Safety: exclude exercises contraindicated for any of user's injuries
@@ -66,9 +84,12 @@ const SwapExerciseSheet = ({
             !safeInjuries.some((inj) =>
               ex.contraindications.includes(inj as typeof ex.contraindications[number]),
             ),
-          )
-          .slice(0, 5);
-        setAlternatives(filtered);
+          );
+        // Equipment filter: prazan profil → bez filtera (ne prazan spisak!)
+        const available = filterExercisesByEquipment(candidates, clientEquipment);
+        // Ranking istom scoring logikom kao automatski surgical swap
+        const ranked = rankExerciseCandidates(available).slice(0, 5);
+        setAlternatives(ranked);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -76,7 +97,7 @@ const SwapExerciseSheet = ({
     return () => {
       cancelled = true;
     };
-  }, [open, movementPattern, muscleGroup, currentExerciseId, injuries]);
+  }, [open, movementPattern, muscleGroup, currentExerciseId, injuries, clientEquipment]);
 
   return (
     <AnimatePresence>
@@ -115,7 +136,24 @@ const SwapExerciseSheet = ({
               </button>
             </div>
 
-            <div className="mt-4 space-y-2">
+            {/* "Zameni trajno" — toggle: zamena važi za sve buduće treninge */}
+            <div className="mt-4 flex items-center justify-between gap-3 bg-background-secondary border border-border rounded-2xl p-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-foreground">
+                  {t("workout.swapPermanent")}
+                </p>
+                <p className="text-caption-1 text-muted-foreground mt-0.5">
+                  {t("workout.swapPermanentHint")}
+                </p>
+              </div>
+              <Switch
+                checked={permanent}
+                onCheckedChange={setPermanent}
+                aria-label={t("workout.swapPermanent")}
+              />
+            </div>
+
+            <div className="mt-3 space-y-2">
               {loading && (
                 <div className="flex flex-col items-center py-8">
                   <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-hidden="true" />
@@ -131,7 +169,7 @@ const SwapExerciseSheet = ({
                   key={ex.id}
                   whileTap={{ scale: TAP_SCALE.secondary }}
                   onClick={() => {
-                    onPick(ex);
+                    onPick(ex, { permanent });
                     onOpenChange(false);
                   }}
                   className="w-full bg-background-secondary border border-border rounded-2xl p-4 text-left flex items-center gap-3 min-h-14"

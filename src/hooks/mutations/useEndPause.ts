@@ -101,6 +101,9 @@ export function useEndPause(
     onSuccess: () => {
       if (clientId) {
         queryClient.invalidateQueries({ queryKey: ['userStatus', clientId] });
+        // end-pause EF cisti profiles.pause_state mirror —
+        // osvezi i banner/Gym blokadu (useClientPause cache).
+        queryClient.invalidateQueries({ queryKey: ['clientPause', clientId] });
       }
     },
 

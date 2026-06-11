@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowRightLeft } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TAP_SCALE } from "@/lib/motion";
+import { isFeatureEnabled } from "@/tenant.config";
 import type { ActiveWorkoutSlot } from "@/hooks/useActiveWorkoutSession";
 
 interface WorkoutExerciseInfoProps {
@@ -32,15 +33,18 @@ const WorkoutExerciseInfo = ({
         <span className="text-caption-1 bg-primary/10 px-2.5 py-1 rounded-lg text-primary font-medium">
           {slot.muscleGroup.replace(/_/g, " ")}
         </span>
-        <motion.button
-          whileTap={{ scale: TAP_SCALE.icon }}
-          onClick={onOpenSwap}
-          className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-caption-1 text-foreground font-medium min-h-9"
-          aria-label={t("workout.swapExercise")}
-        >
-          <ArrowRightLeft size={14} aria-hidden="true" />
-          {t("workout.swapExercise")}
-        </motion.button>
+        {/* White-label: swap dugme samo ako tenant ima exerciseSubstitution */}
+        {isFeatureEnabled("exerciseSubstitution") && (
+          <motion.button
+            whileTap={{ scale: TAP_SCALE.icon }}
+            onClick={onOpenSwap}
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-caption-1 text-foreground font-medium min-h-9"
+            aria-label={t("workout.swapExercise")}
+          >
+            <ArrowRightLeft size={14} aria-hidden="true" />
+            {t("workout.swapExercise")}
+          </motion.button>
+        )}
       </div>
       <h1 className="text-title-1 text-foreground mb-1">
         {overrideName ?? slot.exerciseName}

@@ -50,6 +50,10 @@ vi.mock("@/hooks/useUnreadMessages", () => ({
 vi.mock("@/hooks/useClientPause", () => ({
   useClientPause: () => ({ data: null, isLoading: false, error: null }),
 }));
+vi.mock("@/hooks/useAutoEndExpiredPause", () => ({
+  // No-op: auto-end istekle pauze koristi useQueryClient (nema providera u testu)
+  useAutoEndExpiredPause: () => undefined,
+}));
 vi.mock("@/hooks/useNextSession", () => ({
   useNextSession: () => ({ session: null, isLoading: false }),
 }));

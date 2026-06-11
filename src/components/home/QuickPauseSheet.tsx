@@ -2,11 +2,15 @@
 // QuickPauseSheet — bottom sheet za pokretanje pauze (travel/illness)
 // ============================================================================
 //
-// Korisnik klikne brzu akciju na Home/Profile, bira tip pauze,
+// Korisnik klikne brzu akciju na Home/Profile, bira tip pauze + trajanje,
 // hook poziva start-pause Edge Function. Engine zatim:
 //   - Ne penalizuje za travel (0 penalty sessions)
 //   - Aplicira "soft deficit -5%" za illness
 //   - Pauzira queue (next workout neće se računati kao "skipped")
+//
+// Trajanje (MVP_PRESET gap #1): preset 7/14/21 dana ili "dok se ne vratim".
+// pause_until ide kroz start-pause EF (server validira max 30 dana) i
+// mirror-uje se u profiles.pause_state → auto-resume po isteku.
 // ============================================================================
 
 import { useState } from "react";
@@ -15,6 +19,10 @@ import { Plane, Thermometer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useStartPause, type PauseType } from "@/hooks/mutations/useStartPause";
+import {
+  computePauseUntil,
+  PAUSE_DURATION_PRESETS,
+} from "@/services/clientPauseService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { ICON_SIZE } from "@/lib/design-tokens";
@@ -30,6 +38,8 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
   const { clientId } = useAuth();
   const startPause = useStartPause(clientId, { silent: true });
   const [selected, setSelected] = useState<PauseType | null>(null);
+  // Trajanje pauze u danima; null = "dok se ne vratim" (indefinitivno)
+  const [durationDays, setDurationDays] = useState<number | null>(7);
 
   const options: Array<{
     type: PauseType;
@@ -63,9 +73,11 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
       await startPause.mutateAsync({
         pauseType: selected,
         startDate: new Date().toISOString(),
+        pauseUntil: computePauseUntil(durationDays),
       });
       toast.success(t("pause.started"));
       setSelected(null);
+      setDurationDays(7);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -135,6 +147,44 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
                   </motion.button>
                 );
               })}
+            </div>
+
+            {/* Trajanje pauze — preset 7/14/21 dana ili indefinitivno */}
+            <div className="mt-5">
+              <p className="text-caption-1 text-muted-foreground uppercase tracking-wider mb-2">
+                {t("pause.durationLabel")}
+              </p>
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label={t("pause.durationLabel")}>
+                {PAUSE_DURATION_PRESETS.map((days) => (
+                  <motion.button
+                    key={days}
+                    whileTap={{ scale: TAP_SCALE.secondary }}
+                    onClick={() => setDurationDays(days)}
+                    role="radio"
+                    aria-checked={durationDays === days}
+                    className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-all min-h-11 ${
+                      durationDays === days
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    {t("pause.durationDays").replace("{n}", String(days))}
+                  </motion.button>
+                ))}
+                <motion.button
+                  whileTap={{ scale: TAP_SCALE.secondary }}
+                  onClick={() => setDurationDays(null)}
+                  role="radio"
+                  aria-checked={durationDays === null}
+                  className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-all min-h-11 ${
+                    durationDays === null
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {t("pause.durationIndefinite")}
+                </motion.button>
+              </div>
             </div>
 
             <div className="mt-6">

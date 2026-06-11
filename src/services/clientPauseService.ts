@@ -81,3 +81,36 @@ export function isPauseExpired(state: PauseState | null): boolean {
   now.setHours(0, 0, 0, 0);
   return new Date(state.pause_until) < now;
 }
+
+// ============================================================================
+// Klijent-inicirana pauza — trajanje (MVP_PRESET gap #1)
+// ============================================================================
+
+/** Maksimalno trajanje klijent-inicirane pauze (mirror server-side guard-a u start-pause EF). */
+export const MAX_CLIENT_PAUSE_DAYS = 30;
+
+/** Preset trajanja koje klijentkinja bira u QuickPauseSheet-u. */
+export const PAUSE_DURATION_PRESETS = [7, 14, 21] as const;
+
+/**
+ * Racuna pause_until (YYYY-MM-DD) za izabrano trajanje u danima.
+ * Vraca null za "dok se ne vratim" (days = null) — indefinitivna pauza.
+ * Throw-uje za nevalidan broj dana (van 1..MAX_CLIENT_PAUSE_DAYS).
+ */
+export function computePauseUntil(
+  days: number | null,
+  from: Date = new Date(),
+): string | null {
+  if (days === null) return null;
+  if (!Number.isInteger(days) || days < 1 || days > MAX_CLIENT_PAUSE_DAYS) {
+    throw new Error(
+      `computePauseUntil: days mora biti 1..${MAX_CLIENT_PAUSE_DAYS}, dobio ${days}`,
+    );
+  }
+  const until = new Date(from);
+  until.setDate(until.getDate() + days);
+  const yyyy = until.getFullYear();
+  const mm = String(until.getMonth() + 1).padStart(2, "0");
+  const dd = String(until.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}

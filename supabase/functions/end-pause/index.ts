@@ -19,7 +19,9 @@
 //   2. UPDATE `pause_events` SET is_active=false, end_date=<endDate || today>
 //        WHERE user_id=auth.uid AND is_active=true.
 //   3. Patch UserStatus.training.activePauseEvent = null i upsert.
-//   4. Vraca novi UserStatus.
+//   4. Ocisti profiles.pause_state mirror (start-pause ga upisuje) — banner
+//      i Gym blokada nestaju odmah po povratku.
+//   5. Vraca novi UserStatus.
 //
 // Napomena: illness penalty countdown (penalty_sessions_remaining) se ne
 // resetuje ovde — ostaje na izvornom redu i troshi se kroz
@@ -253,6 +255,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (upsertErr) {
     console.error("[end-pause] user_status upsert failed", upsertErr.message);
     return jsonResponse(HDRS, { error: "user_status upsert failed" }, 500);
+  }
+
+  // 7. Ocisti profiles.pause_state mirror (upisao ga start-pause).
+  //    Ne-blokirajuce — pauza je vec zavrsena u pause_events + user_status.
+  const { error: pauseStateErr } = await admin
+    .from("profiles")
+    .update({ pause_state: null })
+    .eq("id", userId);
+
+  if (pauseStateErr) {
+    console.error("[end-pause] profiles.pause_state clear failed", pauseStateErr.message);
   }
 
   return jsonResponse(HDRS, {

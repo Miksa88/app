@@ -51,6 +51,13 @@ export interface TenantFeatures {
   domsDetection: boolean;
   /** HealthKit placeholder UI (Apple Health red u Profile + HealthPage + onboarding korak) */
   healthKit: boolean;
+  /** Pause/Freeze — klijent-inicirana pauza plana (QuickPauseSheet ulaz u Profile-u).
+   *  MVP_PRESET gap #1. Nezavisan od algorithm moda (korisno i u 'simple' trackeru). */
+  clientPause: boolean;
+  /** Klijent-facing zamena vežbi (swap dugme + SwapExerciseSheet: per-session
+   *  override, equipment filter, "Zameni trajno"). MVP_PRESET gap #2.
+   *  Nezavisan od algorithm moda — i običan tracker sme da menja vežbe. */
+  exerciseSubstitution: boolean;
 }
 
 export interface TenantConfig {
@@ -118,6 +125,10 @@ export const tenantConfig: TenantConfig = {
     // HealthKit nije realno povezan (placeholder UI) — ali gašenje menja vidljivi
     // UI (Profile red, HealthPage, onboarding korak), pa default ostaje true.
     healthKit: true,
+    // Pause/Freeze (MVP_PRESET gap #1) — default ON za sve tenante.
+    clientPause: true,
+    // Klijent-facing zamena vežbi (MVP_PRESET gap #2) — default ON.
+    exerciseSubstitution: true,
   },
 };
 

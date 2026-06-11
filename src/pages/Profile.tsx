@@ -303,24 +303,26 @@ const Profile = () => {
           <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" />
         </motion.button>
 
-        {/* Quick pause action — putovanje/bolest */}
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          onClick={() => setShowPauseSheet(true)}
-          className="w-full bg-card rounded-2xl card-shadow p-4 flex items-center gap-4 text-left"
-          aria-label={t("profile.quickPause")}
-        >
-          <div className="w-12 h-12 rounded-2xl bg-warning/10 flex items-center justify-center shrink-0">
-            <Plane size={20} className="text-warning" aria-hidden="true" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-body font-semibold text-foreground">{t("profile.quickPause")}</p>
-            <p className="text-caption-1 text-muted-foreground mt-0.5">{t("profile.quickPauseSub")}</p>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" />
-        </motion.button>
+        {/* Quick pause action — putovanje/bolest (feature flag: clientPause) */}
+        {isFeatureEnabled("clientPause") && (
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            onClick={() => setShowPauseSheet(true)}
+            className="w-full bg-card rounded-2xl card-shadow p-4 flex items-center gap-4 text-left"
+            aria-label={t("profile.quickPause")}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-warning/10 flex items-center justify-center shrink-0">
+              <Plane size={20} className="text-warning" aria-hidden="true" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-body font-semibold text-foreground">{t("profile.quickPause")}</p>
+              <p className="text-caption-1 text-muted-foreground mt-0.5">{t("profile.quickPauseSub")}</p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground/30 shrink-0" />
+          </motion.button>
+        )}
 
         {/* Account */}
         <div>
@@ -447,7 +449,9 @@ const Profile = () => {
         }
       </AnimatePresence>
 
-      <QuickPauseSheet open={showPauseSheet} onOpenChange={setShowPauseSheet} />
+      {isFeatureEnabled("clientPause") && (
+        <QuickPauseSheet open={showPauseSheet} onOpenChange={setShowPauseSheet} />
+      )}
 
       {/* Destructive confirmation dialogs (WS-3) */}
       <AlertDialog open={confirmAction === "logout"} onOpenChange={(o) => !o && setConfirmAction(null)}>

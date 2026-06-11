@@ -9,6 +9,8 @@
 //   - Refeed dan:  "Dobro jutro 🥐 — dan punjenja, više hidrata"
 //   - Diet break:  "Dobro jutro 🍳 — pauza od dijete"
 //
+// Pauzirane klijentkinje (Pause/Freeze, MVP_PRESET gap #1) se preskaču.
+//
 // Auth: x-cron-secret header.
 // ============================================================================
 
@@ -31,6 +33,8 @@ interface UserStatusRow {
       isInDeload?: boolean;
       dietBreakActive?: boolean;
       nextSessionPartition?: string;
+      // Pause/Freeze (MVP_PRESET gap #1): aktivna klijent-pauza
+      activePauseEvent?: unknown;
     };
     nutrition?: {
       activeRefeedDay?: boolean;
@@ -122,11 +126,35 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "user_status fetch failed" }, 500);
   }
 
+  // Pause/Freeze (MVP_PRESET gap #1): pauzirane klijentkinje NE dobijaju
+  // jutarnji push. Dva izvora pauze:
+  //   1. user_status.training.activePauseEvent (klijent-inicirana, start-pause EF)
+  //   2. profiles.pause_state (trener-inicirana, clientPauseService)
+  const { data: profileRows, error: profilesErr } = await admin
+    .from("profiles")
+    .select("id, pause_state")
+    .in("id", uniqueUserIds);
+  if (profilesErr) {
+    console.error("[daily-push-reminders] profiles fetch failed", profilesErr.message);
+    return jsonResponse({ error: "profiles fetch failed" }, 500);
+  }
+  const pausedByTrainer = new Set(
+    (profileRows ?? [])
+      .filter((p) => p.pause_state != null)
+      .map((p) => p.id as string),
+  );
+
   let pushed = 0;
   let failed = 0;
+  let skippedPaused = 0;
 
   // Pošalji u sequence (može i parallel ali EF max execution = 60s; sekvenca je sigurnija)
   for (const row of (statuses ?? []) as UserStatusRow[]) {
+    // Skip pauzirane (bilo koji izvor pauze)
+    if (row.status_json?.training?.activePauseEvent || pausedByTrainer.has(row.client_id)) {
+      skippedPaused++;
+      continue;
+    }
     const msg = buildMessage(row.status_json ?? {});
     try {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
@@ -150,5 +178,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true, pushed, failed, total: uniqueUserIds.length });
+  return jsonResponse({ ok: true, pushed, failed, skippedPaused, total: uniqueUserIds.length });
 });

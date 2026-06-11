@@ -166,34 +166,69 @@ const TENSION_PROFILE_SCORE: Record<TensionProfile, number> = {
   shortened: 1,        // manji zamor, dobar za finisher
 };
 
+/**
+ * Kontekst za rangiranje kandidata — podskup SubstitutionInputs koji je
+ * dostupan i van automatskog surgical swap-a (npr. klijent-facing
+ * SwapExerciseSheet, koji nema pun ClientTrainingProfile pri ruci).
+ */
+export interface ExerciseRankingContext {
+  /** Recovery multiplier klijentkinje; default 1 (normalan oporavak). */
+  recoveryMultiplier?: number;
+  /** Nedavno korišćene vežbe — variety demote. */
+  recentlyUsedExerciseIds?: number[];
+}
+
+/**
+ * Skor jednog kandidata po Sekciji 5 Korak 4 (tension profile / CNS load /
+ * variety). Izdvojeno iz pickBest da bi SwapExerciseSheet mogao da sortira
+ * alternative istom logikom kao automatski surgical swap.
+ */
+export function scoreExerciseCandidate(
+  ex: Exercise,
+  ctx: ExerciseRankingContext = {},
+): number {
+  const recovery = ctx.recoveryMultiplier ?? 1;
+  const recentlyUsed = new Set(ctx.recentlyUsedExerciseIds ?? []);
+
+  let score = 0;
+
+  // Tension profile (vise je bolje za hipertrofiju)
+  score += TENSION_PROFILE_SCORE[ex.tensionProfile];
+
+  // CNS load — ako recovery nizak, preferiramo manji CNS load
+  if (recovery < 0.85) {
+    score -= ex.cnsLoad * 0.5;          // penalty za visok CNS pri losem oporavku
+  } else {
+    score += (5 - ex.cnsLoad) * 0.2;    // mali bonus na lakim vezbama
+  }
+
+  // Variety — ako je nedavno koriscena, demote
+  if (recentlyUsed.has(ex.id)) {
+    score -= 1;
+  }
+
+  return score;
+}
+
+/**
+ * Sortira kandidate po skoru opadajuće (stabilno — ties zadržavaju ulazni
+ * redosled). Ne mutira ulazni niz.
+ */
+export function rankExerciseCandidates(
+  candidates: Exercise[],
+  ctx: ExerciseRankingContext = {},
+): Exercise[] {
+  return candidates
+    .map(ex => ({ ex, score: scoreExerciseCandidate(ex, ctx) }))
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.ex);
+}
+
 function pickBest(candidates: Exercise[], input: SubstitutionInputs): Exercise {
   if (candidates.length === 1) return candidates[0];
 
-  const recovery = input.profile.recoveryMultiplier;
-  const recentlyUsed = new Set(input.recentlyUsedExerciseIds ?? []);
-
-  // Score svaki kandidat
-  const scored = candidates.map(ex => {
-    let score = 0;
-
-    // Tension profile (vise je bolje za hipertrofiju)
-    score += TENSION_PROFILE_SCORE[ex.tensionProfile];
-
-    // CNS load — ako recovery nizak, preferiramo manji CNS load
-    if (recovery < 0.85) {
-      score -= ex.cnsLoad * 0.5;          // penalty za visok CNS pri losem oporavku
-    } else {
-      score += (5 - ex.cnsLoad) * 0.2;    // mali bonus na lakim vezbama
-    }
-
-    // Variety — ako je nedavno koriscena, demote
-    if (recentlyUsed.has(ex.id)) {
-      score -= 1;
-    }
-
-    return { ex, score };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0].ex;
+  return rankExerciseCandidates(candidates, {
+    recoveryMultiplier: input.profile.recoveryMultiplier,
+    recentlyUsedExerciseIds: input.recentlyUsedExerciseIds,
+  })[0];
 }

@@ -38,6 +38,7 @@ import { toast } from "sonner";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useProfileInjuries } from "@/hooks/useProfile";
 import { isFeatureEnabled } from "@/tenant.config";
+import { upsertClientExerciseSwap } from "@/services/exerciseSwapService";
 
 const ActiveWorkout = () => {
   const navigate = useNavigate();
@@ -374,7 +375,9 @@ const ActiveWorkout = () => {
         onLeave={() => navigate("/gym")}
       />
 
-      {slot && (
+      {/* White-label (MVP_PRESET gap #2): swap sheet samo ako tenant ima
+          exerciseSubstitution feature */}
+      {slot && isFeatureEnabled("exerciseSubstitution") && (
         <SwapExerciseSheet
           open={showSwapSheet}
           onOpenChange={(open) => dispatch({ type: "SET_SWAP_SHEET", open })}
@@ -384,9 +387,25 @@ const ActiveWorkout = () => {
             exerciseOverrides[exerciseIdx]?.id ?? slot.chosenExerciseId ?? null
           }
           injuries={profileInjuries}
-          onPick={(ex) => {
+          onPick={(ex, { permanent }) => {
+            // Per-session override — vežba se menja odmah u tekućoj sesiji
             dispatch({ type: "SWAP_EXERCISE", exercise: ex });
             haptic("medium");
+
+            // "Zameni trajno" — upiši mapiranje original → izabrana vežba u
+            // client_exercise_swaps. from = ORIGINALNA vežba slota (ono što
+            // algoritam bira), ne eventualni raniji per-session override.
+            // Namerno NE invalidiramo activeWorkoutSession query — refetch bi
+            // resetovao tekuću sesiju; zamena se primenjuje od sledećeg
+            // učitavanja (applyPermanentSwaps u useActiveWorkoutSession).
+            if (permanent && clientId && slot.exerciseUuid) {
+              const toUuid = session.exerciseUuidById.get(ex.id);
+              if (toUuid && toUuid !== slot.exerciseUuid) {
+                void upsertClientExerciseSwap(clientId, slot.exerciseUuid, toUuid)
+                  .then(() => toast.success(t("workout.swapPermanentSaved")))
+                  .catch(() => toast.error(t("workout.swapPermanentError")));
+              }
+            }
           }}
         />
       )}

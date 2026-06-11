@@ -12,6 +12,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_exercise_swaps: {
+        Row: {
+          client_id: string
+          created_at: string
+          from_exercise_id: string
+          id: string
+          to_exercise_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          from_exercise_id: string
+          id?: string
+          to_exercise_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          from_exercise_id?: string
+          id?: string
+          to_exercise_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_exercise_swaps_from_exercise_id_fkey"
+            columns: ["from_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_exercise_swaps_to_exercise_id_fkey"
+            columns: ["to_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_notes: {
         Row: {
           body: string

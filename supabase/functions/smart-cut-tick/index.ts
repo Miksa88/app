@@ -18,6 +18,9 @@
 //        - currentSmartCutStep = nextStep
 //        - activeRefeedDay = true (samo emergency_refeed)
 //
+// Pauzirane klijentkinje (Pause/Freeze, MVP_PRESET gap #1) se preskaču —
+// Smart Cut ne sme da teče tokom pauze.
+//
 // Ulaz (POST JSON, svi polja opcionalna):
 //   { clientIds?: string[] }
 //
@@ -31,6 +34,7 @@
 //     advanced: <int>,
 //     refeedsTriggered: <int>,
 //     blocked: <int>,
+//     skippedPaused: <int>,
 //     errors: [{ clientId, reason }]
 //   }
 // ============================================================================
@@ -172,6 +176,7 @@ interface SmartCutResult {
   advanced: number;
   refeedsTriggered: number;
   blocked: number;
+  skippedPaused: number;
   errors: Array<{ clientId: string; reason: string }>;
 }
 
@@ -227,11 +232,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return jsonResponse(HDRS, { ok: false, error: "user_status fetch failed" }, 500);
   }
 
+  // Pause/Freeze (MVP_PRESET gap #1): pauzirane klijentkinje se preskaču —
+  // Smart Cut evaluacija ne sme da tece dok je plan zamrznut (lazni signali:
+  // vaga/snaga/NEAT podaci tokom pauze nisu reprezentativni).
+  // Izvori pauze: user_status.training.activePauseEvent + profiles.pause_state.
+  const pausedByTrainer = new Set<string>();
+  {
+    const ids = (rows ?? []).map((r) => r.client_id as string);
+    if (ids.length > 0) {
+      const { data: profileRows, error: profilesErr } = await supabase
+        .from("profiles")
+        .select("id, pause_state")
+        .in("id", ids);
+      if (profilesErr) {
+        console.error("[smart-cut-tick] profiles fetch failed", profilesErr.message);
+        return jsonResponse(HDRS, { ok: false, error: "profiles fetch failed" }, 500);
+      }
+      for (const p of profileRows ?? []) {
+        if (p.pause_state != null) pausedByTrainer.add(p.id as string);
+      }
+    }
+  }
+
   const result: SmartCutResult = {
     processed: 0,
     advanced: 0,
     refeedsTriggered: 0,
     blocked: 0,
+    skippedPaused: 0,
     errors: [],
   };
 
@@ -251,7 +279,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
         currentSmartCutStep?: SmartCutStep;
         activeRefeedDay?: boolean;
       };
-      const training = (status.training ?? {}) as { position?: string };
+      const training = (status.training ?? {}) as {
+        position?: string;
+        activePauseEvent?: unknown;
+      };
+
+      // Skip pauzirane (bilo koji izvor pauze)
+      if (training.activePauseEvent || pausedByTrainer.has(clientId)) {
+        result.skippedPaused++;
+        continue;
+      }
       const experienceLevel: 'beginner' | 'intermediate' =
         training.position?.startsWith('intermediate') ? 'intermediate' : 'beginner';
       const targetMode = nutrition.targetMode;

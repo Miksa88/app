@@ -7,6 +7,7 @@
 //     clientId: "uuid",
 //     pauseType: "illness" | "travel",
 //     startDate: "YYYY-MM-DD" | ISO string,
+//     pauseUntil?: "YYYY-MM-DD" | ISO string,  // planirani kraj pauze (max 30 dana)
 //     notes?: string
 //   }
 //
@@ -24,7 +25,14 @@
 //   3. Parcijalni UNIQUE index `idx_pause_events_one_active_per_user`
 //      sprecava duple aktivne pauze — na unique_violation (23505) vraca 409.
 //   4. Update UserStatus.training.activePauseEvent kroz upsert user_status.
-//   5. Vraca novi DB red + novi UserStatus.
+//   5. Mirror u profiles.pause_state (isti shape kao trener-pauza) — jedan
+//      izvor istine za PausedClientBanner + Gym blokadu + auto-expire.
+//   6. Vraca novi DB red + novi UserStatus.
+//
+// pauseUntil pravila (MVP_PRESET gap #1):
+//   - opcionalan; null = "dok se ne vratim" (indefinitivna pauza)
+//   - mora biti > startDate i <= startDate + 30 dana (klijent-inicirana pauza
+//     ne sme da zamrzne plan duze od mesec dana bez trenera)
 //
 // Spec reference:
 //   01_TRAINING_FLOW_MASTER.md §4.8 (Pauza modul: illness 2 sesije -0.15)
@@ -70,6 +78,7 @@ interface StartPausePayload {
   clientId: string;
   pauseType: PauseType;
   startDate: string; // YYYY-MM-DD ili ISO
+  pauseUntil?: string; // YYYY-MM-DD ili ISO — planirani kraj (max 30 dana)
   notes?: string;
 }
 
@@ -80,6 +89,7 @@ interface UserStatusShape {
       | {
           type: PauseType | null;
           startDate: string | null;
+          pauseUntil?: string | null;
           penaltySessionsRemaining: number;
           recoveryPenalty?: number;
         }
@@ -109,11 +119,15 @@ function validatePayload(p: unknown): StartPausePayload | string {
   if (o.notes !== undefined && typeof o.notes !== "string") {
     return "Invalid `notes` (expected string if provided)";
   }
+  if (o.pauseUntil !== undefined && o.pauseUntil !== null && typeof o.pauseUntil !== "string") {
+    return "Invalid `pauseUntil` (expected string if provided)";
+  }
 
   return {
     clientId: o.clientId,
     pauseType: o.pauseType,
     startDate: o.startDate,
+    pauseUntil: typeof o.pauseUntil === "string" ? o.pauseUntil : undefined,
     notes: typeof o.notes === "string" ? o.notes : undefined,
   };
 }
@@ -121,6 +135,36 @@ function validatePayload(p: unknown): StartPausePayload | string {
 function toDateOnly(input: string): string {
   // Podrzi ISO (2026-04-23T08:00:00Z) i YYYY-MM-DD
   return input.slice(0, 10);
+}
+
+// Maksimalno trajanje klijent-inicirane pauze (server-side guard).
+const MAX_PAUSE_DAYS = 30;
+
+/**
+ * Validira pauseUntil u odnosu na startDate.
+ * Vraca normalizovan YYYY-MM-DD ili string sa greskom.
+ */
+function validatePauseUntil(
+  startDateOnly: string,
+  pauseUntilRaw: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const untilOnly = toDateOnly(pauseUntilRaw);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(untilOnly)) {
+    return { ok: false, error: "Invalid `pauseUntil` date format (expected YYYY-MM-DD)" };
+  }
+  const start = new Date(`${startDateOnly}T00:00:00Z`).getTime();
+  const until = new Date(`${untilOnly}T00:00:00Z`).getTime();
+  if (Number.isNaN(start) || Number.isNaN(until)) {
+    return { ok: false, error: "Invalid `pauseUntil` or `startDate` date" };
+  }
+  if (until <= start) {
+    return { ok: false, error: "`pauseUntil` mora biti posle `startDate`" };
+  }
+  const days = (until - start) / 86_400_000;
+  if (days > MAX_PAUSE_DAYS) {
+    return { ok: false, error: `Pauza moze trajati najvise ${MAX_PAUSE_DAYS} dana` };
+  }
+  return { ok: true, value: untilOnly };
 }
 
 // ----------------------------------------------------------------------------
@@ -192,6 +236,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const isIllness = payload.pauseType === "illness";
   const startDateOnly = toDateOnly(payload.startDate);
 
+  // 4b. Validacija planiranog kraja pauze (max 30 dana, server-side guard)
+  let pauseUntilOnly: string | null = null;
+  if (payload.pauseUntil) {
+    const validated = validatePauseUntil(startDateOnly, payload.pauseUntil);
+    if (!validated.ok) {
+      return jsonResponse(HDRS, { ok: false, error: validated.error }, 400);
+    }
+    pauseUntilOnly = validated.value;
+  }
+
   const { data: pauseData, error: insertErr } = await admin
     .from("pause_events")
     .insert({
@@ -248,6 +302,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       activePauseEvent: {
         type: payload.pauseType,
         startDate: startDateOnly,
+        pauseUntil: pauseUntilOnly,
         penaltySessionsRemaining: isIllness ? 2 : 0,
         recoveryPenalty: isIllness ? -0.15 : 0,
       },
@@ -269,6 +324,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (upsertErr) {
     console.error("[start-pause] user_status upsert failed", upsertErr.message);
     return jsonResponse(HDRS, { error: "user_status upsert failed" }, 500);
+  }
+
+  // 7. Mirror u profiles.pause_state — isti shape kao trener-pauza
+  //    (clientPauseService.PauseState). Time PausedClientBanner, Gym blokada
+  //    i isPauseExpired() auto-resume rade identicno za obe vrste pauze.
+  const { error: pauseStateErr } = await admin
+    .from("profiles")
+    .update({
+      pause_state: {
+        paused_at: new Date().toISOString(),
+        pause_until: pauseUntilOnly,
+        reason: payload.pauseType,
+        paused_by_trainer_id: null, // klijent-inicirana pauza
+      },
+    })
+    .eq("id", userId);
+
+  if (pauseStateErr) {
+    // Ne-blokirajuce: pause_events + user_status su vec upisani; banner ce
+    // i dalje raditi preko activePauseEvent fallback-a. Logujemo i nastavljamo.
+    console.error("[start-pause] profiles.pause_state mirror failed", pauseStateErr.message);
   }
 
   return jsonResponse(HDRS, {
