@@ -47,6 +47,7 @@ function makeUserStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       sessionPointer: 0, nextSessionId: 'A1', nextSessionPartition: 'Lower',
       partitionLastSeen: {}, isInDeload: false, isInReturnFromBreak: false,
       currentMesocycleIndex: 1, currentMicrocycleIndex: 0, activePauseEvent: null,
+      dietBreakActive: false, dietBreakStartedAt: null, mesocyclesSinceDietBreak: 0,
     },
     nutrition: {
       bmr: 1314, tdee: 2000, currentCalorieTarget: 1600, targetMode: 'deficit',
@@ -54,7 +55,7 @@ function makeUserStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       metabolicFilter: [], isMetabolicNoiseTriggered: false,
       hydrationTargetMl: 2275, hydrationTodayMl: 2000,
       measurementWeekActive: false, measurementWeekDay: 0,
-      daysSincePlanChange: 0, activeRefeedDay: false,
+      daysSincePlanChange: 0, currentSmartCutStep: 0, activeRefeedDay: false,
     },
     redFlags: {
       skipCount7d: 0, metabolicNoiseDays7d: 0, energyBelowThreshold7d: 0,

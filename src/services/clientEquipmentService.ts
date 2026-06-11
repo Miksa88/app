@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 // Kanonska lista equipment opcija (matche ExerciseItem.equipment u
 // trainerMockData.ts EXERCISE_LIBRARY).
@@ -50,7 +51,7 @@ export async function setClientEquipment(
   const cleaned = Array.from(new Set(equipment.filter(Boolean)));
   const { error } = await supabase
     .from("profiles")
-    .update({ equipment_list: cleaned as unknown as Record<string, unknown> })
+    .update({ equipment_list: cleaned as Json })
     .eq("id", clientId);
 
   if (error) {

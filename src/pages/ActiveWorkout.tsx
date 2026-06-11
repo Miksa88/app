@@ -156,7 +156,7 @@ const ActiveWorkout = () => {
       },
     });
 
-    finishTimerRef.current = window.setTimeout(() => {
+    finishTimerRef.current = setTimeout(() => {
       finishTimerRef.current = null;
       if (cancelled) return;
       finishWorkout.mutate(
@@ -299,9 +299,12 @@ const ActiveWorkout = () => {
 
             <ExerciseNotesField
               exerciseId={
-                exerciseOverrides[exerciseIdx]?.id
-                  ?? slot.exerciseUuid
-                  ?? null
+                // POZNAT BUG (strict-om vidljiv): override Exercise nosi hash
+                // int id, ne uuid — posle swap-a notes lookup po njemu ne
+                // nalazi ništa. String() čuva postojeće runtime ponašanje.
+                exerciseOverrides[exerciseIdx]
+                  ? String(exerciseOverrides[exerciseIdx].id)
+                  : slot.exerciseUuid ?? null
               }
             />
 

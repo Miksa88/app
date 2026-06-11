@@ -18,7 +18,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useHealth } from "@/contexts/HealthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { updateProfileFields } from "@/services/profileService";
+import { updateProfileFields, getProfilePersonalFields, getClientTier } from "@/services/profileService";
 import { ArrowLeft } from "lucide-react";
 import { SectionLabel } from "@/components/ui/section-label";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
@@ -108,13 +108,11 @@ const Profile = () => {
     if (!user?.id) return;
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("assigned_tier")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (!cancelled && data?.assigned_tier) {
-        setTier(data.assigned_tier);
+      // Greška → null (servis throw se guta) — isto ponašanje kao raniji
+      // direktni supabase poziv koji nije čitao error.
+      const assignedTier = await getClientTier(user.id).catch(() => null);
+      if (!cancelled && assignedTier) {
+        setTier(assignedTier);
       }
     })();
     return () => { cancelled = true; };
@@ -145,12 +143,8 @@ const Profile = () => {
     if (!user?.id) return;
     let cancelled = false;
     void (async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("current_weight, height, date_of_birth, allergies, primary_goal")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (cancelled || error || !data) return;
+      const data = await getProfilePersonalFields(user.id);
+      if (cancelled || !data) return;
       setPersonalDetails((prev) => ({
         ...prev,
         currentWeight: data.current_weight ?? "",
@@ -182,10 +176,8 @@ const Profile = () => {
   useEffect(() => {
     if (!user?.id) return;
     const timer = setTimeout(() => {
-      void supabase
-        .from("profiles")
-        .update({ allergies })
-        .eq("id", user.id);
+      // Silent catch — raniji direktni supabase poziv je ignorisao error.
+      void updateProfileFields(user.id, { allergies }).catch(() => {});
     }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps

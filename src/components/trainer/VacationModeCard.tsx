@@ -86,7 +86,9 @@ const VacationModeCard = () => {
       revert: () =>
         mutateAsync({
           ...prefs,
-          vacation: previousVacation ?? null,
+          // undefined (umesto null) — `vacation` je optional polje; JSON
+          // serijalizacija ispušta ključ, što je ekvivalentno starom null-u.
+          vacation: previousVacation,
         }),
     });
   };

@@ -106,11 +106,36 @@ export async function getTrainerClientCard(clientId: string): Promise<ClientData
  */
 export async function updateProfileFields(
   userId: string,
-  fields: Record<string, number | string | null>,
+  fields: Record<string, number | string | string[] | null>,
 ): Promise<void> {
   const { error } = await supabase
     .from("profiles")
     .update(fields as never)
     .eq("id", userId);
   if (error) throw new Error(`updateProfileFields: ${error.message}`);
+}
+
+/** Polja koja Profile stranica čita za "Personal details" sekciju. */
+export interface ProfilePersonalFields {
+  current_weight: number | null;
+  height: number | null;
+  date_of_birth: string | null;
+  allergies: string[] | null;
+  primary_goal: string | null;
+}
+
+/**
+ * Personal details za Profile stranicu. Greška → null (UI ignoriše,
+ * isto ponašanje kao raniji direktni supabase poziv u stranici).
+ */
+export async function getProfilePersonalFields(
+  userId: string,
+): Promise<ProfilePersonalFields | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("current_weight, height, date_of_birth, allergies, primary_goal")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) return null;
+  return data;
 }

@@ -11,6 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
 import { MOTION_DURATION, staggerContainer, staggerItem, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { signInWithPassword } from "@/services/authService";
+import { getProfileRole } from "@/services/profileService";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,12 +29,10 @@ const Login = () => {
 
   // Route posle uspešnog login-a — po profile.role iz Supabase-a (ne po email stringu)
   const routeByRole = async (userId: string) => {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .maybeSingle();
-    navigate(profile?.role === "trainer" ? "/trainer" : "/home");
+    // Greška se guta (role=null → /home) — isto ponašanje kao raniji
+    // direktni supabase poziv koji je ignorisao error.
+    const role = await getProfileRole(userId).catch(() => null);
+    navigate(role === "trainer" ? "/trainer" : "/home");
   };
 
   const validateEmail = (val: string): string | undefined => {

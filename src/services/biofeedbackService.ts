@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 // ----------------------------------------------------------------------------
 // Interni helper — read-modify-write patch na status_json.bio
@@ -30,7 +31,7 @@ async function patchUserStatusBio(
 
   const { error: writeErr } = await supabase
     .from("user_status")
-    .update({ status_json: newStatus, last_updated_at: new Date().toISOString() })
+    .update({ status_json: newStatus as Json, last_updated_at: new Date().toISOString() })
     .eq("client_id", clientId);
   if (writeErr) throw new Error(`${label} write: ${writeErr.message}`);
 }
@@ -104,7 +105,7 @@ export async function savePostWorkoutDifficulty(
   };
   const { error: writeErr } = await supabase
     .from("user_status")
-    .update({ status_json: newStatus, last_updated_at: new Date().toISOString() })
+    .update({ status_json: newStatus as Json, last_updated_at: new Date().toISOString() })
     .eq("client_id", clientId);
   if (writeErr) throw new Error(`saveDifficulty status write: ${writeErr.message}`);
 }

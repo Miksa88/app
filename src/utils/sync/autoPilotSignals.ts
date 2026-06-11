@@ -9,7 +9,9 @@
 //   - Missing video signal: vežba u queue-u bez video URL-a
 // ============================================================================
 
-import type { ExerciseHistorySample } from "@/utils/db/exerciseHistory";
+// Red iz exercise_progress — isti shape kao ExerciseHistoryRow (alias zadržan
+// zbog postojećih internih referenci u ovom modulu).
+import type { ExerciseHistoryRow as ExerciseHistorySample } from "@/utils/db/exerciseHistory";
 
 // ============================================================================
 // 1. Plateau detector

@@ -105,7 +105,9 @@ async function loadFoodItems(): Promise<FoodItem[]> {
     throw new Error(`useFoodItems: ${error.message}`);
   }
 
-  return (data ?? []).map((row) => toLegacyFoodItem(row as FoodItemRow));
+  // Supabase type parser ne ume da parsira konkateniran select string,
+  // pa data tipuje kao GenericStringError[] — runtime shape je FoodItemRow.
+  return (data ?? []).map((row) => toLegacyFoodItem(row as unknown as FoodItemRow));
 }
 
 // ============================================================================

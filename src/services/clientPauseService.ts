@@ -10,6 +10,7 @@
 // ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface PauseState {
   paused_at: string;
@@ -50,7 +51,7 @@ export async function pauseClient(
   };
   const { error } = await supabase
     .from("profiles")
-    .update({ pause_state: state as unknown as Record<string, unknown> })
+    .update({ pause_state: state as unknown as Json })
     .eq("id", clientId);
 
   if (error) {

@@ -177,7 +177,9 @@ describe('buildMesocycleQueue — error cases', () => {
     const skeleton: SessionSkeleton = {
       id: 'INT_UL_2',
       level: 'intermediate',
-      daysPerWeek: 2,
+      // Namerno van 3|4|5 unije — test proverava custom weeksInMesocycle
+      // na minimalnom 2-dnevnom skeletu.
+      daysPerWeek: 2 as SessionSkeleton['daysPerWeek'],
       name: 'INT',
       periodizationType: 'undulating',
       days: [

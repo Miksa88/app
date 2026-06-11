@@ -105,8 +105,9 @@ describe('calibrateVolume — recovery → sets interpolacija', () => {
       recoveryMultiplier: 1.0,
       cyclePhase: 'menstrual',
     });
-    expect(withMenstrual.days[0].exerciseSlots[0].finalSets).toBeLessThanOrEqual(
-      without.days[0].exerciseSlots[0].finalSets,
+    // Non-null: calibrateVolume uvek popunjava finalSets na svakom slotu.
+    expect(withMenstrual.days[0].exerciseSlots[0].finalSets!).toBeLessThanOrEqual(
+      without.days[0].exerciseSlots[0].finalSets!,
     );
   });
 

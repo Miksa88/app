@@ -93,7 +93,7 @@ function makeStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       isInDeload: false,
       isInReturnFromBreak: false,
       activePauseEvent: null,
-    } as UserStatus['training'],
+    } as unknown as UserStatus['training'],
     nutrition: {
       bmr: 1400,
       tdee: 2000,

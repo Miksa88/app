@@ -19,7 +19,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion } from "framer-motion";
 import {
   MessageCircle, ChevronRight, Dumbbell, Check, Footprints,
-  Utensils,
+  Utensils, type LucideIcon,
 } from "lucide-react";
 import type { Partition } from "@/types/training";
 import { useState } from "react";
@@ -83,7 +83,13 @@ const Home = () => {
 
   // Card 3: Sledeći obrok
   const mealsLogged = dailyTotals?.mealsLogged ?? 0;
-  const allMeals = mealPlan?.meals ?? [];
+  // POZNAT BUG (strict-om vidljiv): MealPlanWeek nema `meals` (refactor na
+  // `slots` strukturu) — ova lista je u runtime-u UVEK prazna, pa kartica
+  // uvek pada na "nema obroka" CTA. Cast čuva postojeće ponašanje;
+  // wiring na slots + food lookup je zaseban task.
+  const allMeals = (mealPlan as unknown as {
+    meals?: Array<{ name?: string; slotLabel?: string; calories: number; protein: number; carbs: number; fat: number }>;
+  } | null)?.meals ?? [];
   const nextMealIdx = Math.min(mealsLogged, Math.max(0, allMeals.length - 1));
   const nextMeal = allMeals[nextMealIdx] ?? null;
   const allMealsLogged = allMeals.length > 0 && mealsLogged >= allMeals.length;
@@ -375,7 +381,7 @@ interface StatRingProps {
   suffix?: string;
   footnote?: string;
   tone: "primary" | "info";
-  icon?: React.ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
+  icon?: LucideIcon;
 }
 
 const StatRing = ({ label, value, total, suffix, footnote, tone, icon: Icon }: StatRingProps) => {

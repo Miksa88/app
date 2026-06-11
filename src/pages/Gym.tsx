@@ -20,6 +20,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 import { ChevronRight, Lock, ArrowRightLeft, PartyPopper, Flame, Zap, Timer } from 'lucide-react';
 import type { Partition } from '@/types/training';
 import GradientButton from '@/components/GradientButton';

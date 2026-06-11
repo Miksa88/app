@@ -41,7 +41,8 @@ export type PauseType = 'illness' | 'travel' | 'other';
 
 export type MovementPattern =
   | 'knee_dominant'        // squat, leg press, lunge
-  | 'hip_dominant'         // RDL, hip thrust, deadlift
+  | 'hip_dominant'         // RDL, deadlift
+  | 'hip_extension'        // hip thrust, donkey kick, reverse hyper (glute fokus)
   | 'horizontal_push'      // bench, push-up, chest press
   | 'vertical_push'        // OHP, shoulder press
   | 'horizontal_pull'      // row

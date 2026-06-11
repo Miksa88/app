@@ -16,6 +16,8 @@
 // rezultatom.
 // ============================================================================
 
+import { logger } from '@/lib/logger';
+
 const isDevEnvironment =
   typeof process !== 'undefined' &&
   process.env.NODE_ENV !== 'production';

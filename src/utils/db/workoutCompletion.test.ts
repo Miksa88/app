@@ -78,6 +78,9 @@ function makeTraining(queue: MesocycleQueue, overrides: Partial<UserStatusTraini
     isInReturnFromBreak: false,
     currentMesocycleIndex: 1,
     currentMicrocycleIndex: queue.currentMicrocycleIndex,
+    dietBreakActive: false,
+    dietBreakStartedAt: null,
+    mesocyclesSinceDietBreak: 0,
     activePauseEvent: null,
     ...overrides,
   };

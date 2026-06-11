@@ -65,6 +65,9 @@ function makeBaseStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       isInReturnFromBreak: false,
       currentMesocycleIndex: 1,
       currentMicrocycleIndex: 0,
+      dietBreakActive: false,
+      dietBreakStartedAt: null,
+      mesocyclesSinceDietBreak: 0,
       activePauseEvent: null,
     },
     nutrition: {
@@ -80,6 +83,7 @@ function makeBaseStatus(overrides: Partial<UserStatus> = {}): UserStatus {
       measurementWeekActive: false,
       measurementWeekDay: 0,
       daysSincePlanChange: 0,
+      currentSmartCutStep: 0,
       activeRefeedDay: false,
     },
     redFlags: {

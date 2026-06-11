@@ -23,6 +23,7 @@ function makeStatus(redFlags: Partial<UserStatusRedFlags> = {}): UserStatus {
       sessionPointer: 0, nextSessionId: '', nextSessionPartition: 'FullBody',
       partitionLastSeen: {}, isInDeload: false, isInReturnFromBreak: false,
       currentMesocycleIndex: 1, currentMicrocycleIndex: 0, activePauseEvent: null,
+      dietBreakActive: false, dietBreakStartedAt: null, mesocyclesSinceDietBreak: 0,
     },
     nutrition: {
       bmr: 1400, tdee: 2000, currentCalorieTarget: 1600, targetMode: 'deficit',
@@ -30,7 +31,7 @@ function makeStatus(redFlags: Partial<UserStatusRedFlags> = {}): UserStatus {
       metabolicFilter: [], isMetabolicNoiseTriggered: false,
       hydrationTargetMl: 2275, hydrationTodayMl: 1500,
       measurementWeekActive: false, measurementWeekDay: 0,
-      daysSincePlanChange: 0, activeRefeedDay: false,
+      daysSincePlanChange: 0, currentSmartCutStep: 0, activeRefeedDay: false,
     },
     redFlags: {
       skipCount7d: 0, metabolicNoiseDays7d: 0, energyBelowThreshold7d: 0,

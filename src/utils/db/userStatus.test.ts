@@ -83,6 +83,9 @@ function makeFixtureStatus(): UserStatus {
       isInReturnFromBreak: false,
       currentMesocycleIndex: 1,
       currentMicrocycleIndex: 0,
+      dietBreakActive: false,
+      dietBreakStartedAt: null,
+      mesocyclesSinceDietBreak: 0,
       activePauseEvent: null,
     },
     nutrition: {
@@ -98,6 +101,7 @@ function makeFixtureStatus(): UserStatus {
       measurementWeekActive: false,
       measurementWeekDay: 0,
       daysSincePlanChange: 4,
+      currentSmartCutStep: 0,
       activeRefeedDay: false,
     },
     redFlags: {

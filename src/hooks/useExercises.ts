@@ -60,6 +60,7 @@ export interface ExerciseItem {
 const MOVEMENT_TO_CATEGORY: Record<MovementPattern, string> = {
   knee_dominant: 'Noge',
   hip_dominant: 'Noge',
+  hip_extension: 'Noge',
   abduction: 'Noge',
   adduction: 'Noge',
   calf_raise: 'Noge',

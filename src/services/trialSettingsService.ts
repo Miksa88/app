@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface TrialSettings {
   duration: number;
@@ -50,7 +51,7 @@ export async function setTrialSettings(
 ): Promise<void> {
   const { error } = await supabase
     .from("profiles")
-    .update({ trial_settings: settings as unknown as Record<string, unknown> })
+    .update({ trial_settings: settings as unknown as Json })
     .eq("id", trainerId);
   if (error) throw new Error(`setTrialSettings: ${error.message}`);
 }

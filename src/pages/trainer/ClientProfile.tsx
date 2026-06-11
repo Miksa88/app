@@ -38,11 +38,13 @@ const ClientProfile = () => {
 
   // Prev/next client navigation — Quick Win #14 (TrueCoach parity)
   const { clients: trainerClients } = useTrainerClients();
-  const currentIdx = trainerClients.findIndex((c) => c.id === id);
-  const prevClientId = currentIdx > 0 ? trainerClients[currentIdx - 1].id : null;
+  // BUG fix (strict): ClientListItem ima `clientId`, ne `id` — staro `c.id`
+  // je uvek bilo undefined pa prev/next navigacija nikad nije radila.
+  const currentIdx = trainerClients.findIndex((c) => c.clientId === id);
+  const prevClientId = currentIdx > 0 ? trainerClients[currentIdx - 1].clientId : null;
   const nextClientId =
     currentIdx >= 0 && currentIdx < trainerClients.length - 1
-      ? trainerClients[currentIdx + 1].id
+      ? trainerClients[currentIdx + 1].clientId
       : null;
   // Notes — real DB-backed (client_notes tabela, W-3 finishing)
   const { data: notes = [] } = useClientNotes(id ?? null);

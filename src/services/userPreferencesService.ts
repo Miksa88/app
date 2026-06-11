@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 
 // ── Notification preferences ──
 
@@ -100,7 +101,7 @@ export async function setNotificationPreferences(
   const { error } = await supabase
     .from("profiles")
     .update({
-      notification_preferences: prefs as unknown as Record<string, unknown>,
+      notification_preferences: prefs as unknown as Json,
     })
     .eq("id", userId);
 
@@ -151,7 +152,7 @@ export async function setPreferredUnits(
   const { error } = await supabase
     .from("profiles")
     .update({
-      preferred_units: units as unknown as Record<string, unknown>,
+      preferred_units: units as unknown as Json,
     })
     .eq("id", userId);
 
