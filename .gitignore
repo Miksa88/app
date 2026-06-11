@@ -50,3 +50,5 @@ playwright/.cache/
 fitbyivana.app/
 fitbyivana-stop.app/
 
+
+*.zip

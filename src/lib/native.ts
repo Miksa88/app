@@ -7,6 +7,7 @@
 //   - Keyboard behavior (resize layout, hide accessory bar)
 //   - App state listeners (za background/foreground tranzicije)
 
+import { logger } from "@/lib/logger";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { SplashScreen } from "@capacitor/splash-screen";
@@ -62,8 +63,7 @@ export const initNative = async () => {
       document.body.dispatchEvent(new CustomEvent("app:urlOpen", { detail: event.url }));
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[native] init failed:", err);
+    logger.warn("[native] init failed:", err);
   }
 };
 

@@ -84,9 +84,13 @@ function buildMessage(status: UserStatusRow["status_json"]): { title: string; bo
 }
 
 Deno.serve(async (req) => {
-  // Auth
+  // Auth — fail-loud pattern (isti kao mesocycle-tick): ne-konfigurisan
+  // CRON_SECRET je server greška (500), pogrešan secret je 403.
+  if (!CRON_SECRET) {
+    return jsonResponse({ error: "Server misconfigured" }, 500);
+  }
   const cronSecret = req.headers.get("x-cron-secret");
-  if (!CRON_SECRET || cronSecret !== CRON_SECRET) {
+  if (cronSecret !== CRON_SECRET) {
     return jsonResponse({ error: "unauthorized" }, 403);
   }
 
@@ -97,7 +101,11 @@ Deno.serve(async (req) => {
     .from("push_subscriptions")
     .select("user_id")
     .eq("enabled", true);
-  if (subsErr) return jsonResponse({ error: subsErr.message }, 500);
+  if (subsErr) {
+    // Detalji idu u server log, caller dobija generičku poruku
+    console.error("[daily-push-reminders] push_subscriptions fetch failed", subsErr.message);
+    return jsonResponse({ error: "push_subscriptions fetch failed" }, 500);
+  }
 
   const uniqueUserIds = Array.from(new Set((subs ?? []).map((s) => s.user_id as string)));
   if (uniqueUserIds.length === 0) {
@@ -109,7 +117,10 @@ Deno.serve(async (req) => {
     .from("user_status")
     .select("client_id, status_json")
     .in("client_id", uniqueUserIds);
-  if (statusErr) return jsonResponse({ error: statusErr.message }, 500);
+  if (statusErr) {
+    console.error("[daily-push-reminders] user_status fetch failed", statusErr.message);
+    return jsonResponse({ error: "user_status fetch failed" }, 500);
+  }
 
   let pushed = 0;
   let failed = 0;

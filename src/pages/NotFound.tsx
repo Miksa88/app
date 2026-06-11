@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useEffect } from "react";
@@ -11,8 +12,7 @@ const NotFound = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    logger.error("404 Error: User attempted to access non-existent route:", location.pathname);
   }, [location.pathname]);
 
   return (

@@ -20,6 +20,7 @@
 // — niko od UI komponenti ne treba refactor jer svi koriste useAuth() API.
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,7 +44,6 @@ if (MOCK_AUTH_ENABLED && import.meta.env.PROD) {
 // ============================================================================
 
 function createMockUser(): User {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return {
     id: MOCK_USER_ID,
     email: MOCK_USER_EMAIL,
@@ -57,7 +57,7 @@ function createMockUser(): User {
     last_sign_in_at: new Date().toISOString(),
     identities: [],
     factors: [],
-  } as any;
+  } as unknown as User;
 }
 
 // ============================================================================
@@ -93,8 +93,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (MOCK_AUTH_ENABLED) {
       // Mock mode — sintetisana sesija, bez Supabase pinga
       if (!MOCK_USER_ID) {
-        // eslint-disable-next-line no-console
-        console.warn(
+        logger.warn(
           '[AuthContext] VITE_DEV_MOCK_AUTH=true ali VITE_DEV_TEST_USER_ID nije postavljen. ' +
           'Dodaj UUID u .env.',
         );
@@ -104,8 +103,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
       setUser(createMockUser());
       setIsLoading(false);
-      // eslint-disable-next-line no-console
-      console.info(`[AuthContext] Mock auth aktivan: ${MOCK_USER_EMAIL} (${MOCK_USER_ID})`);
+      logger.info(`[AuthContext] Mock auth aktivan: ${MOCK_USER_EMAIL} (${MOCK_USER_ID})`);
       return;
     }
 
@@ -134,8 +132,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signOut = async (): Promise<void> => {
     if (MOCK_AUTH_ENABLED) {
       // U mock mode-u, sign out ne radi nista (osvezi stranicu da resetujes)
-      // eslint-disable-next-line no-console
-      console.info('[AuthContext] Mock auth: signOut je no-op u dev mode-u.');
+      logger.info('[AuthContext] Mock auth: signOut je no-op u dev mode-u.');
       return;
     }
     await supabase.auth.signOut();

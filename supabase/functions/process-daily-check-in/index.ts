@@ -47,6 +47,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { calcMA5, type WeightSample } from "../_shared/movingAverage.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Deno ambient declaration (edge-runtime.d.ts import gives Deno.serve + Deno.env)
 declare const Deno: {
@@ -85,18 +86,16 @@ interface CheckInRow {
 // CORS helpers
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -166,12 +165,14 @@ function avgOrNull(values: Array<number | null>): number | null {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -179,7 +180,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return jsonResponse({ error: "Server misconfigured" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured" }, 500);
   }
 
   // 1. JWT auth — dobij user iz Authorization header-a kroz anon klijent.
@@ -187,7 +188,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   //    verifikaciju potpisa); anon client je pravilan pristup.
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return jsonResponse({ error: "Missing Authorization" }, 401);
+    return jsonResponse(HDRS, { error: "Missing Authorization" }, 401);
   }
   const jwt = authHeader.slice("Bearer ".length).trim();
 
@@ -197,7 +198,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: userData, error: userErr } = await anonClient.auth.getUser(jwt);
   if (userErr || !userData?.user) {
-    return jsonResponse({ error: "Invalid JWT" }, 401);
+    return jsonResponse(HDRS, { error: "Invalid JWT" }, 401);
   }
   const userId = userData.user.id;
 
@@ -207,11 +208,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ error: validated }, 400);
+      return jsonResponse(HDRS, { error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   // 3. Service-role klijent za DB pristup (bypass RLS tamo gde nam treba —
@@ -236,10 +237,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (checkInErr) {
-    return jsonResponse(
-      { error: `daily_check_ins upsert failed: ${checkInErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[process-daily-check-in] daily_check_ins upsert failed", checkInErr.message);
+    return jsonResponse(HDRS, { error: "daily_check_ins upsert failed" }, 500);
   }
 
   // 5. Insert weight_logs (append-only istorija; source=manual za ručni unos)
@@ -254,10 +254,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
 
   if (weightErr) {
-    return jsonResponse(
-      { error: `weight_logs insert failed: ${weightErr.message}` },
-      500,
-    );
+    console.error("[process-daily-check-in] weight_logs insert failed", weightErr.message);
+    return jsonResponse(HDRS, { error: "weight_logs insert failed" }, 500);
   }
 
   // 6. Fetch istoriju: poslednjih 14 weight log-ova + 7 check-in-ova.
@@ -271,10 +269,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .limit(14);
 
   if (wlErr) {
-    return jsonResponse(
-      { error: `weight_logs fetch failed: ${wlErr.message}` },
-      500,
-    );
+    console.error("[process-daily-check-in] weight_logs fetch failed", wlErr.message);
+    return jsonResponse(HDRS, { error: "weight_logs fetch failed" }, 500);
   }
 
   // 7 dana unazad za avg-ove i cycle-day korelaciju
@@ -289,10 +285,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .order("date", { ascending: false });
 
   if (ciErr) {
-    return jsonResponse(
-      { error: `daily_check_ins fetch failed: ${ciErr.message}` },
-      500,
-    );
+    console.error("[process-daily-check-in] daily_check_ins fetch failed", ciErr.message);
+    return jsonResponse(HDRS, { error: "daily_check_ins fetch failed" }, 500);
   }
 
   const checkIns: CheckInRow[] = (checkInRows as CheckInRow[] | null) ?? [];
@@ -328,7 +322,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // 10. Vrati computed vrednosti — IT-5 hook će pozvati applyDailyCheckIn
   //     na klijent-strani i patchovati ove vrednosti u UserStatus.
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     ma5,
     reliableSampleCount,

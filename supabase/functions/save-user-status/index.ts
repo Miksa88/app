@@ -28,6 +28,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Deno ambient (edge-runtime.d.ts import donosi Deno.serve + Deno.env)
 declare const Deno: {
@@ -39,18 +40,16 @@ declare const Deno: {
 // CORS helpers
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -95,12 +94,14 @@ function validatePayload(p: unknown): SaveUserStatusPayload | string {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -108,13 +109,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return jsonResponse({ error: "Server misconfigured" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured" }, 500);
   }
 
   // 1. JWT auth — dobij user iz Authorization header-a kroz anon klijent.
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return jsonResponse({ error: "Missing Authorization" }, 401);
+    return jsonResponse(HDRS, { error: "Missing Authorization" }, 401);
   }
   const jwt = authHeader.slice("Bearer ".length).trim();
 
@@ -124,7 +125,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: userData, error: userErr } = await anonClient.auth.getUser(jwt);
   if (userErr || !userData?.user) {
-    return jsonResponse({ error: "Invalid JWT" }, 401);
+    return jsonResponse(HDRS, { error: "Invalid JWT" }, 401);
   }
   const userId = userData.user.id;
 
@@ -134,17 +135,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ error: validated }, 400);
+      return jsonResponse(HDRS, { error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   // 3. Bezbednost: user sme da save-uje samo svoj status. service_role (ispod)
   //    bypass-uje RLS pa eksplicitno verifikujemo vlasništvo pre pisanja.
   if (payload.status.clientId !== userId) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { error: "Forbidden: status.clientId ne odgovara auth.uid" },
       403,
     );
@@ -180,15 +181,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .single();
 
   if (upsertErr) {
-    return jsonResponse(
-      { error: `user_status upsert failed: ${upsertErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[save-user-status] user_status upsert failed", upsertErr.message);
+    return jsonResponse(HDRS, { error: "user_status upsert failed" }, 500);
   }
 
   // 5. Vraćamo svež DB red (Realtime push već osvežava klijenta; ovo je za
   //    defensive react-query cache update u mutation hook-u)
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     row: {
       client_id: data.client_id,

@@ -257,7 +257,7 @@ const Profile = () => {
     { icon: Music, label: t("profile.tiktok"), page: null as SettingsPage },
   ];
 
-  const renderSettingsGroup = (items: Array<{ icon: any; label: string; sub?: string; page: SettingsPage }>) => (
+  const renderSettingsGroup = (items: Array<{ icon: React.ComponentType<LucideProps>; label: string; sub?: string; page: SettingsPage }>) => (
     <Card className="overflow-hidden">
       {items.map(({ icon: Icon, label, sub, page }, i) => (
         <button key={label}

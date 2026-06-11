@@ -51,6 +51,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import {
   canSwapNextTwoSessions,
   swapNextTwoSessions,
@@ -92,18 +93,16 @@ interface SwapPayload {
 // CORS helpers
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -129,12 +128,14 @@ function validatePayload(p: unknown): SwapPayload | string {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -142,13 +143,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return jsonResponse({ error: "Server misconfigured" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured" }, 500);
   }
 
   // 1. JWT auth
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return jsonResponse({ error: "Missing Authorization" }, 401);
+    return jsonResponse(HDRS, { error: "Missing Authorization" }, 401);
   }
   const jwt = authHeader.slice("Bearer ".length).trim();
 
@@ -158,7 +159,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: userData, error: userErr } = await anonClient.auth.getUser(jwt);
   if (userErr || !userData?.user) {
-    return jsonResponse({ error: "Invalid JWT" }, 401);
+    return jsonResponse(HDRS, { error: "Invalid JWT" }, 401);
   }
   const userId = userData.user.id;
 
@@ -168,16 +169,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ error: validated }, 400);
+      return jsonResponse(HDRS, { error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   // 3. clientId guard
   if (payload.clientId !== userId) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { error: "Forbidden: clientId ne odgovara auth.uid" },
       403,
     );
@@ -194,13 +195,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
 
   if (loadErr) {
-    return jsonResponse(
-      { error: `user_status load failed: ${loadErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[swap-next-sessions] user_status load failed", loadErr.message);
+    return jsonResponse(HDRS, { error: "user_status load failed" }, 500);
   }
   if (!rowData?.status_json) {
-    return jsonResponse({ error: "user_status not found for client" }, 404);
+    return jsonResponse(HDRS, { error: "user_status not found for client" }, 404);
   }
 
   const status = rowData.status_json as UserStatusShape;
@@ -208,13 +208,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // 6. Guard: queue postoji
   const queue = status.training?.queue;
   if (!queue || !Array.isArray(queue.sessions)) {
-    return jsonResponse({ error: "user_status.training.queue missing" }, 500);
+    return jsonResponse(HDRS, { error: "user_status.training.queue missing" }, 500);
   }
 
   // 7. Validate swap eligibility — pure helper
   const eligibility = canSwapNextTwoSessions(queue);
   if (!eligibility.allowed) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { ok: false, error: eligibility.reason ?? "Swap nije dozvoljen." },
       400,
     );
@@ -226,7 +226,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     newQueue = swapNextTwoSessions(queue);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "swap failed";
-    return jsonResponse({ ok: false, error: msg }, 400);
+    console.error("[swap-next-sessions] swapNextTwoSessions failed", msg);
+    return jsonResponse(HDRS, { ok: false, error: "swap failed" }, 400);
   }
 
   // 9. Recompute derived next session info (pointer nije promenjen, ali je
@@ -263,14 +264,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (upsertErr) {
-    return jsonResponse(
-      { error: `user_status upsert failed: ${upsertErr.message}` },
-      500,
-    );
+    console.error("[swap-next-sessions] user_status upsert failed", upsertErr.message);
+    return jsonResponse(HDRS, { error: "user_status upsert failed" }, 500);
   }
 
   // 12. Vrati novi status + sledecu sesiju (za UI toast feedback)
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     success: true,
     newFirstSession: next,

@@ -9,6 +9,7 @@
 // Idempotentno: ako se pozove vise puta, ne dupli registraciju (interni guard).
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { EventBus } from '@/utils/sync/eventBus';
 import { registerNutritionSubscribers } from './nutritionSubscribers';
 import { registerTrainingSubscribers } from './trainingSubscribers';
@@ -22,8 +23,7 @@ export function registerAllSubscribers(): void {
   registerNutritionSubscribers();
   registerTrainingSubscribers();
 
-  // eslint-disable-next-line no-console
-  console.info('[EventBus] Subscribers registered');
+  logger.info('[EventBus] Subscribers registered');
 }
 
 /**

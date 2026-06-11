@@ -37,6 +37,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
@@ -175,25 +176,28 @@ interface SmartCutResult {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist iz _shared/cors.ts + x-cron-secret)
+  const HDRS = corsHeaders(req, "x-cron-secret");
+
   // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(),
+      headers: HDRS,
     });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { ok: false, error: "Method not allowed" }, 405);
   }
 
   // Auth: x-cron-secret header
   const cronSecret = Deno.env.get("CRON_SECRET");
   if (!cronSecret) {
-    return jsonResponse({ ok: false, error: "CRON_SECRET not configured" }, 500);
+    return jsonResponse(HDRS, { ok: false, error: "CRON_SECRET not configured" }, 500);
   }
   if (req.headers.get("x-cron-secret") !== cronSecret) {
-    return jsonResponse({ ok: false, error: "Forbidden" }, 403);
+    return jsonResponse(HDRS, { ok: false, error: "Forbidden" }, 403);
   }
 
   let body: RequestBody = {};
@@ -207,7 +211,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !supabaseServiceKey) {
-    return jsonResponse({ ok: false, error: "Supabase env not configured" }, 500);
+    return jsonResponse(HDRS, { ok: false, error: "Supabase env not configured" }, 500);
   }
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -218,7 +222,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   const { data: rows, error } = await query;
   if (error) {
-    return jsonResponse({ ok: false, error: error.message }, 500);
+    // Detalji idu u server log, caller dobija generičku poruku
+    console.error("[smart-cut-tick] user_status fetch failed", error.message);
+    return jsonResponse(HDRS, { ok: false, error: "user_status fetch failed" }, 500);
   }
 
   const result: SmartCutResult = {
@@ -335,25 +341,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
-  return jsonResponse({ ok: true, ...result }, 200);
+  return jsonResponse(HDRS, { ok: true, ...result }, 200);
 });
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-cron-secret",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-}
-
-function jsonResponse(body: unknown, status: number): Response {
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status: number,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(), "Content-Type": "application/json" },
+    headers: { ...HDRS, "Content-Type": "application/json" },
   });
 }

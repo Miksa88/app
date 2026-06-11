@@ -13,6 +13,7 @@
 //   - clientOverrides toggle (Faza 4.3 placeholder; full toggle UI Faza 5)
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { useEffect, useState } from 'react';
 import {
   Activity, Moon, Heart, Droplet, AlertTriangle, Sparkles, Lock, Zap, AlertCircle,
@@ -52,8 +53,7 @@ export const ClientUserStatusPanel = ({ clientId, className = '' }: ClientUserSt
         const err = e instanceof Error ? e : new Error(String(e));
         // Log pun error interno (dev console / Sentry); UI prikazuje friendly fallback
         // WS-8.5 D24 — fix raw Postgres UUID leakage u UI-ju.
-        // eslint-disable-next-line no-console
-        console.error('[ClientUserStatusPanel] getClientStatusByTrainer failed:', err);
+        logger.error('[ClientUserStatusPanel] getClientStatusByTrainer failed:', err);
         if (mounted) setError(err);
       })
       .finally(() => { if (mounted) setIsLoading(false); });

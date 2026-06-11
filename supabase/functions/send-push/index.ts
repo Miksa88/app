@@ -67,7 +67,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "vapid_not_configured" }, 500);
   }
 
-  // Auth — cron secret ili service role (od EF-a)
+  // Auth — cron secret ili service role (od EF-a).
+  // NAPOMENA (security): `CRON_SECRET &&` guard je namerno — ako env var nije
+  // setovan, cron path NIKAD ne autorizuje (undefined === undefined ne sme da
+  // prođe). Ne menjati u prosto poređenje bez ovog guard-a.
   const authHeader = req.headers.get("authorization") || "";
   const cronSecret = req.headers.get("x-cron-secret");
   const isCron = CRON_SECRET && cronSecret === CRON_SECRET;
@@ -85,7 +88,11 @@ Deno.serve(async (req) => {
     .select("endpoint, p256dh, auth")
     .eq("user_id", payload.userId)
     .eq("enabled", true);
-  if (error) return jsonResponse({ error: `db_error: ${error.message}` }, 500);
+  if (error) {
+    // Detalji idu u server log, caller dobija generičku poruku
+    console.error("[send-push] push_subscriptions fetch failed", error.message);
+    return jsonResponse({ error: "db_error" }, 500);
+  }
   if (!subs || subs.length === 0) return jsonResponse({ ok: true, sent: 0, failed: 0 });
 
   const notifBody = JSON.stringify({

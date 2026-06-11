@@ -2,6 +2,7 @@
 // Spec: design-system/MASTER.md §2.7 (ErrorBoundary)
 // Sentry hook placeholder — u WS-3 dodati @sentry/react kad backend zakači
 
+import { logger } from "@/lib/logger";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RotateCw } from "lucide-react";
 import { captureError } from "@/lib/sentry";
@@ -29,8 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     captureError(error, { componentStack: errorInfo.componentStack });
-    // eslint-disable-next-line no-console
-    console.error("[ErrorBoundary]", error, errorInfo);
+    logger.error("[ErrorBoundary]", error, errorInfo);
   }
 
   reset = () => {

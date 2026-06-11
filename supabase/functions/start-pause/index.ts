@@ -33,6 +33,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Deno ambient
 declare const Deno: {
@@ -44,18 +45,16 @@ declare const Deno: {
 // CORS helpers
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -129,12 +128,14 @@ function toDateOnly(input: string): string {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -142,13 +143,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return jsonResponse({ error: "Server misconfigured" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured" }, 500);
   }
 
   // 1. JWT auth
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return jsonResponse({ error: "Missing Authorization" }, 401);
+    return jsonResponse(HDRS, { error: "Missing Authorization" }, 401);
   }
   const jwt = authHeader.slice("Bearer ".length).trim();
 
@@ -158,7 +159,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: userData, error: userErr } = await anonClient.auth.getUser(jwt);
   if (userErr || !userData?.user) {
-    return jsonResponse({ error: "Invalid JWT" }, 401);
+    return jsonResponse(HDRS, { error: "Invalid JWT" }, 401);
   }
   const userId = userData.user.id;
 
@@ -168,16 +169,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ error: validated }, 400);
+      return jsonResponse(HDRS, { error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   // 3. clientId guard
   if (payload.clientId !== userId) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { error: "Forbidden: clientId ne odgovara auth.uid" },
       403,
     );
@@ -213,15 +214,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // PostgREST postgresql error code dolazi kroz `code` polje.
     const code = (insertErr as { code?: string }).code;
     if (code === "23505") {
-      return jsonResponse(
+      return jsonResponse(HDRS,
         { ok: false, error: "Vec imas aktivnu pauzu. Zavrsi je pre nove." },
         409,
       );
     }
-    return jsonResponse(
-      { error: `pause_events insert failed: ${insertErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[start-pause] pause_events insert failed", insertErr.message);
+    return jsonResponse(HDRS, { error: "pause_events insert failed" }, 500);
   }
 
   // 6. Load trenutni user_status, patch activePauseEvent, upsert
@@ -232,13 +232,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
 
   if (loadErr) {
-    return jsonResponse(
-      { error: `user_status load failed: ${loadErr.message}` },
-      500,
-    );
+    console.error("[start-pause] user_status load failed", loadErr.message);
+    return jsonResponse(HDRS, { error: "user_status load failed" }, 500);
   }
   if (!rowData?.status_json) {
-    return jsonResponse({ error: "user_status not found for client" }, 404);
+    return jsonResponse(HDRS, { error: "user_status not found for client" }, 404);
   }
 
   const status = rowData.status_json as UserStatusShape;
@@ -269,13 +267,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (upsertErr) {
-    return jsonResponse(
-      { error: `user_status upsert failed: ${upsertErr.message}` },
-      500,
-    );
+    console.error("[start-pause] user_status upsert failed", upsertErr.message);
+    return jsonResponse(HDRS, { error: "user_status upsert failed" }, 500);
   }
 
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     pauseEvent: pauseData,
     status: newStatus,

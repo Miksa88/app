@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { useMemo, useState } from "react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -62,8 +63,7 @@ const AnalysisReport = () => {
       }
 
       if (!resolvedClientId) {
-        // eslint-disable-next-line no-console
-        console.warn('[AnalysisReport] Sesija nije dostupna posle 5s — verovatno email confirmation pending.');
+        logger.warn('[AnalysisReport] Sesija nije dostupna posle 5s — verovatno email confirmation pending.');
         const fallback = "Proveri svoj email da potvrdiš nalog, pa pokušaj ponovo.";
         const friendly = t("analysis.errorNoSession");
         toast.error(friendly && friendly !== "analysis.errorNoSession" ? friendly : fallback);
@@ -71,8 +71,7 @@ const AnalysisReport = () => {
         return;
       }
       if (isMockAuth) {
-        // eslint-disable-next-line no-console
-        console.info(`[AnalysisReport] Mock auth — pokrecem completeOnboarding za ${clientId}`);
+        logger.info(`[AnalysisReport] Mock auth — pokrecem completeOnboarding za ${clientId}`);
       }
 
       const cleanInjuries = (data.injuries ?? data.limitations ?? [])
@@ -106,13 +105,11 @@ const AnalysisReport = () => {
       });
 
       if (result.warnings.length > 0) {
-        // eslint-disable-next-line no-console
-        console.warn('[Onboarding] Warnings:', result.warnings);
+        logger.warn('[Onboarding] Warnings:', result.warnings);
       }
       navigate("/home");
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[Onboarding] completeOnboarding failed:', err);
+      logger.error('[Onboarding] completeOnboarding failed:', err);
       const errMsg = err instanceof Error ? err.message : String(err);
       const fallback = "Kreiranje plana nije uspelo. Probaj ponovo ili kontaktiraj podršku.";
       const friendly = t("analysis.errorGeneric");

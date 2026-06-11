@@ -55,6 +55,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Deno ambient (edge-runtime.d.ts donosi Deno.serve + Deno.env)
 declare const Deno: {
@@ -103,18 +104,16 @@ interface UserStatusShape {
 // CORS helpers
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -215,12 +214,14 @@ function isMetabolicNoise(liquidKcal: number, calorieTarget: number): boolean {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { ok: false, error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -228,13 +229,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return jsonResponse({ ok: false, error: "Server misconfigured" }, 500);
+    return jsonResponse(HDRS, { ok: false, error: "Server misconfigured" }, 500);
   }
 
   // 1. JWT auth
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return jsonResponse({ ok: false, error: "Missing Authorization" }, 401);
+    return jsonResponse(HDRS, { ok: false, error: "Missing Authorization" }, 401);
   }
   const jwt = authHeader.slice("Bearer ".length).trim();
 
@@ -244,7 +245,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: userData, error: userErr } = await anonClient.auth.getUser(jwt);
   if (userErr || !userData?.user) {
-    return jsonResponse({ ok: false, error: "Invalid JWT" }, 401);
+    return jsonResponse(HDRS, { ok: false, error: "Invalid JWT" }, 401);
   }
   const userId = userData.user.id;
 
@@ -254,16 +255,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = await req.json();
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ ok: false, error: validated }, 400);
+      return jsonResponse(HDRS, { ok: false, error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { ok: false, error: "Invalid JSON" }, 400);
   }
 
   // 3. clientId guard
   if (payload.clientId !== userId) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { ok: false, error: "Forbidden: clientId ne odgovara auth.uid" },
       403,
     );
@@ -292,10 +293,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   });
 
   if (insertErr) {
-    return jsonResponse(
-      { ok: false, error: `meal_logs insert failed: ${insertErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[process-meal-log] meal_logs insert failed", insertErr.message);
+    return jsonResponse(HDRS, { ok: false, error: "meal_logs insert failed" }, 500);
   }
 
   // 6. Load UserStatus
@@ -306,13 +306,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .maybeSingle();
 
   if (loadErr) {
-    return jsonResponse(
-      { ok: false, error: `user_status load failed: ${loadErr.message}` },
-      500,
-    );
+    console.error("[process-meal-log] user_status load failed", loadErr.message);
+    return jsonResponse(HDRS, { ok: false, error: "user_status load failed" }, 500);
   }
   if (!rowData?.status_json) {
-    return jsonResponse(
+    return jsonResponse(HDRS,
       { ok: false, error: "user_status not found for client" },
       404,
     );
@@ -335,10 +333,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .gt("logged_at", twentyFourHoursAgoIso);
 
   if (liquidErr) {
-    return jsonResponse(
-      { ok: false, error: `liquid aggregate failed: ${liquidErr.message}` },
-      500,
-    );
+    console.error("[process-meal-log] liquid aggregate failed", liquidErr.message);
+    return jsonResponse(HDRS, { ok: false, error: "liquid aggregate failed" }, 500);
   }
 
   const liquidTotal = ((liquidRows ?? []) as Array<{ calories_actual: number }>)
@@ -395,14 +391,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (upsertErr) {
-    return jsonResponse(
-      { ok: false, error: `user_status upsert failed: ${upsertErr.message}` },
-      500,
-    );
+    console.error("[process-meal-log] user_status upsert failed", upsertErr.message);
+    return jsonResponse(HDRS, { ok: false, error: "user_status upsert failed" }, 500);
   }
 
   // 12. Vrati novi status + aggregate.
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     status: newStatus,
     liquidTotal,

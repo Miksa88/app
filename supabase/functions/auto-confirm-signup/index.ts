@@ -20,42 +20,40 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 declare const Deno: {
   serve: (h: (req: Request) => Response | Promise<Response>) => void;
   env: { get: (k: string) => string | undefined };
 };
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const json = (body: unknown, status = 200) =>
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+const json = (HDRS: Record<string, string>, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: { ...HDRS, "Content-Type": "application/json" },
   });
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: HDRS });
+  if (req.method !== "POST") return json(HDRS, { error: "Method not allowed" }, 405);
 
   const url = Deno.env.get("SUPABASE_URL");
   const srk = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !srk) return json({ error: "Server misconfigured" }, 500);
+  if (!url || !srk) return json(HDRS, { error: "Server misconfigured" }, 500);
 
   let payload: { userId?: unknown };
   try {
     payload = await req.json();
   } catch {
-    return json({ error: "Invalid JSON" }, 400);
+    return json(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   const userId = payload.userId;
   if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) {
-    return json({ error: "Invalid userId (UUID expected)" }, 400);
+    return json(HDRS, { error: "Invalid userId (UUID expected)" }, 400);
   }
 
   const admin = createClient(url, srk);
@@ -69,23 +67,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .limit(1);
 
   if (selectErr) {
-    return json({ error: `auth.users select failed: ${selectErr.message}` }, 500);
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[auto-confirm-signup] auth.users select failed", selectErr.message);
+    return json(HDRS, { error: "auth.users select failed" }, 500);
   }
   if (!rows || rows.length === 0) {
-    return json({ error: "User not found" }, 404);
+    return json(HDRS, { error: "User not found" }, 404);
   }
 
   const u = rows[0] as { id: string; email_confirmed_at: string | null; created_at: string };
 
   if (u.email_confirmed_at) {
     // Already confirmed — idempotent OK
-    return json({ ok: true, alreadyConfirmed: true });
+    return json(HDRS, { ok: true, alreadyConfirmed: true });
   }
 
   const createdAt = new Date(u.created_at).getTime();
   const ageMs = Date.now() - createdAt;
   if (ageMs > 60_000) {
-    return json(
+    return json(HDRS,
       { error: "User created over 60s ago — auto-confirm only allowed for recent signups" },
       403,
     );
@@ -98,8 +98,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .eq("id", userId);
 
   if (updateErr) {
-    return json({ error: `auth.users update failed: ${updateErr.message}` }, 500);
+    console.error("[auto-confirm-signup] auth.users update failed", updateErr.message);
+    return json(HDRS, { error: "auth.users update failed" }, 500);
   }
 
-  return json({ ok: true, alreadyConfirmed: false });
+  return json(HDRS, { ok: true, alreadyConfirmed: false });
 });

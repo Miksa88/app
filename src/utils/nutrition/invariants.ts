@@ -48,8 +48,7 @@ export function assertInvariant(
   }
 
   // PROD: log + continue (nikad rusiti korisnicku sesiju zbog edge case-a)
-  // eslint-disable-next-line no-console
-  console.error(fullMessage);
+  logger.error(fullMessage);
 }
 
 // ============================================================================

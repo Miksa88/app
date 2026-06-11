@@ -13,6 +13,7 @@
 // Privatni key ide u Supabase secrets (za EF send-push): VAPID_PRIVATE_KEY.
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { supabase } from '@/integrations/supabase/client';
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
@@ -31,7 +32,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     return await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   } catch (err) {
-    console.error('SW registration failed:', err);
+    logger.error('SW registration failed:', err);
     return null;
   }
 }
@@ -65,7 +66,7 @@ export async function subscribeToPush(clientId: string): Promise<boolean> {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
     } catch (err) {
-      console.error('subscribe failed:', err);
+      logger.error('subscribe failed:', err);
       return false;
     }
   }
@@ -88,7 +89,7 @@ export async function subscribeToPush(clientId: string): Promise<boolean> {
     { onConflict: 'user_id,endpoint' },
   );
   if (error) {
-    console.error('save subscription failed:', error.message);
+    logger.error('save subscription failed:', error.message);
     return false;
   }
   return true;

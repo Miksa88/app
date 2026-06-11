@@ -18,6 +18,7 @@
 //     for <clientId>".
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 
@@ -77,8 +78,7 @@ export const SyncRulesOverrideSection = ({
         if (mounted) setStatus(s);
       })
       .catch((e) => {
-        // eslint-disable-next-line no-console
-        console.error('[SyncRulesOverrideSection] load failed:', e);
+        logger.error('[SyncRulesOverrideSection] load failed:', e);
       })
       .finally(() => {
         if (mounted) setIsLoading(false);
@@ -136,8 +136,7 @@ export const SyncRulesOverrideSection = ({
 
       // Audit trail — gate u dev-u only; prod-u nije korisno (treba real audit table).
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log(
+        logger.debug(
           `[trainer-audit] ${trainerId ?? 'unknown'} changed ${rule} to ${newState} for ${clientId}`,
         );
       }

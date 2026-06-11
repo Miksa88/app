@@ -15,32 +15,29 @@
 //   3. Trener notifikacije (TODO Faza 4)
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import { EventBus } from '@/utils/sync/eventBus';
 
 export function registerNutritionSubscribers(): void {
   EventBus.subscribe('DELOAD_ACTIVATED', async (event) => {
-    // eslint-disable-next-line no-console
-    console.info(`[Nutrition] Deload aktiviran za ${event.clientId} ` +
+    logger.info(`[Nutrition] Deload aktiviran za ${event.clientId} ` +
       `(reason=${event.reason}, mezo=${event.mesocycleIndex}). ` +
       `Sledeci runSyncRules ce postaviti nutrition na maintenance.`);
     // TODO Faza 4: trigger SyncEventBanner "Deload nedelja — ishrana je na maintenance"
   });
 
   EventBus.subscribe('RETURN_FROM_BREAK_STARTED', async (event) => {
-    // eslint-disable-next-line no-console
-    console.info(`[Nutrition] Return from Break za ${event.clientId} (${event.partition}). ` +
+    logger.info(`[Nutrition] Return from Break za ${event.clientId} (${event.partition}). ` +
       `Nutrition deficit ide na -8% (tdee × 0.92).`);
   });
 
   EventBus.subscribe('PAUSE_STARTED', async (event) => {
-    // eslint-disable-next-line no-console
-    console.info(`[Nutrition] Pauza pokrenuta (${event.pauseType}) za ${event.clientId}.`);
+    logger.info(`[Nutrition] Pauza pokrenuta (${event.pauseType}) za ${event.clientId}.`);
     // TODO Faza 4: ako 'illness', SyncEventBanner sa "-5% deficit, polako vracamo"
   });
 
   EventBus.subscribe('METABOLIC_NOISE_TRIGGERED', async (event) => {
-    // eslint-disable-next-line no-console
-    console.warn(`[Nutrition] Metabolic noise za ${event.clientId}: ` +
+    logger.warn(`[Nutrition] Metabolic noise za ${event.clientId}: ` +
       `${event.percentage}% tecnih kalorija. Plan adjustment blokiran 3 dana.`);
     // TODO Faza 4: SyncEventBanner zuti warning + sugestija "smanji tečne kalorije"
   });

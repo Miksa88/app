@@ -15,6 +15,7 @@
 // Redis Pub/Sub). Za MVP in-memory je dovoljan.
 // ============================================================================
 
+import { logger } from "@/lib/logger";
 import type { SystemEvent, SystemEventType, EventHandler, EventOfType } from '@/types/events';
 
 // ============================================================================
@@ -54,8 +55,7 @@ class EventBusImpl {
     await Promise.all(
       list.map(handler =>
         handler(event).catch(err => {
-          // eslint-disable-next-line no-console
-          console.error(`[EventBus] handler za ${event.type} bacio gresku:`, err);
+          logger.error(`[EventBus] handler za ${event.type} bacio gresku:`, err);
         }),
       ),
     );

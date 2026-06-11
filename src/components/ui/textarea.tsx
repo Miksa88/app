@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 // iOS-native Textarea — DESIGN_AUDIT v2 Iter 2g refactor.
 // Isti filled pattern kao Input — radi standalone i u grouped list-ima.

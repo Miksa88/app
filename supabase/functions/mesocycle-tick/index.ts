@@ -43,6 +43,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 import {
   getMesocycleWeeks,
   handleMesocycleEnd,
@@ -110,18 +111,16 @@ interface TickPayload {
 // CORS helpers (nije striktno potrebno za cron, ali drzimo konzistentnost)
 // ----------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function jsonResponse(body: unknown, status = 200): Response {
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+function jsonResponse(
+  HDRS: Record<string, string>,
+  body: unknown,
+  status = 200,
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...HDRS,
       "Content-Type": "application/json",
     },
   });
@@ -152,12 +151,14 @@ function validatePayload(p: unknown): TickPayload | string {
 // ----------------------------------------------------------------------------
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // CORS headeri po request-u (origin whitelist + x-cron-secret)
+  const HDRS = corsHeaders(req, "x-cron-secret");
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: HDRS });
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(HDRS, { error: "Method not allowed" }, 405);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -165,19 +166,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const cronSecret = Deno.env.get("CRON_SECRET");
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return jsonResponse({ error: "Server misconfigured (supabase env)" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured (supabase env)" }, 500);
   }
 
   if (!cronSecret) {
     // Ne-konfigurisan secret je security failure — ne dozvoljavamo default
     // allow, cron-trigger mora biti eksplicitno podesen.
-    return jsonResponse({ error: "Server misconfigured (CRON_SECRET missing)" }, 500);
+    return jsonResponse(HDRS, { error: "Server misconfigured (CRON_SECRET missing)" }, 500);
   }
 
   // Auth — cron secret header match
   const providedSecret = req.headers.get("x-cron-secret");
   if (providedSecret !== cronSecret) {
-    return jsonResponse({ error: "Forbidden" }, 403);
+    return jsonResponse(HDRS, { error: "Forbidden" }, 403);
   }
 
   // Parse payload (opcioni)
@@ -187,11 +188,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const body = text.length > 0 ? JSON.parse(text) : {};
     const validated = validatePayload(body);
     if (typeof validated === "string") {
-      return jsonResponse({ error: validated }, 400);
+      return jsonResponse(HDRS, { error: validated }, 400);
     }
     payload = validated;
   } catch {
-    return jsonResponse({ error: "Invalid JSON" }, 400);
+    return jsonResponse(HDRS, { error: "Invalid JSON" }, 400);
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
@@ -204,14 +205,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: statusRows, error: statusErr } = await statusQuery;
   if (statusErr) {
-    return jsonResponse(
-      { error: `user_status fetch failed: ${statusErr.message}` },
-      500,
-    );
+    // Detalji idu u server log, caller dobija generičku poruku
+    console.error("[mesocycle-tick] user_status fetch failed", statusErr.message);
+    return jsonResponse(HDRS, { error: "user_status fetch failed" }, 500);
   }
 
   if (!statusRows || statusRows.length === 0) {
-    return jsonResponse({
+    return jsonResponse(HDRS, {
       ok: true,
       processed: 0,
       mesocyclesRolled: 0,
@@ -238,10 +238,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .in("id", templateIds);
 
     if (templateErr) {
-      return jsonResponse(
-        { error: `session_templates fetch failed: ${templateErr.message}` },
-        500,
-      );
+      console.error("[mesocycle-tick] session_templates fetch failed", templateErr.message);
+      return jsonResponse(HDRS, { error: "session_templates fetch failed" }, 500);
     }
 
     for (const row of (templateRows ?? []) as Array<{
@@ -404,7 +402,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
   }
 
-  return jsonResponse({
+  return jsonResponse(HDRS, {
     ok: true,
     processed: statusRows.length,
     mesocyclesRolled,
