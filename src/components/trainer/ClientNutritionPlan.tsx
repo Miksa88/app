@@ -1,12 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus, ChevronRight, RefreshCw, X, ChevronDown, Pencil } from "lucide-react";
+import { motion } from "framer-motion";
+import { ChevronRight } from "lucide-react";
 import { TAP_SCALE } from "@/lib/motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
-import type { FoodItem } from "@/data/foodDatabase";
 import {
   generateMealPlan,
   GeneratedMealPlan,
@@ -17,7 +16,18 @@ import {
 import { useFoodItems } from "@/hooks/useFoodItems";
 import { useNutritionTemplates } from "@/hooks/useNutritionTemplates";
 import PlanInsightCard from "@/components/PlanInsightCard";
-import { BottomSheet } from "@/components/ui/bottom-sheet";
+// Dekompozicija — UI delovi izdvojeni u ClientNutritionPlanParts.tsx + Sheets fajl
+import {
+  DailyTargetsCard,
+  MealSwipeCard,
+  NutritionUndoBar,
+} from "./ClientNutritionPlanParts";
+import {
+  MACRO_PRESETS,
+  MacroPresetSheet,
+  TemplateSwitcherSheet,
+  AddMealSheet,
+} from "./ClientNutritionPlanSheets";
 
 interface ClientNutritionPlanProps {
   client: {
@@ -71,25 +81,6 @@ function getModificationLevel(
   return "edited";
 }
 
-const MACRO_PRESETS = [
-  { id: "balanced", label: "Balanced", p: 30, c: 40, f: 30 },
-  { id: "highProtein", label: "High Protein", p: 40, c: 30, f: 30 },
-  { id: "lowCarb", label: "Low Carb", p: 40, c: 20, f: 40 },
-  { id: "keto", label: "Keto", p: 25, c: 5, f: 70 },
-  { id: "lowFat", label: "Low Fat", p: 25, c: 55, f: 20 },
-];
-
-const MEAL_SLOT_TYPES = [
-  "breakfast",
-  "morning_snack",
-  "lunch",
-  "afternoon_snack",
-  "dinner",
-  "evening_snack",
-  "pre_workout",
-  "post_workout",
-] as const;
-
 function buildMockClientProfile(client: ClientNutritionPlanProps["client"]): ClientProfile {
   const weightNum = typeof client.weight === 'number' ? client.weight : parseInt(String(client.weight)) || 70;
   const heightNum = typeof client.height === 'number' ? client.height : parseInt(String(client.height)) || 170;
@@ -113,6 +104,9 @@ function buildMockClientProfile(client: ClientNutritionPlanProps["client"]): Cli
     jobType: client.jobType?.toLowerCase().includes("sedentary") ? "sedentary" : client.jobType?.toLowerCase().includes("active") ? "active" : "mixed",
   };
 }
+
+// Koji bottom sheet je otvoren — konsolidovano iz 3 zasebna boolean useState-a
+type OpenSheet = "macro" | "template" | "addMeal" | null;
 
 const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
   const { t } = useLanguage();
@@ -157,10 +151,8 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate?.id, foodPool.length]);
 
-  // Sheets
-  const [macroSheetOpen, setMacroSheetOpen] = useState(false);
-  const [templateSheetOpen, setTemplateSheetOpen] = useState(false);
-  const [addMealSheetOpen, setAddMealSheetOpen] = useState(false);
+  // Sheets — jedan state atom umesto 3 boolean-a (mehanička konsolidacija)
+  const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
 
   // Undo
   const [undoState, setUndoState] = useState<{ meals: GeneratedMeal[]; calories: number; macros: typeof macroRatio } | null>(null);
@@ -217,7 +209,7 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
     const prev = { meals: [...meals], calories: dailyCalories, macros: { ...macroRatio } };
     setMacroRatio({ protein: preset.p, carbs: preset.c, fat: preset.f });
     setOverrides((o) => ({ ...o, macrosOverridden: true }));
-    setMacroSheetOpen(false);
+    setOpenSheet(null);
     toast(t("nutrition.planUpdated"));
     showUndo(prev.meals, prev.calories, prev.macros);
   };
@@ -240,7 +232,7 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
       mealsRemoved: 0,
       portionsChanged: 0,
     });
-    setTemplateSheetOpen(false);
+    setOpenSheet(null);
     toast(t("nutrition.planUpdated"));
   };
 
@@ -304,7 +296,7 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
 
   // Add meal slot
   const addMealSlot = (slotType: string) => {
-    setAddMealSheetOpen(false);
+    setOpenSheet(null);
     // Navigate to picker with slot info
     navigate(`/trainer/client/${client.id}/meal-picker?slot=${slotType}&calories=${Math.round(dailyCalories * 0.1)}`);
   };
@@ -329,128 +321,28 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
     );
   }
 
-  // Macro display calculations (selectedTemplate je guaranteed non-null posle guard-a)
-  const proteinGrams = Math.round((dailyCalories * macroRatio.protein) / 100 / 4);
-  const carbsGrams = Math.round((dailyCalories * macroRatio.carbs) / 100 / 4);
-  const fatGrams = Math.round((dailyCalories * macroRatio.fat) / 100 / 9);
-  const trainingDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.trainingDayModifier || 150) : 0);
-  const restDayCal = dailyCalories + (selectedTemplate.differentOnTrainingDays ? (selectedTemplate.restDayModifier || -100) : 0);
-
   // Is training day (mock)
   const isTrainingDay = new Date().getDay() % 2 === 1; // odd days = training
 
   return (
     <div className="space-y-3">
       {/* Daily Targets Card */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="bg-card rounded-xl p-4 card-shadow"
-      >
-        {/* Calories header */}
-        <div className="flex items-center justify-between mb-3">
-          {editingCalories ? (
-            <input
-              type="number"
-              value={calorieInput}
-              onChange={(e) => setCalorieInput(e.target.value)}
-              onBlur={commitCalories}
-              onKeyDown={(e) => e.key === "Enter" && commitCalories()}
-              autoFocus
-              className="text-title-2 font-bold text-foreground bg-transparent border-b-2 border-primary outline-none w-32"
-            />
-          ) : (
-            <button
-              onClick={() => {
-                setEditingCalories(true);
-                setCalorieInput(String(dailyCalories));
-              }}
-              className="text-title-2 font-bold text-foreground flex items-center gap-2"
-            >
-              {dailyCalories} kcal
-              <Pencil size={ICON_SIZE.xs} className="text-muted-foreground" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-
-        {/* Macro bars */}
-        <button
-          onClick={() => setMacroSheetOpen(true)}
-          className="w-full text-left"
-        >
-          <div className="flex gap-2 mb-2">
-            <div className="flex-1">
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${macroRatio.protein}%`,
-                    backgroundColor: "hsl(var(--info))",
-                  }}
-                />
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${macroRatio.carbs}%`,
-                    backgroundColor: "hsl(var(--warning))",
-                  }}
-                />
-              </div>
-            </div>
-            <div className="flex-1">
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${macroRatio.fat}%`,
-                    backgroundColor: "hsl(var(--destructive))",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2 text-caption-1">
-            <span className="flex-1 text-info font-semibold">
-              Protein {proteinGrams}g ({macroRatio.protein}%)
-            </span>
-            <span className="flex-1 text-warning-foreground font-semibold">
-              Carbs {carbsGrams}g ({macroRatio.carbs}%)
-            </span>
-            <span className="flex-1 text-destructive font-semibold">
-              Fat {fatGrams}g ({macroRatio.fat}%)
-            </span>
-          </div>
-        </button>
-
-        {/* Training/Rest day */}
-        {selectedTemplate.differentOnTrainingDays && (
-          <div className="flex gap-4 mt-3 text-caption-1 text-muted-foreground">
-            <span>{t("nutrition.trainingDayLabel")}: {trainingDayCal} kcal</span>
-            <span>{t("nutrition.restDayLabel")}: {restDayCal} kcal</span>
-          </div>
-        )}
-
-        {/* Template & Reset */}
-        <div className="mt-3 flex items-center justify-between">
-          <button
-            onClick={() => setTemplateSheetOpen(true)}
-            className="text-caption-1 text-muted-foreground"
-          >
-            {t("nutrition.template")}: {selectedTemplate.name}
-          </button>
-          <button
-            onClick={resetToDefaults}
-            className="text-caption-1 text-primary flex items-center gap-1"
-          >
-            <RefreshCw size={ICON_SIZE.xs} />
-            {t("nutrition.resetToDefaults")}
-          </button>
-        </div>
-      </motion.div>
+      <DailyTargetsCard
+        dailyCalories={dailyCalories}
+        editingCalories={editingCalories}
+        calorieInput={calorieInput}
+        onCalorieInputChange={setCalorieInput}
+        onCommitCalories={commitCalories}
+        onStartEditing={() => {
+          setEditingCalories(true);
+          setCalorieInput(String(dailyCalories));
+        }}
+        macroRatio={macroRatio}
+        selectedTemplate={selectedTemplate}
+        onOpenMacroSheet={() => setOpenSheet("macro")}
+        onOpenTemplateSheet={() => setOpenSheet("template")}
+        onReset={resetToDefaults}
+      />
 
       {/* Insight Card */}
       <PlanInsightCard
@@ -475,101 +367,24 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
       </div>
 
       {meals.map((meal, index) => (
-        <motion.div
+        <MealSwipeCard
           key={`${meal.mealId}-${index}`}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.03 }}
-          className="relative overflow-hidden rounded-xl"
-        >
-          {/* Swipe actions behind */}
-          <div className="absolute inset-y-0 right-0 flex">
-            <button
-              onClick={() => replaceMeal(index)}
-              className="w-20 flex items-center justify-center text-caption-1 font-semibold"
-              style={{ backgroundColor: "hsl(var(--info))" }}
-            >
-              <span className="text-white">{t("nutrition.replace")}</span>
-            </button>
-            <button
-              onClick={() => removeMeal(index)}
-              className="w-20 flex items-center justify-center text-caption-1 font-semibold"
-              style={{ backgroundColor: "hsl(var(--destructive))" }}
-            >
-              <span className="text-white">{t("nutrition.remove")}</span>
-            </button>
-          </div>
-
-          {/* Main card */}
-          <motion.div
-            drag="x"
-            dragConstraints={{ left: -160, right: 0 }}
-            dragElastic={0.1}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -80) {
-                setSwipedIndex(index);
-              } else {
-                setSwipedIndex(null);
-              }
-            }}
-            animate={{ x: swipedIndex === index ? -160 : 0 }}
-            className="bg-card rounded-xl p-4 card-shadow relative z-10"
-          >
-            <div className="flex items-start justify-between mb-1">
-              <span className="text-caption-2 text-muted-foreground uppercase tracking-wide font-semibold">
-                {meal.slotLabel}
-              </span>
-              <span className="text-caption-2 text-muted-foreground">
-                {meals.length > 0
-                  ? `${Math.round(
-                      (meal.calories / (dailyCalories || 1)) * 100
-                    )}%`
-                  : ""}
-              </span>
-            </div>
-            <p className="text-body font-semibold text-foreground mb-1">
-              {meal.name}
-            </p>
-            <p className="text-caption-1 text-muted-foreground mb-2">
-              {meal.calories} kcal ·{" "}
-              <span style={{ color: "hsl(var(--info))" }}>{meal.protein}g P</span> ·{" "}
-              <span style={{ color: "hsl(var(--warning))" }}>{meal.carbs}g C</span> ·{" "}
-              <span style={{ color: "hsl(var(--destructive))" }}>{meal.fat}g F</span>
-            </p>
-
-            {/* Portion adjuster */}
-            <div className="flex items-center gap-3">
-              <span className="text-caption-1 text-muted-foreground">
-                {t("nutrition.serving")}:
-              </span>
-              <div className="flex items-center gap-2">
-                <motion.button
-                  whileTap={{ scale: TAP_SCALE.iconStrong }}
-                  onClick={() => changePortion(index, -0.25)}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center min-w-[32px]"
-                >
-                  <Minus size={ICON_SIZE.xs} className="text-foreground" />
-                </motion.button>
-                <span className="text-body font-semibold text-foreground w-10 text-center">
-                  {meal.portionMultiplier.toFixed(2)}x
-                </span>
-                <motion.button
-                  whileTap={{ scale: TAP_SCALE.iconStrong }}
-                  onClick={() => changePortion(index, 0.25)}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center min-w-[32px]"
-                >
-                  <Plus size={ICON_SIZE.xs} className="text-foreground" />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
+          meal={meal}
+          index={index}
+          dailyCalories={dailyCalories}
+          mealsCount={meals.length}
+          isSwiped={swipedIndex === index}
+          onSwipeChange={setSwipedIndex}
+          onReplace={replaceMeal}
+          onRemove={removeMeal}
+          onChangePortion={changePortion}
+        />
       ))}
 
       {/* Add Meal Button */}
       <motion.button
         whileTap={{ scale: TAP_SCALE.secondary }}
-        onClick={() => setAddMealSheetOpen(true)}
+        onClick={() => setOpenSheet("addMeal")}
         className="w-full py-3 border-2 border-dashed border-border rounded-xl text-body text-muted-foreground font-medium min-h-11"
       >
         + {t("nutrition.addMeal")}
@@ -584,124 +399,35 @@ const ClientNutritionPlan = ({ client }: ClientNutritionPlanProps) => {
       </button>
 
       {/* Undo Bar */}
-      <AnimatePresence>
-        {undoState && (
-          <motion.div
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 60, opacity: 0 }}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-snackbar bg-foreground text-background px-4 py-3 rounded-xl flex items-center gap-3 card-shadow"
-          >
-            <span className="text-caption-1">
-              {t("nutrition.planUpdated")}
-            </span>
-            <button
-              onClick={handleUndo}
-              className="text-primary text-caption-1 font-semibold"
-            >
-              {t("nutrition.undo")}
-            </button>
-            <button onClick={() => setUndoState(null)}>
-              <X size={ICON_SIZE.xs} className="text-background/60" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <NutritionUndoBar
+        visible={!!undoState}
+        onUndo={handleUndo}
+        onDismiss={() => setUndoState(null)}
+      />
 
       {/* Macro Preset Sheet */}
-      <BottomSheet
-        open={macroSheetOpen}
-        onOpenChange={setMacroSheetOpen}
-        title={t("nutrition.macroPreset")}
-      >
-        <div className="space-y-2 pt-2 pb-2">
-          {MACRO_PRESETS.map((preset) => (
-            <motion.button
-              key={preset.id}
-              whileTap={{ scale: TAP_SCALE.secondary }}
-              onClick={() => selectMacroPreset(preset)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border ios-row-h ${
-                macroRatio.protein === preset.p &&
-                macroRatio.carbs === preset.c &&
-                macroRatio.fat === preset.f
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card"
-              }`}
-            >
-              {/* Mini bar */}
-              <div className="flex w-16 h-3 rounded-full overflow-hidden shrink-0">
-                <div style={{ width: `${preset.p}%`, backgroundColor: "hsl(var(--info))" }} />
-                <div style={{ width: `${preset.c}%`, backgroundColor: "hsl(var(--warning))" }} />
-                <div style={{ width: `${preset.f}%`, backgroundColor: "hsl(var(--destructive))" }} />
-              </div>
-              <div className="text-left flex-1">
-                <p className="text-body font-semibold text-foreground">
-                  {preset.label}
-                </p>
-                <p className="text-caption-1 text-muted-foreground">
-                  P:{preset.p}% C:{preset.c}% F:{preset.f}%
-                </p>
-              </div>
-            </motion.button>
-          ))}
-        </div>
-      </BottomSheet>
+      <MacroPresetSheet
+        open={openSheet === "macro"}
+        onOpenChange={(open) => setOpenSheet(open ? "macro" : null)}
+        macroRatio={macroRatio}
+        onSelect={selectMacroPreset}
+      />
 
       {/* Template Switcher Sheet */}
-      <BottomSheet
-        open={templateSheetOpen}
-        onOpenChange={setTemplateSheetOpen}
-        title={t("nutrition.templates")}
-      >
-        <div className="space-y-2 pt-2 pb-2">
-          {templates.map((tmpl) => (
-            <motion.button
-              key={tmpl.id}
-              whileTap={{ scale: TAP_SCALE.secondary }}
-              onClick={() => switchTemplate(tmpl)}
-              className={`w-full text-left p-3 rounded-xl border ios-row-h ${
-                selectedTemplateId === tmpl.id
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card"
-              }`}
-            >
-              <p className="text-body font-semibold text-foreground">
-                {tmpl.name}
-              </p>
-              <p className="text-caption-1 text-muted-foreground">
-                {tmpl.description}
-              </p>
-            </motion.button>
-          ))}
-        </div>
-      </BottomSheet>
+      <TemplateSwitcherSheet
+        open={openSheet === "template"}
+        onOpenChange={(open) => setOpenSheet(open ? "template" : null)}
+        templates={templates}
+        selectedTemplateId={selectedTemplateId}
+        onSelect={switchTemplate}
+      />
 
       {/* Add Meal Sheet */}
-      <BottomSheet
-        open={addMealSheetOpen}
-        onOpenChange={setAddMealSheetOpen}
-        title={t("nutrition.addMeal")}
-      >
-        <div className="space-y-1 pt-2 pb-2">
-          {MEAL_SLOT_TYPES.map((type) => {
-            const labelKey = `nutrition.mealSlot${type
-              .split("_")
-              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-              .join("")}`;
-            return (
-              <motion.button
-                key={type}
-                whileTap={{ scale: TAP_SCALE.secondary }}
-                onClick={() => addMealSlot(type)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-card min-h-11"
-              >
-                <span className="text-body text-foreground">{t(labelKey)}</span>
-                <ChevronRight size={16} className="text-muted-foreground/40" />
-              </motion.button>
-            );
-          })}
-        </div>
-      </BottomSheet>
+      <AddMealSheet
+        open={openSheet === "addMeal"}
+        onOpenChange={(open) => setOpenSheet(open ? "addMeal" : null)}
+        onSelect={addMealSlot}
+      />
     </div>
   );
 };

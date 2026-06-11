@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ICON_SIZE, IOS_SWITCH } from "@/lib/design-tokens";
+import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp , IOS_SPRING} from "@/lib/motion";
 import {
@@ -12,8 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Sun, Moon, Monitor, Check, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Pencil, Flame, Footprints, HeartPulse, Bed, Plane, Ruler, type LucideProps } from "lucide-react";
-import type { ComponentType } from "react";
+import { ChevronRight, LogOut, Target, Bell, Palette, Salad, Crown, Heart, Globe, User, FileText, Shield, Mail, Instagram, Music, Trash2, Scale, Plane, Ruler, type LucideProps } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useHealth } from "@/contexts/HealthContext";
@@ -24,12 +23,20 @@ import { ArrowLeft } from "lucide-react";
 import { SectionLabel } from "@/components/ui/section-label";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useHaptic } from "@/hooks/useHaptic";
 import QuickPauseSheet from "@/components/home/QuickPauseSheet";
 import TierBadge from "@/components/profile/TierBadge";
-import QuietHoursPicker from "@/components/profile/QuietHoursPicker";
 import UnitsPicker from "@/components/profile/UnitsPicker";
+// Sub-page komponente izdvojene iz ovog fajla (refactor — ponašanje identično)
+import PersonalDetailsPage from "@/components/profile/PersonalDetailsPage";
+import GoalsPage from "@/components/profile/GoalsPage";
+import AllergiesPage from "@/components/profile/AllergiesPage";
+import NotificationsPage from "@/components/profile/NotificationsPage";
+import SubscriptionPage from "@/components/profile/SubscriptionPage";
+import HealthPage from "@/components/profile/HealthPage";
+import AppearancePage from "@/components/profile/AppearancePage";
+import LanguagePage from "@/components/profile/LanguagePage";
+import WeightHistoryPage from "@/components/profile/WeightHistoryPage";
 import { PageTitle } from "@/components/PageTitle";
 import type { PackageTier } from "@/services/packageService";
 import {
@@ -44,8 +51,8 @@ type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance
 const Profile = () => {
   const navigate = useNavigate();
   const [activePage, setActivePage] = useState<SettingsPage>(null);
-  const { theme, setTheme } = useTheme();
-  const { language, setLanguage, t } = useLanguage();
+  const { theme } = useTheme();
+  const { language, t } = useLanguage();
   const { user, signOut } = useAuth();
   const haptic = useHaptic();
 
@@ -114,13 +121,6 @@ const Profile = () => {
 
   const toggleGoal = (g: string) => setGoals((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]);
   const toggleAllergy = (a: string) => setAllergies((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
-
-  // TODO: zameniti pravim subscription query-jem (Stripe / Supabase) u IT-25.
-  // Za beta — niko nema aktivnu pretplatu, "Manage" ulazi u plan landing.
-  const subscriptionFeatures = [
-    "sub.personalizedPlan", "sub.allExercises", "sub.progressTracking",
-    "sub.mealPlan", "sub.trainerChat", "sub.weeklyCheckin", "sub.monthlyVideo",
-  ];
 
   const [personalDetails, setPersonalDetails] = useState<{
     goalWeight: number | "";
@@ -224,7 +224,7 @@ const Profile = () => {
   };
   const [editValue, setEditValue] = useState("");
 
-  const { healthConnected, setHealthConnected } = useHealth();
+  const { healthConnected } = useHealth();
 
   const slideIn = {
     initial: { x: "100%" }, animate: { x: 0 }, exit: { x: "100%" },
@@ -395,160 +395,30 @@ const Profile = () => {
             <div className="px-5 pb-32">
               {/* PERSONAL DETAILS */}
               {activePage === "personal" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2 text-center">{t("profile.personalDetails")}</h2>
-                  <div className="flex justify-center mb-6">
-                    <PrivacyBadge variant="compact" />
-                  </div>
-
-                  <div className="bg-card rounded-xl card-shadow overflow-hidden">
-                    {([
-                      { key: "currentWeight" as const, label: t("personal.currentWeight"), value: personalDetails.currentWeight, suffix: "kg", type: "number" as const },
-                      { key: "height" as const, label: t("personal.height"), value: personalDetails.height, suffix: "cm", type: "number" as const },
-                      { key: "dateOfBirth" as const, label: t("personal.dateOfBirth"), value: personalDetails.dateOfBirth, suffix: "", type: "text" as const },
-                      { key: "gender" as const, label: t("personal.gender"), value: personalDetails.gender, suffix: "", type: "select" as const },
-                      { key: "dailyStepGoal" as const, label: t("personal.dailyStepGoal"), value: personalDetails.dailyStepGoal, suffix: t("personal.steps"), type: "number" as const },
-                    ] as const).map(({ key, label, value, suffix, type }, i, arr) => {
-                      const isEditing = editingField === key;
-                      return (
-                        <div key={key} className={`flex items-center justify-between px-4 py-4 ios-row-h ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
-                          <span className="text-body text-foreground">{label}</span>
-                          <div className="flex items-center gap-2">
-                            {isEditing ? (
-                              <>
-                                {type === "select" ? (
-                                  <select
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    className="bg-muted rounded-lg px-3 py-2 text-body text-foreground font-semibold text-right focus:outline-none focus:ring-2 focus:ring-primary min-h-11"
-                                  >
-                                    <option value={t("personal.female")}>{t("personal.female")}</option>
-                                    <option value={language === "sr" ? "Muški" : "Male"}>{language === "sr" ? "Muški" : "Male"}</option>
-                                  </select>
-                                ) : (
-                                  <input
-                                    type={type === "number" ? "number" : "text"}
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    autoFocus
-                                    className="bg-muted rounded-lg px-3 py-2 text-body text-foreground font-semibold text-right focus:outline-none focus:ring-2 focus:ring-primary w-24 min-h-11"
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        const nextVal = type === "number" ? Number(editValue) : editValue;
-                                        setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
-                                        void persistProfileField(key, nextVal);
-                                        setEditingField(null);
-                                        haptic("medium");
-                                      }
-                                    }}
-                                  />
-                                )}
-                                {suffix && <span className="text-footnote text-muted-foreground">{suffix}</span>}
-                                <button onClick={() => {
-                                  const nextVal = type === "number" ? Number(editValue) : editValue;
-                                  setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
-                                  void persistProfileField(key, nextVal);
-                                  setEditingField(null);
-                                  haptic("medium");
-                                }}
-                                  className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-full bg-primary/10">
-                                  <Check size={16} className="text-primary" />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-body text-foreground font-semibold">{value === "" ? "—" : value} {value !== "" && suffix}</span>
-                                <button onClick={() => { setEditingField(key); setEditValue(String(value)); }}
-                                  className="text-muted-foreground/50 min-w-[32px] min-h-[32px] flex items-center justify-center">
-                                  <Pencil size={16} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
+                <PersonalDetailsPage
+                  personalDetails={personalDetails}
+                  setPersonalDetails={setPersonalDetails}
+                  editingField={editingField}
+                  setEditingField={setEditingField}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  persistProfileField={persistProfileField}
+                />
               }
 
               {/* MY GOALS */}
               {activePage === "goals" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("goals.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("goals.subtitle")}</p>
-                  <div className="space-y-2">
-                    {allGoals.map((g) => {
-                      const selected = goals.includes(g);
-                      return (
-                        <button key={g} onClick={() => toggleGoal(g)}
-                          className={`w-full flex items-center justify-between px-4 py-4 rounded-xl min-h-11 transition-colors ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
-                          <span className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{t(goalKeys[g] || g)}</span>
-                          {selected && <Check size={20} className="text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
+                <GoalsPage goals={goals} allGoals={allGoals} goalKeys={goalKeys} toggleGoal={toggleGoal} />
               }
 
               {/* ALLERGIES */}
               {activePage === "allergies" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("allergies.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("allergies.subtitle")}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {allAllergies.map((a) => {
-                      const selected = allergies.includes(a);
-                      return (
-                        <button key={a} onClick={() => toggleAllergy(a)}
-                          className={`px-4 py-3 rounded-full min-h-11 transition-colors text-body ${selected ? "gradient-primary text-primary-foreground font-semibold" : "bg-card card-shadow text-foreground"}`}>
-                          {a}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
+                <AllergiesPage allergies={allergies} allAllergies={allAllergies} toggleAllergy={toggleAllergy} />
               }
 
               {/* NOTIFICATIONS */}
               {activePage === "notifications" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("notifications.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("notifications.subtitle")}</p>
-                  <div className="bg-card rounded-xl card-shadow overflow-hidden">
-                    {[
-                      { key: "workout" as const, label: t("notifications.workoutReminders"), desc: t("notifications.workoutRemindersDesc") },
-                      { key: "meals" as const, label: t("notifications.mealReminders"), desc: t("notifications.mealRemindersDesc") },
-                      { key: "chat" as const, label: t("notifications.chatMessages"), desc: t("notifications.chatMessagesDesc") },
-                      { key: "system" as const, label: t("notifications.systemMessages"), desc: t("notifications.systemMessagesDesc") },
-                      { key: "achievement" as const, label: t("notifications.achievements"), desc: t("notifications.achievementsDesc") },
-                    ].map(({ key, label, desc }, i, arr) => (
-                      <button
-                        key={key}
-                        onClick={() => toggleNotif(key)}
-                        role="switch"
-                        aria-checked={notifs[key]}
-                        aria-label={label}
-                        aria-describedby={`notif-desc-${key}`}
-                        className={`w-full flex items-center justify-between px-4 py-4 min-h-14 text-left ${i < arr.length - 1 ? "border-b border-border" : ""}`}
-                      >
-                        <div>
-                          <p className="text-body text-foreground">{label}</p>
-                          <p id={`notif-desc-${key}`} className="text-footnote text-muted-foreground">{desc}</p>
-                        </div>
-                        <div className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 ${notifs[key] ? "bg-success" : "bg-muted"}`} aria-hidden="true">
-                          <motion.div layout transition={IOS_SPRING.precise}
-                            className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${notifs[key] ? "ml-auto" : "ml-0"}`} />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="bg-card rounded-xl card-shadow p-4 mt-4">
-                    <QuietHoursPicker />
-                  </div>
-                </motion.div>
+                <NotificationsPage notifs={notifs} toggleNotif={toggleNotif} />
               }
 
               {/* UNITS */}
@@ -561,172 +431,19 @@ const Profile = () => {
               }
 
               {/* SUBSCRIPTION */}
-              {activePage === "subscription" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("subscription.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("subscription.subtitle")}</p>
-                  <Card className="p-5 mb-4">
-                    <SectionLabel className="!px-0">{t("subscription.included")}</SectionLabel>
-                    <div className="space-y-3">
-                      {subscriptionFeatures.map((f) => (
-                        <div key={f} className="flex items-center gap-3">
-                          <div className="w-5 h-5 rounded-full gradient-primary flex items-center justify-center shrink-0">
-                            <Check size={ICON_SIZE.xs} className="text-primary-foreground" />
-                          </div>
-                          <span className="text-body text-foreground">{t(f)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                  <Button onClick={() => navigate("/subscription")} variant="cta" size="xl">
-                    {t("subscription.changePlan")}
-                  </Button>
-                  <Button variant="link" className="w-full text-destructive mt-2 min-h-11 hover:no-underline">{t("subscription.cancel")}</Button>
-                </motion.div>
-              }
+              {activePage === "subscription" && <SubscriptionPage />}
 
               {/* APPLE HEALTH */}
-              {activePage === "health" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("health.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("health.subtitle")}</p>
-                  <div className="bg-card rounded-xl card-shadow p-4 mb-4">
-                    <button
-                      onClick={() => setHealthConnected(!healthConnected)}
-                      role="switch"
-                      aria-checked={healthConnected}
-                      aria-label={t("health.title")}
-                      className="w-full flex items-center justify-between min-h-14"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${healthConnected ? "bg-success/15" : "bg-muted"}`}>
-                          <Heart size={20} className={healthConnected ? "text-success" : "text-muted-foreground"} aria-hidden="true" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-body text-foreground font-medium">{t("health.title")}</p>
-                          <p className="text-footnote text-muted-foreground">{healthConnected ? t("health.connectedSync") : t("profile.notConnected")}</p>
-                        </div>
-                      </div>
-                      <div className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors duration-base shrink-0 ${healthConnected ? "bg-success" : "bg-muted"}`} aria-hidden="true">
-                        <motion.div layout transition={IOS_SPRING.precise} className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm ${healthConnected ? "ml-auto" : "ml-0"}`} />
-                      </div>
-                    </button>
-                  </div>
-                  {healthConnected &&
-                    <div className="bg-card rounded-xl card-shadow overflow-hidden">
-                      <div className="px-4 pt-4 pb-2">
-                        <SectionLabel className="!px-0 !mb-0">{t("health.syncingData")}</SectionLabel>
-                      </div>
-                      {([
-                        { icon: Flame, iconColor: "text-warning", label: t("health.calories"), desc: t("health.caloriesDesc"), enabled: true },
-                        { icon: Footprints, iconColor: "text-info", label: t("health.stepsDistance"), desc: t("health.stepsDistanceDesc"), enabled: true },
-                        { icon: HeartPulse, iconColor: "text-destructive", label: t("health.heartRate"), desc: t("health.heartRateDesc"), enabled: true },
-                        { icon: Bed, iconColor: "text-primary", label: t("health.sleep"), desc: t("health.sleepDesc"), enabled: false },
-                        { icon: Scale, iconColor: "text-success", label: t("health.weight"), desc: t("health.weightDesc"), enabled: true },
-                      ] as Array<{ icon: ComponentType<LucideProps>; iconColor: string; label: string; desc: string; enabled: boolean }>).map((item, i, arr) => {
-                        const Icon = item.icon;
-                        return (
-                          <div key={item.label} className={`flex items-center gap-3 px-4 py-4 min-h-14 ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
-                            <Icon size={ICON_SIZE.lg} className={item.iconColor} aria-hidden="true" />
-                            <div className="flex-1">
-                              <p className="text-body text-foreground">{item.label}</p>
-                              <p className="text-footnote text-muted-foreground">{item.desc}</p>
-                            </div>
-                            <div className={`w-2 h-2 rounded-full ${item.enabled ? "bg-success" : "bg-muted-foreground/30"}`} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  }
-                  {!healthConnected &&
-                    <div className="bg-card rounded-xl card-shadow p-6 text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                        <Heart size={28} className="text-primary" />
-                      </div>
-                      <h3 className="text-title-3 text-foreground mb-2">{t("health.connectTitle")}</h3>
-                      <p className="text-subhead text-muted-foreground mb-4">{t("health.connectDesc")}</p>
-                      <Button onClick={() => setHealthConnected(true)} variant="cta" size="xl">
-                        {t("health.connectNow")}
-                      </Button>
-                    </div>
-                  }
-                </motion.div>
-              }
+              {activePage === "health" && <HealthPage />}
 
               {/* APPEARANCE */}
-              {activePage === "appearance" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("appearance.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("appearance.subtitle")}</p>
-                  <div className="space-y-2">
-                    {[
-                      { value: "light" as const, icon: Sun, label: t("appearance.light"), desc: t("appearance.lightDesc") },
-                      { value: "dark" as const, icon: Moon, label: t("appearance.dark"), desc: t("appearance.darkDesc") },
-                      { value: "system" as const, icon: Monitor, label: t("appearance.system"), desc: t("appearance.systemDesc") },
-                    ].map(({ value, icon: Icon, label, desc }) => {
-                      const selected = theme === value;
-                      return (
-                        <button key={value} onClick={() => setTheme(value)}
-                          className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition-all ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
-                          <Icon size={ICON_SIZE.lg} className={selected ? "text-primary" : "text-muted-foreground"} />
-                          <div className="flex-1 text-left">
-                            <p className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{label}</p>
-                            <p className="text-footnote text-muted-foreground">{desc}</p>
-                          </div>
-                          {selected &&
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={IOS_SPRING.precise}>
-                              <Check size={20} className="text-primary" />
-                            </motion.div>
-                          }
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              }
+              {activePage === "appearance" && <AppearancePage />}
 
               {/* LANGUAGE */}
-              {activePage === "language" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("language.title")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{t("language.subtitle")}</p>
-                  <div className="space-y-2">
-                    {[
-                      { value: "en" as const, flag: "🇬🇧", label: t("language.english"), desc: t("language.englishDesc") },
-                      { value: "sr" as const, flag: "🇷🇸", label: t("language.serbian"), desc: t("language.serbianDesc") },
-                    ].map(({ value, flag, label, desc }) => {
-                      const selected = language === value;
-                      return (
-                        <button key={value} onClick={() => setLanguage(value)}
-                          className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition-all ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
-                          <span className="text-title-3" aria-hidden="true">{flag}</span>
-                          <div className="flex-1 text-left">
-                            <p className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{label}</p>
-                            <p className="text-footnote text-muted-foreground">{desc}</p>
-                          </div>
-                          {selected &&
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={IOS_SPRING.precise}>
-                              <Check size={20} className="text-primary" />
-                            </motion.div>
-                          }
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              }
+              {activePage === "language" && <LanguagePage />}
 
               {/* WEIGHT HISTORY */}
-              {activePage === "weightHistory" &&
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-title-2 text-foreground mb-2">{t("profile.weightHistory")}</h2>
-                  <p className="text-subhead text-muted-foreground mb-6">{language === "sr" ? "Prati promene težine tokom vremena" : "Track your weight changes over time"}</p>
-                  <div className="bg-card rounded-xl card-shadow p-5 text-center">
-                    <Scale size={32} className="text-muted-foreground mx-auto mb-3" />
-                    <p className="text-body text-muted-foreground">{language === "sr" ? "Istorija težine će se pojaviti ovde" : "Weight history will appear here"}</p>
-                  </div>
-                </motion.div>
-              }
+              {activePage === "weightHistory" && <WeightHistoryPage />}
             </div>
           </motion.div>
         }
