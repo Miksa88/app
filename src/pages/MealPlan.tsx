@@ -17,7 +17,6 @@ import { useMealPlan } from "@/hooks/useMealPlan";
 import { useFoodItems } from "@/hooks/useFoodItems";
 import { computeDayRollups, findSwapAlternatives, type MealPlanSlot } from "@/utils/nutrition/mealPlanGenerator";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { addFoodDislike } from "@/services/dislikeService";
 import { toast } from "sonner";
 

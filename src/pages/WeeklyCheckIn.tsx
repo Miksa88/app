@@ -26,7 +26,7 @@
 //   - Zero-guilt copy: "Ova nedelja", "Kako je prošlo" — nikad "propušteno/kasniš".
 // ============================================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -54,7 +54,7 @@ import {
   lbToKg,
   DEFAULT_UNITS,
 } from '@/services/userPreferencesService';
-import { supabase } from '@/integrations/supabase/client';
+import { useRecentWeightAvg } from '@/hooks/useRecentWeightAvg';
 
 // ============================================================================
 // Constants
@@ -125,67 +125,30 @@ export default function WeeklyCheckIn() {
   const [waterRetentionScore, setWaterRetentionScore] = useState<number>(3);
   const [notes, setNotes] = useState<string>('');
 
-  const [prefillLoading, setPrefillLoading] = useState<boolean>(true);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
 
   const weekStartDate = mondayOfWeek(new Date());
 
   // ============================================================================
-  // Auto-prefill weight iz poslednjih 3 dana weight_logs
+  // Auto-prefill weight iz poslednjih 3 dana weight_logs (useRecentWeightAvg).
+  // Silent fail — prefill je nice-to-have, ne blokira formu.
   // ============================================================================
+  const { data: avgKg, isLoading: prefillLoading } = useRecentWeightAvg(clientId);
+  const prefillAppliedRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
+    if (prefillAppliedRef.current) return;
+    if (avgKg === null || avgKg === undefined) return;
+    prefillAppliedRef.current = true;
 
-    async function loadPrefill() {
-      if (!clientId) {
-        setPrefillLoading(false);
-        return;
-      }
-      try {
-        const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
-        const { data, error } = await supabase
-          .from('weight_logs')
-          .select('weight_kg, logged_at')
-          .eq('user_id', clientId)
-          .gte('logged_at', threeDaysAgo)
-          .order('logged_at', { ascending: false })
-          .limit(10);
-
-        if (cancelled) return;
-        if (error || !data || data.length === 0) {
-          setPrefillLoading(false);
-          return;
-        }
-
-        const values = data
-          .map((r) => Number(r.weight_kg))
-          .filter((v) => Number.isFinite(v));
-        if (values.length === 0) {
-          setPrefillLoading(false);
-          return;
-        }
-
-        const avgKg = values.reduce((a, b) => a + b, 0) / values.length;
-        const avgInDisplayUnit = isLb ? kgToLb(avgKg) : avgKg;
-        const rounded = Math.round(avgInDisplayUnit * 10) / 10;
-        const roundedStr = String(rounded);
-        setLastKnownWeight(roundedStr);
-        if (weightStr === '') {
-          setWeightStr(roundedStr);
-        }
-      } catch {
-        // Silent — prefill je nice-to-have, ne blokira formu
-      } finally {
-        if (!cancelled) setPrefillLoading(false);
-      }
+    const avgInDisplayUnit = isLb ? kgToLb(avgKg) : avgKg;
+    const rounded = Math.round(avgInDisplayUnit * 10) / 10;
+    const roundedStr = String(rounded);
+    setLastKnownWeight(roundedStr);
+    if (weightStr === '') {
+      setWeightStr(roundedStr);
     }
-
-    void loadPrefill();
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [avgKg]);
 
   // ============================================================================
   // Validation — value entered in user-preferred unit, converted to canonical

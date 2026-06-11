@@ -13,7 +13,7 @@ import { MotionButton } from "@/components/ui/motion-button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { getSessionUserId } from "@/services/authService";
 import { computePersonalizedPlan } from "@/utils/planPersonalization";
 import { completeOnboarding } from "@/services/onboardingService";
 import type {
@@ -48,15 +48,15 @@ const AnalysisReport = () => {
     try {
       // Race condition fix: posle SignUpSheet.signUp, AuthContext onAuthStateChange
       // može biti par stotina ms zaostao. Čekamo do 5s na clientId; ako i dalje
-      // null — verovatno email confirmation pending → poll supabase.auth.getSession()
+      // null — verovatno email confirmation pending → poll session (authService)
       // direktno (umesto navigate koji ProtectedRoute bounce-uje na /).
       let resolvedClientId = clientId;
       if (!resolvedClientId) {
         for (let i = 0; i < 10; i++) {
           await new Promise((r) => setTimeout(r, 500));
-          const { data } = await supabase.auth.getSession();
-          if (data.session?.user?.id) {
-            resolvedClientId = data.session.user.id;
+          const sessionUserId = await getSessionUserId();
+          if (sessionUserId) {
+            resolvedClientId = sessionUserId;
             break;
           }
         }

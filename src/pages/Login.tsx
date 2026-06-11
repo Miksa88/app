@@ -10,7 +10,7 @@ import { Eye, EyeOff, X, Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
 import { MOTION_DURATION, staggerContainer, staggerItem, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
-import { supabase } from "@/integrations/supabase/client";
+import { signInWithPassword } from "@/services/authService";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -60,21 +60,20 @@ const Login = () => {
     setErrors({});
     setIsLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    setIsLoading(false);
-
-    if (error || !data?.user) {
+    let userId: string;
+    try {
+      userId = await signInWithPassword(email.trim(), password);
+    } catch (err) {
+      setIsLoading(false);
       haptic("warning");
-      toast.error(error?.message || t("login.errorInvalidCredentials") || "Pogrešan email ili password");
+      const msg = err instanceof Error && err.message ? err.message : null;
+      toast.error(msg || t("login.errorInvalidCredentials") || "Pogrešan email ili password");
       return;
     }
 
+    setIsLoading(false);
     haptic("success");
-    await routeByRole(data.user.id);
+    await routeByRole(userId);
   };
 
   return (

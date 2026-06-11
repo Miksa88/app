@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import GradientButton from "@/components/GradientButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
-import { supabase } from "@/integrations/supabase/client";
+import { signInWithPassword, signUpConfirmed } from "@/services/authService";
 import { checkPwnedPassword } from "@/utils/auth/pwnedPasswordCheck";
 
 interface SignUpSheetProps {
@@ -62,21 +62,7 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
     //    mail i posle ~4 signup-a hitao "email rate limit exceeded". Nova EF
     //    `signup-confirmed` koristi auth.admin.createUser({email_confirm:true})
     //    — nikakav mail se ne salje, nema rate limit-a, instant ready.
-    let signupErrMsg: string | null = null;
-    try {
-      const { data: signupData, error: signupErr } = await supabase.functions.invoke(
-        "signup-confirmed",
-        { body: { email: email.trim(), password } },
-      );
-      if (signupErr) {
-        signupErrMsg = signupErr.message;
-      } else {
-        const efPayload = (signupData ?? {}) as { ok?: boolean; error?: string };
-        if (!efPayload.ok) signupErrMsg = efPayload.error ?? "EF returned no ok";
-      }
-    } catch (e) {
-      signupErrMsg = e instanceof Error ? e.message : String(e);
-    }
+    const signupErrMsg = await signUpConfirmed(email.trim(), password);
 
     if (signupErrMsg) {
       setSubmitting(false);
@@ -85,17 +71,15 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
     }
 
     // 2. Sign in — sada bi trebalo da radi odmah (user je email_confirmed=true)
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    setSubmitting(false);
-
-    if (signInErr) {
-      toast.error(signInErr.message);
+    try {
+      await signInWithPassword(email.trim(), password);
+    } catch (signInErr) {
+      setSubmitting(false);
+      toast.error(signInErr instanceof Error ? signInErr.message : String(signInErr));
       return;
     }
+
+    setSubmitting(false);
 
     // Session je aktivna; AuthContext.onAuthStateChange will populate clientId.
     onComplete("email", email);

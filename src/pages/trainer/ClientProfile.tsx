@@ -8,7 +8,7 @@ import { ArrowLeft, Flame, ChevronRight, ChevronLeft, Dumbbell, UtensilsCrossed,
 import { useTrainerClients } from "@/hooks/useTrainerClients";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { ClientData } from "@/data/trainerMockData";
-import { supabase } from "@/integrations/supabase/client";
+import { useClientTier, useTrainerClientCard } from "@/hooks/useProfile";
 import { useClientActivity } from "@/hooks/useClientActivity";
 import { useClientNotes, useCreateClientNote, useDeleteClientNote } from "@/hooks/useClientNotes";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
@@ -82,85 +82,14 @@ const ClientProfile = () => {
   const [newNote, setNewNote] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showTierSheet, setShowTierSheet] = useState(false);
-  const [clientTier, setClientTier] = useState<PackageTier | null>(null);
+  // Tier iz profiles preko React Query; lokalni override posle promote akcije
+  const { data: fetchedTier = null } = useClientTier(id ?? null);
+  const [tierOverride, setTierOverride] = useState<PackageTier | null>(null);
+  const clientTier = tierOverride ?? fetchedTier;
+  const setClientTier = setTierOverride;
 
-  // Učitaj tier iz profiles
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("assigned_tier")
-        .eq("id", id)
-        .maybeSingle();
-      if (!cancelled && data?.assigned_tier) setClientTier(data.assigned_tier);
-    })();
-    return () => { cancelled = true; };
-  }, [id]);
-
-  const [supabaseClient, setSupabaseClient] = useState<ClientData | null>(null);
-  const [isResolving, setIsResolving] = useState<boolean>(!!id);
-
-  useEffect(() => {
-    if (!id) {
-      setIsResolving(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, first_name, last_name, email, avatar_url, current_weight, height, date_of_birth, allergies, food_dislikes, injuries, sleep_hours_avg, stress_level, job_type, work_schedule, primary_goal, metabolic_conditions")
-        .eq("id", id)
-        .maybeSingle();
-      if (cancelled) return;
-      if (data) {
-        const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ").trim()
-          || data.email?.split("@")[0]
-          || "Client";
-        setSupabaseClient({
-          id: data.id,
-          name: fullName,
-          email: data.email ?? "",
-          avatar: data.avatar_url,
-          status: "active",
-          type: "online",
-          startDate: new Date().toISOString().split("T")[0],
-          endDate: null,
-          pausedAt: null,
-          programWeek: 0,
-          programTotalWeeks: 12,
-          trialDaysTotal: 7,
-          trialDaysRemaining: 0,
-          dateOfBirth: data.date_of_birth ?? "2000-01-01",
-          weight: data.current_weight ?? 0,
-          height: data.height ?? 0,
-          goals: data.primary_goal ? [data.primary_goal] : [],
-          injuries: Array.isArray(data.injuries) ? data.injuries.join(", ") : "",
-          allergies: data.allergies ?? [],
-          foodDislikes: data.food_dislikes ?? [],
-          metabolicProfile: data.metabolic_conditions ?? [],
-          sleepQuality: data.sleep_hours_avg ?? 0,
-          stressLevel: data.stress_level ?? 0,
-          jobType: data.job_type ?? "",
-          workSchedule: data.work_schedule ?? "",
-          trainingExperience: "",
-          workoutFrequency: 0,
-          assignedProgramId: null,
-          assignedNutritionTemplateId: null,
-          streak: 0,
-          level: "1",
-          totalWorkoutsCompleted: 0,
-          lastActiveAt: new Date().toISOString(),
-          lastCheckInAt: null,
-          progress: 0,
-        });
-      }
-      setIsResolving(false);
-    })();
-    return () => { cancelled = true; };
-  }, [id]);
+  // ClientData kartica iz profiles (mapiranje u profileService.getTrainerClientCard)
+  const { data: supabaseClient = null, isLoading: isResolving } = useTrainerClientCard(id ?? null);
 
   const client = supabaseClient;
   const { data: activityEntries = [] } = useClientActivity(id ?? null);

@@ -10,6 +10,33 @@ import {
 } from "@/utils/nutrition/irMealStructure";
 import type { MetabolicCondition } from "@/types/training";
 import type { CalorieTargetMode, NutritionCyclePhase } from "@/types/nutrition";
+import {
+  CARBS_KCAL_PER_G,
+  FAT_KCAL_PER_G,
+  MIN_WORKOUT_FREQUENCY,
+  MAX_WORKOUT_FREQUENCY,
+  DEFAULT_WORKOUT_FREQUENCY,
+  HIGH_STRESS_THRESHOLD,
+  LOW_SLEEP_QUALITY_THRESHOLD,
+  DEFAULT_TRAINING_DAY_CALORIE_BONUS,
+  DEFAULT_REST_DAY_CALORIE_REDUCTION,
+  PROTEIN_FLOOR_PER_MEAL_G,
+  PROTEIN_RANGE_PER_SLOT_G,
+  PROTEIN_SHORTFALL_PENALTY,
+  CALORIE_DIFF_WEIGHT,
+  PROTEIN_DIFF_WEIGHT,
+  MEAL_ROTATION_VARIANTS,
+  DAYS_PER_WEEK,
+  TOP_MATCHES_FOR_ROTATION,
+  IR_MINI_MEAL_MIN_SLOT_COUNT,
+  SIMILAR_MEAL_TOLERANCE,
+  SIMILAR_MEAL_TOP_N,
+  TEMPLATE_SCORE_GOAL_MATCH,
+  TEMPLATE_SCORE_EXPERIENCE_MATCH,
+  TEMPLATE_SCORE_FREQUENCY_MATCH,
+  TEMPLATE_SCORE_LIMITATION_SAFE,
+  TEMPLATE_SCORE_FREE_TRIAL,
+} from "@/constants/nutritionConstants";
 
 // ── INTERFACES ──
 
@@ -193,10 +220,10 @@ function findTopMatches(
     .map(food => {
       const portionMultiplier = food.calories > 0 ? targetCal / food.calories : 1;
       const adjustedProtein = food.protein * portionMultiplier;
-      const proteinPenalty = adjustedProtein < minProtein ? 50 : 0;
+      const proteinPenalty = adjustedProtein < minProtein ? PROTEIN_SHORTFALL_PENALTY : 0;
       const calDiff = Math.abs(food.calories - targetCal);
       const proteinDiff = Math.abs(food.protein - targetProtein);
-      const score = (calDiff * 1) + (proteinDiff * 2) + proteinPenalty;
+      const score = (calDiff * CALORIE_DIFF_WEIGHT) + (proteinDiff * PROTEIN_DIFF_WEIGHT) + proteinPenalty;
       return { food, score };
     })
     .sort((a, b) => a.score - b.score)
@@ -261,9 +288,9 @@ export function generateMealPlan(
   // STEP 1+2: BMR + TDEE (Mifflin-St Jeor zenska + activity multiplier)
   // (Sloj 2 spec-a 02 — bmrTdee.ts)
   const bmr = calcBMR({ weightKg: client.weight, heightCm: client.height, age: client.age });
-  const workoutFreq = (client.frequency >= 3 && client.frequency <= 5
+  const workoutFreq = (client.frequency >= MIN_WORKOUT_FREQUENCY && client.frequency <= MAX_WORKOUT_FREQUENCY
     ? client.frequency
-    : 4) as 3 | 4 | 5;
+    : DEFAULT_WORKOUT_FREQUENCY) as 3 | 4 | 5;
   const jobPhys = client.jobType === 'sedentary' ? 'sedentary'
     : client.jobType === 'active' ? 'active'
     : 'moderate';
@@ -289,7 +316,7 @@ export function generateMealPlan(
     metabolicAdjustments.push('beginner_protection');
     insights.push({ type: 'info', icon: '🛡️', title: 'insight.beginnerTitle', description: 'insight.beginnerDesc' });
   }
-  if (client.stressLevel >= 7 || client.sleepQuality <= 4) {
+  if (client.stressLevel >= HIGH_STRESS_THRESHOLD || client.sleepQuality <= LOW_SLEEP_QUALITY_THRESHOLD) {
     metabolicAdjustments.push('stress_sleep_adjustment');
     insights.push({ type: 'adjustment', icon: '😴', title: 'insight.stressTitle', description: 'insight.stressDesc' });
   }
@@ -311,14 +338,14 @@ export function generateMealPlan(
       targetMode,
       cyclePhase: cyclePhase ?? undefined,
       // Stress + nizak san aktivira fatigue safeguard (Spec 03 Rule 2)
-      fatigueSyncActive: client.stressLevel >= 7 || client.sleepQuality <= 4,
+      fatigueSyncActive: client.stressLevel >= HIGH_STRESS_THRESHOLD || client.sleepQuality <= LOW_SLEEP_QUALITY_THRESHOLD,
       // pocetnici.md §1.1: Hashimoto deficit cap
       metabolicConditions,
     });
   }
 
-  const trainingDayCalories = dailyCalories + (template.differentOnTrainingDays ? (template.trainingDayModifier || 150) : 0);
-  const restDayCalories = dailyCalories + (template.differentOnTrainingDays ? (template.restDayModifier || -100) : 0);
+  const trainingDayCalories = dailyCalories + (template.differentOnTrainingDays ? (template.trainingDayModifier || DEFAULT_TRAINING_DAY_CALORIE_BONUS) : 0);
+  const restDayCalories = dailyCalories + (template.differentOnTrainingDays ? (template.restDayModifier || DEFAULT_REST_DAY_CALORIE_REDUCTION) : 0);
 
   // STEP 5: Makro split + patoloski override
   // (Spec 02 §4 + SREDNJE_NAPREDNE_V2 §3.3 za intermediate macros)
@@ -373,7 +400,7 @@ export function generateMealPlan(
         label: s.label,
         calPct,
         minProtein: s.minProteinGrams,
-        maxProtein: s.minProteinGrams + 20,
+        maxProtein: s.minProteinGrams + PROTEIN_RANGE_PER_SLOT_G,
         isMainMeal: ['breakfast', 'lunch', 'dinner'].includes(s.type),
         templateType: s.type,
       };
@@ -443,7 +470,7 @@ export function generateMealPlan(
 
     // A/B/C rotacija — top 3 kandidata, biramo po dnevnom rotation index-u.
     // Iste makroe, različita jela; ako je rotationIndex undefined, biramo prvi.
-    const topMatches = findTopMatches(slotFoods, targetCal, targetProtein, slotConfig.minProtein, 3);
+    const topMatches = findTopMatches(slotFoods, targetCal, targetProtein, slotConfig.minProtein, TOP_MATCHES_FOR_ROTATION);
     const variantIdx = topMatches.length > 0
       ? ((rotationIndex ?? 0) % topMatches.length)
       : 0;
@@ -514,17 +541,16 @@ export function generateMealPlan(
   // Per-meal protein validator (pocetnici.md §3.4 mTOR Protokol):
   // Standardni obrok mora imati 25-30g proteina za kontinuiranu mTOR aktivaciju.
   // Mini-obroci (IR P+F) se izuzimaju jer su namerno manji.
-  const PROTEIN_FLOOR_PER_MEAL = 25;
   const lowProteinMeals = finalMeals.filter(m =>
     m.slotType !== 'mini_meal_ir' &&
     m.protein > 0 &&
-    m.protein < PROTEIN_FLOOR_PER_MEAL,
+    m.protein < PROTEIN_FLOOR_PER_MEAL_G,
   );
   if (lowProteinMeals.length > 0) {
     insights.push({
       type: 'warning', icon: '⚠️',
       title: 'insight.lowMealProtein',
-      description: `${lowProteinMeals.length} obrok(a) ispod ${PROTEIN_FLOOR_PER_MEAL}g proteina ` +
+      description: `${lowProteinMeals.length} obrok(a) ispod ${PROTEIN_FLOOR_PER_MEAL_G}g proteina ` +
         `(${lowProteinMeals.map(m => `${m.slotLabel}=${Math.round(m.protein)}g`).join(', ')}). ` +
         `mTOR aktivacija je suboptimalna — razmotri jaču protein opciju za te slotove.`,
     });
@@ -557,7 +583,7 @@ function applyIRMiniMealMarkers(
   slotConfigs: MealSlotConfig[],
 ): GeneratedMeal[] {
   if (!metabolicConditions.includes('insulin_resistance')) return meals;
-  if (meals.length < 5) return meals;
+  if (meals.length < IR_MINI_MEAL_MIN_SLOT_COUNT) return meals;
 
   return meals.map((meal, index) => {
     const slotConfig = slotConfigs[index];
@@ -569,8 +595,8 @@ function applyIRMiniMealMarkers(
 
     // Prebaci carbs kcal → fat (4 kcal/g carbs → 9 kcal/g fat).
     // Total kcal ostaje konstantan, carbs = 0.
-    const carbKcal = meal.carbs * 4;
-    const fatKcalBoost = Math.round(carbKcal / 9);
+    const carbKcal = meal.carbs * CARBS_KCAL_PER_G;
+    const fatKcalBoost = Math.round(carbKcal / FAT_KCAL_PER_G);
 
     return {
       ...meal,
@@ -592,14 +618,14 @@ export function findMatchingTemplates(
     .map(template => {
       let score = 0;
       const tags = template.tags.map(t => t.toLowerCase());
-      if (clientProfile.goal === 'fat_loss' && tags.includes('fat_loss')) score += 3;
-      if (clientProfile.goal === 'figure' && tags.includes('figure')) score += 3;
-      if (clientProfile.goal === 'health' && tags.includes('health')) score += 3;
-      if (clientProfile.goal === 'muscle_gain' && tags.includes('muscle_gain')) score += 3;
-      if (tags.includes(clientProfile.experience)) score += 2;
-      if (tags.includes(`${clientProfile.frequency}_days_week`)) score += 2;
-      clientProfile.limitations.forEach(l => { if (tags.includes(`safe_${l}`)) score += 1; });
-      if (tags.includes('free_trial')) score += 1;
+      if (clientProfile.goal === 'fat_loss' && tags.includes('fat_loss')) score += TEMPLATE_SCORE_GOAL_MATCH;
+      if (clientProfile.goal === 'figure' && tags.includes('figure')) score += TEMPLATE_SCORE_GOAL_MATCH;
+      if (clientProfile.goal === 'health' && tags.includes('health')) score += TEMPLATE_SCORE_GOAL_MATCH;
+      if (clientProfile.goal === 'muscle_gain' && tags.includes('muscle_gain')) score += TEMPLATE_SCORE_GOAL_MATCH;
+      if (tags.includes(clientProfile.experience)) score += TEMPLATE_SCORE_EXPERIENCE_MATCH;
+      if (tags.includes(`${clientProfile.frequency}_days_week`)) score += TEMPLATE_SCORE_FREQUENCY_MATCH;
+      clientProfile.limitations.forEach(l => { if (tags.includes(`safe_${l}`)) score += TEMPLATE_SCORE_LIMITATION_SAFE; });
+      if (tags.includes('free_trial')) score += TEMPLATE_SCORE_FREE_TRIAL;
       return { template, score };
     })
     .filter(item => item.score > 0)
@@ -664,8 +690,8 @@ export function generateMealPlanWeek(
   cyclePhase?: NutritionCyclePhase | null,
 ): MealPlanWeek {
   const days: GeneratedMealPlan[] = [];
-  for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
-    const rotationIndex = dayIdx % 3;        // 0,1,2,0,1,2,0
+  for (let dayIdx = 0; dayIdx < DAYS_PER_WEEK; dayIdx++) {
+    const rotationIndex = dayIdx % MEAL_ROTATION_VARIANTS;        // 0,1,2,0,1,2,0
     days.push(
       generateMealPlan(
         client, template, foodDatabase, trainingSchedule, cyclePhase, rotationIndex,
@@ -696,7 +722,7 @@ export function findSimilarMeals(
   availableFoods: FoodItem[],
   options: FindSimilarOptions = {},
 ): FoodItem[] {
-  const { tolerance = 0.10, topN = 5 } = options;
+  const { tolerance = SIMILAR_MEAL_TOLERANCE, topN = SIMILAR_MEAL_TOP_N } = options;
   const targetCal = currentMeal.calories;
   const targetProtein = Math.max(1, currentMeal.protein);
 

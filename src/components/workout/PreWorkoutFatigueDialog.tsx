@@ -20,7 +20,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { TAP_SCALE } from '@/lib/motion';
-import { supabase } from '@/integrations/supabase/client';
+import { saveFatigueSignal } from '@/services/biofeedbackService';
 import { toast } from 'sonner';
 
 export interface PreWorkoutFatigueDialogProps {
@@ -29,33 +29,6 @@ export interface PreWorkoutFatigueDialogProps {
   clientId: string;
   /** Callback kad korisnik odgovori — parent može da proceedije u workout */
   onAnswered: (fatigued: boolean) => void;
-}
-
-async function saveFatigueSignal(clientId: string, fatigued: boolean): Promise<void> {
-  // Direct patch na user_status.status_json — bio.preWorkoutFatigue + answeredAt.
-  const { data, error: readErr } = await supabase
-    .from('user_status')
-    .select('status_json')
-    .eq('client_id', clientId)
-    .single();
-  if (readErr) throw new Error(`saveFatigueSignal read: ${readErr.message}`);
-
-  const status = (data?.status_json ?? {}) as Record<string, unknown>;
-  const bio = (status.bio ?? {}) as Record<string, unknown>;
-  const newStatus = {
-    ...status,
-    bio: {
-      ...bio,
-      preWorkoutFatigue: fatigued,
-      preWorkoutFatigueAnsweredAt: new Date().toISOString(),
-    },
-  };
-
-  const { error: writeErr } = await supabase
-    .from('user_status')
-    .update({ status_json: newStatus, last_updated_at: new Date().toISOString() })
-    .eq('client_id', clientId);
-  if (writeErr) throw new Error(`saveFatigueSignal write: ${writeErr.message}`);
 }
 
 export default function PreWorkoutFatigueDialog({

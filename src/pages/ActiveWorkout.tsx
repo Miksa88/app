@@ -36,7 +36,7 @@ import { ExerciseNotesField } from "@/components/workout/ExerciseNotesField";
 import { toast } from "sonner";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import type { Exercise } from "@/types/training";
-import { supabase } from "@/integrations/supabase/client";
+import { useProfileInjuries } from "@/hooks/useProfile";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -109,7 +109,8 @@ const ActiveWorkout = () => {
   const [showSwapSheet, setShowSwapSheet] = useState(false);
   /** Per-session exercise overrides (slot-index → swapped Exercise). Ne persistira se u DB queue. */
   const [exerciseOverrides, setExerciseOverrides] = useState<Record<number, Exercise>>({});
-  const [profileInjuries, setProfileInjuries] = useState<string[]>([]);
+  // Povrede iz profila — surgical swap (prebačeno u useProfileInjuries hook, Task 1.1)
+  const { data: profileInjuries = [] } = useProfileInjuries(clientId);
   const activeSetRef = useRef<HTMLDivElement>(null);
   const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -119,21 +120,6 @@ const ActiveWorkout = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (!clientId) return;
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("injuries")
-        .eq("id", clientId)
-        .maybeSingle();
-      if (!cancelled && data?.injuries) {
-        setProfileInjuries(data.injuries);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [clientId]);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
   const slots = useMemo<ActiveWorkoutSlot[]>(() => session?.slots ?? [], [session]);

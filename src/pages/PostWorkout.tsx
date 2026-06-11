@@ -23,90 +23,14 @@ import { Flame, Clock, Dumbbell, Star, PartyPopper } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { MOTION_DURATION, MOTION_EASE, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
-import { supabase } from "@/integrations/supabase/client";
+import { getTodaySets, type TodaySetRow } from "@/services/progressService";
+import {
+  savePostWorkoutDifficulty,
+  type PerceivedDifficulty,
+} from "@/services/biofeedbackService";
 import { toast } from "sonner";
 
-interface ProgressRow {
-  exercise_id: string;
-  weight_kg: number;
-  reps: number;
-  set_number: number;
-  completed_at: string;
-}
-
-async function loadTodaySets(clientId: string): Promise<ProgressRow[]> {
-  // Dan u ISO format: pocetak lokalnog dana u UTC (jednostavno — last 24h).
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-
-  const { data, error } = await supabase
-    .from("exercise_progress")
-    .select("exercise_id, weight_kg, reps, set_number, completed_at")
-    .eq("user_id", clientId)
-    .gte("completed_at", since.toISOString())
-    .order("completed_at", { ascending: true });
-
-  if (error) throw new Error(`loadTodaySets: ${error.message}`);
-  return (data ?? []).map((r) => ({
-    exercise_id: r.exercise_id,
-    weight_kg: Number(r.weight_kg),
-    reps: r.reps,
-    set_number: r.set_number,
-    completed_at: r.completed_at,
-  }));
-}
-
-type PerceivedDifficulty = 'easy' | 'just_right' | 'hard';
-
-// pump_score reuse: easy=8 (high pump = recovered), just_right=5, hard=2 (low pump = under-recovered).
-// biofeedbackReactiveRules reads pump<5 → +salt/water sledeći trening.
-const DIFFICULTY_TO_PUMP_SCORE: Record<PerceivedDifficulty, number> = {
-  easy: 8,
-  just_right: 5,
-  hard: 2,
-};
-
-async function saveDifficulty(clientId: string, difficulty: PerceivedDifficulty): Promise<void> {
-  const today = new Date().toISOString().slice(0, 10);
-  const pumpScore = DIFFICULTY_TO_PUMP_SCORE[difficulty];
-
-  // 1. Snimi u daily_check_ins (audit log)
-  const { error: ciErr } = await supabase
-    .from('daily_check_ins')
-    .upsert(
-      { user_id: clientId, date: today, pump_score: pumpScore },
-      { onConflict: 'user_id,date' },
-    );
-  if (ciErr) throw new Error(`saveDifficulty check-in: ${ciErr.message}`);
-
-  // 2. Patchuj user_status.bio — latestPumpScore + consecutiveHardWorkouts.
-  // applyBiofeedbackReactiveRules čita pump score; programGenerator čita
-  // consecutiveHardWorkouts za auto-decrement volumena kad je 2+ "Teško".
-  const { data: row, error: readErr } = await supabase
-    .from('user_status')
-    .select('status_json')
-    .eq('client_id', clientId)
-    .single();
-  if (readErr) throw new Error(`saveDifficulty status read: ${readErr.message}`);
-
-  const status = (row?.status_json ?? {}) as Record<string, unknown>;
-  const bio = (status.bio ?? {}) as Record<string, unknown>;
-  const prevHardCount = (bio.consecutiveHardWorkouts as number | undefined) ?? 0;
-  const isHard = difficulty === 'hard';
-  const newStatus = {
-    ...status,
-    bio: {
-      ...bio,
-      latestPumpScore: pumpScore,
-      consecutiveHardWorkouts: isHard ? prevHardCount + 1 : 0,
-    },
-  };
-  const { error: writeErr } = await supabase
-    .from('user_status')
-    .update({ status_json: newStatus, last_updated_at: new Date().toISOString() })
-    .eq('client_id', clientId);
-  if (writeErr) throw new Error(`saveDifficulty status write: ${writeErr.message}`);
-}
+type ProgressRow = TodaySetRow;
 
 const PostWorkout = () => {
   const navigate = useNavigate();
@@ -118,7 +42,7 @@ const PostWorkout = () => {
   const { data: rows = [] } = useQuery<ProgressRow[], Error>({
     queryKey: ["postWorkoutTodaySets", clientId],
     enabled: Boolean(clientId),
-    queryFn: () => loadTodaySets(clientId as string),
+    queryFn: () => getTodaySets(clientId as string),
   });
 
   const handleDifficulty = async (choice: PerceivedDifficulty) => {
@@ -126,7 +50,7 @@ const PostWorkout = () => {
     setDifficulty(choice);
     setSubmitting(true);
     try {
-      await saveDifficulty(clientId, choice);
+      await savePostWorkoutDifficulty(clientId, choice);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Greška pri snimanju');
       setDifficulty(null);

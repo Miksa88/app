@@ -19,7 +19,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useHealth } from "@/contexts/HealthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { updateProfileFields } from "@/services/profileService";
 import { ArrowLeft } from "lucide-react";
 import { SectionLabel } from "@/components/ui/section-label";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
@@ -204,10 +204,9 @@ const Profile = () => {
     const enumValue = LABEL_TO_PRIMARY_GOAL[goals[0]];
     if (!enumValue) return;
     const timer = setTimeout(() => {
-      void supabase
-        .from("profiles")
-        .update({ primary_goal: enumValue as unknown as never })
-        .eq("id", user.id);
+      void updateProfileFields(user.id, { primary_goal: enumValue }).catch(() => {
+        // Silent — autosave gola je best-effort, kao i pre refaktora
+      });
     }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,7 +218,9 @@ const Profile = () => {
     if (key === "currentWeight") update.current_weight = typeof value === "number" ? value : null;
     else if (key === "height") update.height = typeof value === "number" ? value : null;
     else return; // dateOfBirth/gender/dailyStepGoal stay local for now
-    await supabase.from("profiles").update(update).eq("id", user.id);
+    await updateProfileFields(user.id, update).catch(() => {
+      // Silent — isto ponašanje kao pre refaktora (supabase error se ignorisao)
+    });
   };
   const [editValue, setEditValue] = useState("");
 

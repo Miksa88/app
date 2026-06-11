@@ -13,9 +13,8 @@
 
 import { Navigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useProfileRole } from "@/hooks/useProfile";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -26,21 +25,7 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading, clientId } = useAuth();
 
-  const { data: role, isLoading: roleLoading } = useQuery<string | null, Error>({
-    queryKey: ["profile", "role", clientId ?? "anon"],
-    queryFn: async () => {
-      if (!clientId) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", clientId)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return data?.role ?? null;
-    },
-    enabled: !!clientId && !!requireRole,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: role, isLoading: roleLoading } = useProfileRole(clientId, !!requireRole);
 
   if (isLoading || (requireRole && roleLoading)) {
     return (
