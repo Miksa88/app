@@ -59,6 +59,7 @@ import { Button } from "@/components/ui/button";
 import ExtraMealSheet, { ExtraMealTrigger } from "@/components/food/ExtraMealSheet";
 import { RecipeVideoSheet } from "@/components/food/RecipeVideoSheet";
 import { addFoodDislike } from "@/services/dislikeService";
+import { trackFeature } from "@/services/usageAnalyticsService";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 
@@ -214,7 +215,7 @@ const Food = () => {
       protein: meal.protein,
       carbs: meal.carbs,
       fat: meal.fat,
-    });
+    }, { onSuccess: () => trackFeature('meal_logged') }); // Faza 4.2 usage event
   };
 
   const markSkipped = (meal: GeneratedMeal, slotIndex: number) => {
@@ -274,7 +275,7 @@ const Food = () => {
           protein: replacement.protein,
           carbs: replacement.carbs,
           fat: replacement.fat,
-        });
+        }, { onSuccess: () => trackFeature('meal_swapped') }); // Faza 4.2 usage event
       },
       revert: () => {
         // Vrati lokalno mealStatus + log original meal back (audit trail

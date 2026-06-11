@@ -2,7 +2,7 @@ import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
 import BottomNav from "@/components/BottomNav";
 import TrainerBottomNav from "@/components/TrainerBottomNav";
@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { HealthProvider } from "@/contexts/HealthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { trackPageView } from "@/services/usageAnalyticsService";
 // Login + Home su eager (entry points) — brža initial paint
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -108,6 +109,19 @@ const TrainerGuard = ({ children }: { children: ReactNode }) => (
  * motion.div (videti fadeUp() helper u src/lib/motion.ts).
  * WS-8.5 D27: svaki Route obavljen sa <RouteGuard> za per-route ErrorBoundary.
  */
+/**
+ * UsageTracker — Faza 4.2 (PLAN_RADA_WHITELABEL.md): beleži page_view na
+ * svaku promenu rute. Servis je fail-silent + batched, pa ovo nema uticaj
+ * na performanse ni stabilnost navigacije.
+ */
+const UsageTracker = () => {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
+  return null;
+};
+
 const AnimatedRoutes = () => {
   const location = useLocation();
   return (
@@ -175,6 +189,7 @@ const App = () => (
         <Toaster position="top-center" richColors closeButton />
         <BrowserRouter>
           <ScrollManager />
+          <UsageTracker />
           <SkipToContent />
           <div className="max-w-lg mx-auto min-h-screen relative">
             <main id="main-content" tabIndex={-1} className="outline-none">

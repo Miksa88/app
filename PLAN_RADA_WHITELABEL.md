@@ -1,6 +1,7 @@
 # Plan rada — od audita (6.5/10) do white-label proizvoda
 
 **Datum:** 2026-06-11
+**Status (2026-06-11):** Faze 0–3 ZAVRŠENE ✅ · Faza 4 u toku (4.2 analitika ✅, 4.3 Sentry čeka DSN + mesečni advisors check zakazan ✅, 4.4 nacrt u docs/MVP_PRESET.md ✅, 4.1 čeka produkcioni deploy) · Faza 5 čeka 5+ tenanta. GitHub remote još ne postoji — CI neaktivan do push-a.
 **Cilj:** Kod "apoteka" (8+/10) → univerzalni MVP koji se prodaje i setupuje različitim trenerima (boje/logo/podešavanja po tenantu), uz Ivanin algoritam kao premium feature flag.
 **Strategija tenancy:** Opcija A — kopija po treneru (svaki trener = svoj Supabase projekat + svoj deploy iz istog master repo-a). Multi-tenant se NE radi dok ne bude 5+ trenera koji plaćaju.
 

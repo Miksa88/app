@@ -2,7 +2,7 @@
 // Shopping.tsx — kupovna lista derivirana iz potvrđenih obroka
 // ============================================================================
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { buildShoppingList, type ShoppingCategory, type ShoppingItem } from "@/utils/nutrition/shoppingList";
+import { trackFeature } from "@/services/usageAnalyticsService";
 
 const CATEGORY_LABEL_SR: Record<ShoppingCategory, string> = {
   produce: "Voće i povrće",
@@ -48,6 +49,11 @@ const ShoppingPage = () => {
   const { language, t } = useLanguage();
   const { plan, pantryKeys, togglePantry, isLoading } = useMealPlan();
   const [showHave, setShowHave] = useState<boolean>(false);
+
+  // Faza 4.2: usage event — otvaranje kupovne liste (jednom po mount-u)
+  useEffect(() => {
+    trackFeature('shopping_list_opened');
+  }, []);
 
   const list = useMemo(() => {
     if (!plan) return null;

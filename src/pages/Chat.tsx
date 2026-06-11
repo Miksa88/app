@@ -10,6 +10,7 @@ import { useHaptic } from "@/hooks/useHaptic";
 import { MOTION_DURATION } from "@/lib/motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages } from "@/hooks/useMessages";
+import { trackFeature } from "@/services/usageAnalyticsService";
 import { findTrainerForClient } from "@/services/messageService";
 import { EmptyState } from "@/components/ui/empty-state";
 import TrainerVacationBanner from "@/components/chat/TrainerVacationBanner";
@@ -47,6 +48,8 @@ const Chat = () => {
     setInput("");
     try {
       await send(body);
+      // Faza 4.2: usage event na success path — fail-silent
+      trackFeature('chat_message_sent');
     } catch {
       // Restore input on failure
       setInput(body);

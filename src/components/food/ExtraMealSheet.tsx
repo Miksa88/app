@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { logMeal } from "@/services/mealLogService";
+import { trackFeature } from "@/services/usageAnalyticsService";
 import { IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import { toast } from "sonner";
 
@@ -79,6 +80,8 @@ const ExtraMealSheet = ({ open, onOpenChange, onSaved }: ExtraMealSheetProps) =>
         notes: notes.trim() ? `${name.trim()} — ${notes.trim()}` : name.trim(),
       });
       toast.success(t("food.savedExtraMeal"));
+      // Faza 4.2: usage event na success path — fail-silent
+      trackFeature('extra_meal_logged');
       reset();
       onSaved?.();
       onOpenChange(false);

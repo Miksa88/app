@@ -28,6 +28,7 @@ import {
   savePostWorkoutDifficulty,
   type PerceivedDifficulty,
 } from "@/services/biofeedbackService";
+import { trackFeature } from "@/services/usageAnalyticsService";
 import { toast } from "sonner";
 
 type ProgressRow = TodaySetRow;
@@ -51,6 +52,8 @@ const PostWorkout = () => {
     setSubmitting(true);
     try {
       await savePostWorkoutDifficulty(clientId, choice);
+      // Faza 4.2: usage event na success path — fail-silent, ne dira UX
+      trackFeature('workout_completed');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Greška pri snimanju');
       setDifficulty(null);

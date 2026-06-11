@@ -55,6 +55,7 @@ import {
   DEFAULT_UNITS,
 } from '@/services/userPreferencesService';
 import { useRecentWeightAvg } from '@/hooks/useRecentWeightAvg';
+import { trackFeature } from '@/services/usageAnalyticsService';
 import { isFeatureEnabled } from '@/tenant.config';
 
 // ============================================================================
@@ -205,6 +206,8 @@ export default function WeeklyCheckIn() {
       },
       {
         onSuccess: () => {
+          // Faza 4.2: usage event na success path — fail-silent
+          trackFeature('weekly_checkin_submitted');
           setShowConfetti(true);
           toast.success(t('weeklyCheckIn.successToast'), {
             description: t('weeklyCheckIn.successDesc'),
