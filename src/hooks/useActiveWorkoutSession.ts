@@ -170,6 +170,12 @@ export interface ActiveWorkoutSessionData {
   loadingMode: LoadingMode;
   targetRIR: number;
   dayLabel: string;
+  /**
+   * Mapa hashovani int Exercise.id → DB UUID (iz listSystemExercisesWithUuids).
+   * Potrebna za rezoluciju UUID-a swapovane vežbe (notes, progress) —
+   * override Exercise nosi samo int id.
+   */
+  exerciseUuidById: Map<number, string>;
 }
 
 export interface UseActiveWorkoutSessionResult {
@@ -349,6 +355,7 @@ export function useActiveWorkoutSession(): UseActiveWorkoutSessionResult {
         loadingMode: result.loadingMode,
         targetRIR: dayForSession.targetRIR,
         dayLabel: session.label,
+        exerciseUuidById: uuidById,
       };
     },
   });

@@ -30,6 +30,7 @@ import { useDailyTotals } from "@/hooks/useDailyTotals";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { fadeUp, MOTION_DURATION } from "@/lib/motion";
+import { selectNextMeal } from "@/utils/nutrition/nextMeal";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import AlgorithmStatusBanners from "@/components/algorithm/AlgorithmStatusBanners";
@@ -38,7 +39,7 @@ import { shouldReduceMotion } from "@/lib/motion";
 
 const Home = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { clientId, user } = useAuth();
   const { status } = useUserStatus(clientId);
   const { session: nextSession } = useNextSession(clientId);
@@ -81,18 +82,27 @@ const Home = () => {
   const isWorkoutCompleted = todayWorkout?.status === 'completed';
   const isRestDay = !todayWorkout || todayWorkout.dayType === 'Rest';
 
-  // Card 3: Sledeći obrok
+  // Card 3: Sledeći obrok — prvi nepojedeni slot današnjeg dana iz
+  // MealPlanWeek.slots (bugfix: stara verzija je čitala nepostojeći
+  // `mealPlan.meals` pa je kartica uvek bila prazna).
   const mealsLogged = dailyTotals?.mealsLogged ?? 0;
-  // POZNAT BUG (strict-om vidljiv): MealPlanWeek nema `meals` (refactor na
-  // `slots` strukturu) — ova lista je u runtime-u UVEK prazna, pa kartica
-  // uvek pada na "nema obroka" CTA. Cast čuva postojeće ponašanje;
-  // wiring na slots + food lookup je zaseban task.
-  const allMeals = (mealPlan as unknown as {
-    meals?: Array<{ name?: string; slotLabel?: string; calories: number; protein: number; carbs: number; fat: number }>;
-  } | null)?.meals ?? [];
-  const nextMealIdx = Math.min(mealsLogged, Math.max(0, allMeals.length - 1));
-  const nextMeal = allMeals[nextMealIdx] ?? null;
-  const allMealsLogged = allMeals.length > 0 && mealsLogged >= allMeals.length;
+  const {
+    slot: nextMealSlot,
+    food: nextMealFood,
+    todaySlotCount,
+    allLogged: allMealsLogged,
+  } = selectNextMeal(mealPlan, mealsLogged);
+  const nextMeal = nextMealSlot
+    ? {
+        name: nextMealFood
+          ? (language === "sr" ? nextMealFood.nameSr : nextMealFood.nameEn)
+          : null,
+        calories: nextMealSlot.calories,
+        protein: nextMealSlot.protein,
+        carbs: nextMealSlot.carbs,
+        fat: nextMealSlot.fat,
+      }
+    : null;
 
   // Algorithm status props
   const sessionsLen = status?.training.queue?.sessions?.length ?? 0;
@@ -303,7 +313,7 @@ const Home = () => {
                     {t("home.allMealsLogged")}
                   </p>
                   <p className="text-footnote text-muted-foreground">
-                    {t("home.dailyMealsCount").replace("{x}", String(mealsLogged)).replace("{y}", String(allMeals.length))}
+                    {t("home.dailyMealsCount").replace("{x}", String(mealsLogged)).replace("{y}", String(todaySlotCount))}
                   </p>
                 </div>
               </div>
@@ -324,7 +334,7 @@ const Home = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-headline font-semibold text-foreground truncate">
-                    {nextMeal.name || nextMeal.slotLabel || t("home.mealDefault")}
+                    {nextMeal.name || t("home.mealDefault")}
                   </p>
                   <p className="text-footnote text-muted-foreground tabular-nums">
                     {Math.round(nextMeal.calories)} kcal

@@ -27,6 +27,7 @@ import { MOTION_DURATION } from "@/lib/motion";
 import SwapExerciseSheet from "@/components/workout/SwapExerciseSheet";
 import PreWorkoutFatigueDialog from "@/components/workout/PreWorkoutFatigueDialog";
 import { ExerciseNotesField } from "@/components/workout/ExerciseNotesField";
+import { resolveNoteExerciseId } from "@/utils/training/noteExerciseId";
 import WorkoutVideoPlayer from "@/components/workout/WorkoutVideoPlayer";
 import WorkoutSetCard from "@/components/workout/WorkoutSetCard";
 import WorkoutRestScreen from "@/components/workout/WorkoutRestScreen";
@@ -299,12 +300,15 @@ const ActiveWorkout = () => {
 
             <ExerciseNotesField
               exerciseId={
-                // POZNAT BUG (strict-om vidljiv): override Exercise nosi hash
-                // int id, ne uuid — posle swap-a notes lookup po njemu ne
-                // nalazi ništa. String() čuva postojeće runtime ponašanje.
-                exerciseOverrides[exerciseIdx]
-                  ? String(exerciseOverrides[exerciseIdx].id)
-                  : slot.exerciseUuid ?? null
+                // Beleška prati vežbu koja se stvarno izvodi: posle swap-a
+                // override int id se mapira na DB UUID (bugfix — ranije se
+                // koristio String(hash int id) pa notes nisu radile za
+                // zamenjene vežbe).
+                resolveNoteExerciseId(
+                  exerciseOverrides[exerciseIdx],
+                  slot.exerciseUuid ?? null,
+                  session.exerciseUuidById,
+                )
               }
             />
 

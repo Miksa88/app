@@ -144,6 +144,7 @@ const MOCK_SESSION_DATA = {
   loadingMode: "PROGRESS" as const,
   targetRIR: 2,
   dayLabel: "Day A",
+  exerciseUuidById: new Map<number, string>([[12345, "uuid-ex-1"]]),
 };
 
 const SESSION_HOOK_FIXTURE = {
