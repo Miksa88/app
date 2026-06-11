@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,8 +7,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronDown, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
 import { useHaptic } from "@/hooks/useHaptic";
+import { resolveEditorParams, useEditor } from "@/hooks/useEditor";
 import { type NutritionTemplate, type TemplateMealSlot, MEAL_PRESETS, DEFAULT_5_MEAL_SLOTS } from "@/utils/mealPlanGenerator";
 import { MASTER_NUTRITION } from "@/data/masterNutrition";
 import { type DefaultLevel, DEFAULT_LEVELS, getDefaultLevel, setDefaultLevel } from "@/utils/defaultAssignment";
@@ -67,14 +67,11 @@ const NutritionTemplateEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { toast } = useToast();
   const haptic = useHaptic();
   // `default-master-*` ID = master template iz hardkodirane liste. Save uvek pravi NOVI red.
-  const isDefault = !!id?.startsWith("default-");
-  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
-  const isNew = !id || id === "new" || isDefault;
+  const { isDefault, defaultSourceId, isNew, queryId } = resolveEditorParams(id);
 
-  const { data: existing } = useNutritionTemplate(isNew ? null : id);
+  const { data: existing } = useNutritionTemplate(queryId);
   const masterTemplate = isDefault ? MASTER_NUTRITION.find((tmpl) => tmpl.id === defaultSourceId) : null;
   const upsertMutation = useUpsertNutritionTemplate();
 
@@ -95,25 +92,57 @@ const NutritionTemplateEditor = () => {
   const [mealSlots, setMealSlots] = useState<TemplateMealSlot[]>([...DEFAULT_5_MEAL_SLOTS]);
   const [defaultLevel, setDefaultLevelState] = useState<DefaultLevel | null>(null);
 
-  useEffect(() => {
-    const src = existing ?? masterTemplate;
-    if (!src) return;
-    setName(src.name);
-    setDescription(src.description ?? "");
-    setGoalType(src.goalType);
-    setMacroPreset(src.macroPreset);
-    setMacros(src.macroRatio);
-    setCalorieStrategy(src.calorieStrategy);
-    if (src.fixedCalories) setFixedCalories(src.fixedCalories);
-    if (src.calorieRange) setCalorieRange(src.calorieRange);
-    setDifferentOnTrainingDays(src.differentOnTrainingDays);
-    if (src.trainingDayModifier !== undefined) setTrainingDayMod(src.trainingDayModifier);
-    if (src.restDayModifier !== undefined) setRestDayMod(src.restDayModifier);
-    setRestrictions(src.restrictions);
-    setMealCount(src.mealCount);
-    setMealSlots(src.mealSlots);
-    setDefaultLevelState(getDefaultLevel(src.tags));
-  }, [existing, masterTemplate]);
+  // Zajednički editor lifecycle — hidracija + save flow (vidi useEditor.ts)
+  const { handleSave } = useEditor({
+    existing,
+    master: masterTemplate,
+    hydrate: (src) => {
+      setName(src.name);
+      setDescription(src.description ?? "");
+      setGoalType(src.goalType);
+      setMacroPreset(src.macroPreset);
+      setMacros(src.macroRatio);
+      setCalorieStrategy(src.calorieStrategy);
+      if (src.fixedCalories) setFixedCalories(src.fixedCalories);
+      if (src.calorieRange) setCalorieRange(src.calorieRange);
+      setDifferentOnTrainingDays(src.differentOnTrainingDays);
+      if (src.trainingDayModifier !== undefined) setTrainingDayMod(src.trainingDayModifier);
+      if (src.restDayModifier !== undefined) setRestDayMod(src.restDayModifier);
+      setRestrictions(src.restrictions);
+      setMealCount(src.mealCount);
+      setMealSlots(src.mealSlots);
+      setDefaultLevelState(getDefaultLevel(src.tags));
+    },
+    name,
+    fingerprint: {
+      name, description, goalType, macroPreset, macros, calorieStrategy,
+      fixedCalories, calorieRange, differentOnTrainingDays, trainingDayMod,
+      restDayMod, restrictions, mealCount, mealSlots, defaultLevel,
+    },
+    persist: () =>
+      upsertMutation.mutateAsync({
+        id: isNew ? undefined : id,
+        name,
+        description: description || undefined,
+        goalType,
+        macroRatio: macros,
+        macroPreset,
+        calorieStrategy,
+        fixedCalories: calorieStrategy === "fixed" ? fixedCalories : undefined,
+        calorieRange: calorieStrategy === "range" ? calorieRange : undefined,
+        trainingDayModifier: differentOnTrainingDays ? trainingDayMod : undefined,
+        restDayModifier: differentOnTrainingDays ? restDayMod : undefined,
+        differentOnTrainingDays,
+        restrictions,
+        tags: setDefaultLevel(existing?.tags ?? masterTemplate?.tags ?? [], defaultLevel),
+        mealCount,
+        mealSlots,
+      }),
+    createdTitle: t("nutrition.templateCreated"),
+    savedTitle: t("nutrition.templateSaved"),
+    afterSave: () => navigate("/trainer/nutrition"),
+    isNew,
+  });
 
   const toggle = (section: string) => setOpenSection(prev => prev === section ? null : section);
 
@@ -133,40 +162,6 @@ const NutritionTemplateEditor = () => {
     const newMacros = { ...macros, [key]: val };
     const sum = newMacros.protein + newMacros.carbs + newMacros.fat;
     if (sum <= 100) setMacros(newMacros);
-  };
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      toast({ title: t("training.nameRequired"), variant: "destructive" });
-      return;
-    }
-    try {
-      await upsertMutation.mutateAsync({
-        id: isNew ? undefined : id,
-        name,
-        description: description || undefined,
-        goalType,
-        macroRatio: macros,
-        macroPreset,
-        calorieStrategy,
-        fixedCalories: calorieStrategy === "fixed" ? fixedCalories : undefined,
-        calorieRange: calorieStrategy === "range" ? calorieRange : undefined,
-        trainingDayModifier: differentOnTrainingDays ? trainingDayMod : undefined,
-        restDayModifier: differentOnTrainingDays ? restDayMod : undefined,
-        differentOnTrainingDays,
-        restrictions,
-        tags: setDefaultLevel(existing?.tags ?? masterTemplate?.tags ?? [], defaultLevel),
-        mealCount,
-        mealSlots,
-      });
-      toast({ title: isNew ? t("nutrition.templateCreated") : t("nutrition.templateSaved") });
-      navigate("/trainer/nutrition");
-    } catch (err) {
-      toast({
-        title: err instanceof Error ? err.message : "Save failed",
-        variant: "destructive",
-      });
-    }
   };
 
   const SectionHeader = ({ id: sectionId, title, summary }: { id: string; title: string; summary: string }) => (

@@ -15,22 +15,24 @@
 //   ProgramDay { id, dayNumber, workoutId, workoutName, isRest }
 // ============================================================================
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
-import { Calendar, Grid3x3, Plus, Trash2, Users, GripVertical, Dumbbell, Moon, Layers, ChevronDown, Settings2 } from "lucide-react";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { Calendar, Grid3x3, Plus, Users, Dumbbell, Moon, Layers, ChevronDown, Settings2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { ICON_SIZE, IOS_SWITCH } from "@/lib/design-tokens";
+import { ICON_SIZE } from "@/lib/design-tokens";
 import { IOS_SPRING, MOTION_DURATION, MOTION_EASE, TAP_SCALE } from "@/lib/motion";
-import { type Program, type ProgramDay, type MesocycleConfig, type MesoProgression, type MesoPeriodization } from "@/data/trainingMockData";
+import { type Program, type ProgramDay, type MesocycleConfig } from "@/data/trainingMockData";
 import { MASTER_PROGRAMS } from "@/data/masterPrograms";
 import { MASTER_WORKOUTS } from "@/data/masterWorkouts";
 import { type DefaultLevel, DEFAULT_LEVELS, getDefaultLevel, setDefaultLevel } from "@/utils/defaultAssignment";
 import { useProgram, useUpsertProgram } from "@/hooks/usePrograms";
 import { useWorkouts } from "@/hooks/useWorkouts";
+import { resolveEditorParams, useEditor } from "@/hooks/useEditor";
+import { TypeCard, DayRow, StaticDayRow, MesoConfigCard } from "./ProgramEditorParts";
+import { defaultSchedule } from "./programEditorSchedule";
 
 // ============================================================================
 // Main Component
@@ -40,13 +42,10 @@ const ProgramEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { toast } = useToast();
   // `default-master-*` ID = master template. Editor učitava iz hardkodirane MASTER_PROGRAMS
   // liste, save uvek pravi NOVI red (ne update). User može da napusti bez čuvanja.
-  const isDefault = !!id?.startsWith("default-");
-  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
-  const isNew = !id || id === "new" || isDefault;
-  const { data: existing } = useProgram(isNew ? null : id);
+  const { isDefault, defaultSourceId, isNew, queryId } = resolveEditorParams(id);
+  const { data: existing } = useProgram(queryId);
   const masterTemplate = isDefault ? MASTER_PROGRAMS.find((p) => p.id === defaultSourceId) : null;
   const { data: trainerWorkouts = [] } = useWorkouts();
   // Trener-owned workouts + default master workouts (sa `default-` prefix-om).
@@ -88,57 +87,42 @@ const ProgramEditor = () => {
     ));
   };
 
-  // Sync state when existing program loads from DB. Master template hidracija
-  // se radi jednom (template je sinhron iz hardkodirane liste).
-  useEffect(() => {
-    if (existing) {
-      setName(existing.name);
-      setDescription(existing.description ?? "");
-      setType(existing.type);
-      setDays(existing.workoutDays);
-      setDefaultLevelState(getDefaultLevel(existing.tags));
-    } else if (masterTemplate) {
-      setName(masterTemplate.name);
-      setDescription(masterTemplate.description);
-      setType(masterTemplate.type);
-      setDays(masterTemplate.workoutDays);
-      setDefaultLevelState(getDefaultLevel(masterTemplate.tags));
-    }
-  }, [existing, masterTemplate]);
-
-  // Workout picker modal
-  const [showWorkoutPicker, setShowWorkoutPicker] = useState<string | null>(null);
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      toast({ title: t("training.nameRequired"), variant: "destructive" });
-      return;
-    }
-    const persistedDays = days.map((d, i) => ({ ...d, dayNumber: i + 1 }));
-    try {
-      await upsertProgramMutation.mutateAsync({
+  // Zajednički editor lifecycle — hidracija + save flow (vidi useEditor.ts).
+  // Master template hidracija se radi jednom (template je sinhron iz hardkodirane liste).
+  const { handleSave, validateName } = useEditor({
+    existing,
+    master: masterTemplate,
+    hydrate: (src) => {
+      setName(src.name);
+      setDescription(src.description ?? "");
+      setType(src.type);
+      setDays(src.workoutDays);
+      setDefaultLevelState(getDefaultLevel(src.tags));
+    },
+    name,
+    fingerprint: { name, description, type, defaultLevel, days },
+    persist: () =>
+      upsertProgramMutation.mutateAsync({
         id: isNew ? undefined : id,
         name,
         description: description || null,
         type,
         tags: setDefaultLevel(existing?.tags ?? masterTemplate?.tags ?? [], defaultLevel),
-        workoutDays: persistedDays,
-      });
-      toast({ title: isNew ? t("training.programCreated") : t("training.programSaved") });
-      navigate("/trainer/training");
-    } catch (err) {
-      toast({
-        title: err instanceof Error ? err.message : t("training.saveFailed") ?? "Save failed",
-        variant: "destructive",
-      });
-    }
-  };
+        // dayNumber se persistuje iz finalnog redosleda
+        workoutDays: days.map((d, i) => ({ ...d, dayNumber: i + 1 })),
+      }),
+    createdTitle: t("training.programCreated"),
+    savedTitle: t("training.programSaved"),
+    saveFailedTitle: t("training.saveFailed") ?? "Save failed",
+    afterSave: () => navigate("/trainer/training"),
+    isNew,
+  });
+
+  // Workout picker modal
+  const [showWorkoutPicker, setShowWorkoutPicker] = useState<string | null>(null);
 
   const handleAssign = () => {
-    if (!name.trim()) {
-      toast({ title: t("training.nameRequired"), variant: "destructive" });
-      return;
-    }
+    if (!validateName()) return;
     navigate(`/trainer/program/${id || "new"}/assign`);
   };
 
@@ -662,392 +646,5 @@ const ProgramEditor = () => {
     </div>
   );
 };
-
-// ============================================================================
-// TypeCard — Fiksni / Kalendar selector
-// ============================================================================
-
-interface TypeCardProps {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  caption: string;
-}
-
-const TypeCard = ({ active, onClick, icon, label, caption }: TypeCardProps) => (
-  <motion.button
-    type="button"
-    whileTap={{ scale: TAP_SCALE.primary }}
-    onClick={onClick}
-    className={`rounded-2xl p-4 text-left transition-colors min-h-[100px] border-2 ${
-      active
-        ? "bg-card border-primary"
-        : "bg-card border-transparent card-shadow active:opacity-70"
-    }`}
-  >
-    <div className={`mb-2 ${active ? "text-primary" : "text-muted-foreground"}`}>{icon}</div>
-    <p className={`text-body font-bold ${active ? "text-primary" : "text-foreground/90"}`}>
-      {label}
-    </p>
-    <p className={`text-caption-2 mt-0.5 leading-snug ${active ? "text-primary/80" : "text-muted-foreground"}`}>
-      {caption}
-    </p>
-  </motion.button>
-);
-
-// ============================================================================
-// DayRow — draggable day in schedule
-// ============================================================================
-
-interface DayRowProps {
-  day: ProgramDay;
-  index: number;
-  programType: Program["type"];
-  workoutLookup: Array<{ id: string; sections: Array<{ exercises: unknown[] }> }>;
-  onRemove: () => void;
-  onPickWorkout: () => void;
-  onMarkRest: () => void;
-  t: (key: string) => string;
-}
-
-// iOS-locale short weekday names (Mon-Sun cycle)
-const WEEKDAY_KEYS = [
-  "training.weekdayMon",
-  "training.weekdayTue",
-  "training.weekdayWed",
-  "training.weekdayThu",
-  "training.weekdayFri",
-  "training.weekdaySat",
-  "training.weekdaySun",
-];
-
-const DayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkout, onMarkRest, t }: DayRowProps) => {
-  const dragControls = useDragControls();
-  const exerciseCount = day.workoutId
-    ? workoutLookup.find((w) => w.id === day.workoutId)?.sections.reduce((sum, s) => sum + s.exercises.length, 0) ?? 0
-    : 0;
-  // Fixed: prikaz weekday-only (Mon, Tue...). Calendar: "Dan N (u nedelji X)".
-  const weekdayLabel = programType === "fixed" ? t(WEEKDAY_KEYS[index % 7]) : null;
-  const calendarLabel = programType === "calendar"
-    ? `${t("training.day")} ${(index % 7) + 1}`
-    : null;
-
-  return (
-    <Reorder.Item
-      value={day}
-      dragListener={false}
-      dragControls={dragControls}
-      className={`relative rounded-2xl card-shadow overflow-hidden touch-manipulation ${
-        day.isRest ? "bg-muted/30" : "bg-card"
-      }`}
-      whileDrag={{
-        scale: 1.03,
-        boxShadow: "0 16px 40px -8px rgba(0,0,0,0.22)",
-        // z-modal token (100) — drži se iznad svih sibling card-ica i kontejner overlay-a
-        zIndex: 100,
-      }}
-      style={{ position: "relative" }}
-      transition={{ type: "spring", stiffness: 400, damping: 28 }}
-    >
-      <div className="flex items-center gap-2 p-3">
-        {/* Drag handle */}
-        <button
-          type="button"
-          onPointerDown={(e) => dragControls.start(e)}
-          className="min-w-8 min-h-8 flex items-center justify-center text-muted-foreground/40 active:text-muted-foreground active:bg-muted/40 rounded-md touch-none cursor-grab active:cursor-grabbing shrink-0"
-          aria-label={t("training.dragReorder")}
-        >
-          <GripVertical size={16} aria-hidden />
-        </button>
-
-        {/* Tone rail (primary for workout, muted for rest) */}
-        <span
-          className={`w-1 h-8 rounded-full shrink-0 ${day.isRest ? "bg-muted-foreground/30" : "bg-primary"}`}
-          aria-hidden
-        />
-
-        {/* Content — tap to pick workout (if not rest) */}
-        <button
-          type="button"
-          onClick={onPickWorkout}
-          className="flex-1 min-w-0 text-left active:opacity-60 transition-opacity"
-        >
-          <p className="text-body font-semibold text-foreground truncate">
-            {weekdayLabel && <span>{weekdayLabel}</span>}
-            {calendarLabel && <span>{calendarLabel}</span>}
-            <span className="text-muted-foreground font-normal">: </span>
-            {day.isRest ? t("training.restDay") : day.workoutName}
-          </p>
-          {!day.isRest && exerciseCount > 0 && (
-            <p className="text-caption-1 text-muted-foreground">
-              {exerciseCount} {exerciseCount === 1 ? t("training.exerciseSingular") : t("training.exercisePlural")}
-            </p>
-          )}
-          {day.isRest && (
-            <p className="text-caption-1 text-muted-foreground">{t("training.tapToAddWorkout")}</p>
-          )}
-        </button>
-
-        {/* Convert to rest (only for workout days) */}
-        {!day.isRest && (
-          <button
-            type="button"
-            onClick={onMarkRest}
-            className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-muted/50 text-muted-foreground/70 shrink-0"
-            aria-label={t("training.markAsRest")}
-          >
-            <Moon size={14} />
-          </button>
-        )}
-
-        {/* Delete */}
-        <button
-          type="button"
-          onClick={onRemove}
-          className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-destructive/10 shrink-0"
-          aria-label={t("common.delete")}
-        >
-          <Trash2 size={ICON_SIZE.xs} className="text-destructive/70" />
-        </button>
-      </div>
-    </Reorder.Item>
-  );
-};
-
-// ============================================================================
-// StaticDayRow — locked prvi dan mezo bloka (ne učestvuje u drag-reorder)
-// ============================================================================
-
-const StaticDayRow = ({ day, index, programType, workoutLookup, onRemove, onPickWorkout, onMarkRest, t }: DayRowProps) => {
-  const exerciseCount = day.workoutId
-    ? workoutLookup.find((w) => w.id === day.workoutId)?.sections.reduce((sum, s) => sum + s.exercises.length, 0) ?? 0
-    : 0;
-  const weekdayLabel = programType === "fixed" ? t(WEEKDAY_KEYS[index % 7]) : null;
-  const calendarLabel = programType === "calendar"
-    ? `${t("training.day")} ${(index % 7) + 1}`
-    : null;
-
-  return (
-    <div
-      className={`rounded-2xl card-shadow overflow-hidden ${day.isRest ? "bg-muted/30" : "bg-card"}`}
-    >
-      <div className="flex items-center gap-2 p-3">
-        {/* Lock indicator umesto drag handle-a */}
-        <span
-          className="min-w-8 min-h-8 flex items-center justify-center text-primary/50 shrink-0"
-          aria-label={t("training.firstDayLocked")}
-        >
-          <Layers size={14} aria-hidden />
-        </span>
-        <span
-          className={`w-1 h-8 rounded-full shrink-0 ${day.isRest ? "bg-muted-foreground/30" : "bg-primary"}`}
-          aria-hidden
-        />
-        <button
-          type="button"
-          onClick={onPickWorkout}
-          className="flex-1 min-w-0 text-left active:opacity-60 transition-opacity"
-        >
-          <p className="text-body font-semibold text-foreground truncate">
-            {weekdayLabel && <span>{weekdayLabel}</span>}
-            {calendarLabel && <span>{calendarLabel}</span>}
-            <span className="text-muted-foreground font-normal">: </span>
-            {day.isRest ? t("training.restDay") : day.workoutName}
-          </p>
-          {!day.isRest && exerciseCount > 0 && (
-            <p className="text-caption-1 text-muted-foreground">
-              {exerciseCount} {exerciseCount === 1 ? t("training.exerciseSingular") : t("training.exercisePlural")}
-            </p>
-          )}
-          {day.isRest && (
-            <p className="text-caption-1 text-muted-foreground">{t("training.tapToAddWorkout")}</p>
-          )}
-        </button>
-        {!day.isRest && (
-          <button
-            type="button"
-            onClick={onMarkRest}
-            className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-muted/50 text-muted-foreground/70 shrink-0"
-            aria-label={t("training.markAsRest")}
-          >
-            <Moon size={14} />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onRemove}
-          className="min-w-10 min-h-10 flex items-center justify-center rounded-full active:bg-destructive/10 shrink-0"
-          aria-label={t("common.delete")}
-        >
-          <Trash2 size={ICON_SIZE.xs} className="text-destructive/70" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ============================================================================
-// MesoConfigCard — config za jedan mezociklus blok
-// ============================================================================
-
-interface MesoConfigCardProps {
-  config: MesocycleConfig;
-  defaultName: string;
-  onUpdate: (patch: Partial<MesocycleConfig>) => void;
-  t: (key: string) => string;
-}
-
-const MesoConfigCard = ({ config, defaultName, onUpdate, t }: MesoConfigCardProps) => {
-  const weeks: Array<4 | 5 | 6 | 7> = [4, 5, 6, 7];
-  const progressions: MesoProgression[] = ["linear", "double", "rpe", "percentage"];
-  const periodizations: MesoPeriodization[] = ["linear", "undulating", "block", "dup"];
-
-  return (
-    <div className="bg-card border border-primary/30 rounded-2xl p-4 space-y-4 card-shadow">
-      {/* Naziv */}
-      <div>
-        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
-          {t("training.mesoName")}
-        </label>
-        <input
-          type="text"
-          value={config.name ?? ""}
-          onChange={(e) => onUpdate({ name: e.target.value || undefined })}
-          placeholder={defaultName}
-          className="w-full bg-background-secondary text-foreground rounded-xl px-3 py-2.5 text-body focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
-
-      {/* Trajanje (nedelja) */}
-      <div>
-        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
-          {t("training.mesoDuration")}
-        </label>
-        <div className="flex gap-2">
-          {weeks.map((w) => {
-            const active = config.weeks === w;
-            return (
-              <button
-                key={w}
-                type="button"
-                onClick={() => onUpdate({ weeks: w })}
-                className={`flex-1 min-h-11 rounded-xl text-footnote font-bold transition-colors border-2 ${
-                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
-                }`}
-              >
-                {w}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-caption-2 text-muted-foreground/70 mt-1">{t("training.mesoDurationHint")}</p>
-      </div>
-
-      {/* Progressive overload */}
-      <div>
-        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
-          {t("training.mesoProgression")}
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {progressions.map((p) => {
-            const active = config.progression === p;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => onUpdate({ progression: p })}
-                className={`min-h-11 rounded-xl text-footnote font-semibold transition-colors border-2 px-3 ${
-                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
-                }`}
-              >
-                {t(`training.progression_${p}`)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Periodizacija */}
-      <div>
-        <label className="text-caption-1 text-muted-foreground font-medium mb-1.5 block">
-          {t("training.mesoPeriodization")}
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {periodizations.map((p) => {
-            const active = config.periodization === p;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => onUpdate({ periodization: p })}
-                className={`min-h-11 rounded-xl text-footnote font-semibold transition-colors border-2 px-3 ${
-                  active ? "border-primary bg-primary/5 text-primary" : "border-transparent bg-background-secondary text-foreground"
-                }`}
-              >
-                {t(`training.periodization_${p}`)}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Deload toggle */}
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="text-body font-medium text-foreground">{t("training.mesoDeload")}</p>
-          <p className="text-caption-2 text-muted-foreground/80">{t("training.mesoDeloadHint")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onUpdate({ deload: config.deload === "off" ? "auto" : "off" })}
-          aria-pressed={config.deload !== "off"}
-          aria-label={t("training.mesoDeload")}
-          className={`${IOS_SWITCH.track} rounded-full p-[2px] transition-colors shrink-0 ml-3 ${
-            config.deload !== "off" ? "bg-primary" : "bg-muted"
-          }`}
-        >
-          <motion.div
-            animate={{ x: config.deload !== "off" ? 20 : 0 }}
-            transition={IOS_SPRING.precise}
-            className={`${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm`}
-          />
-        </button>
-      </div>
-
-      <p className="text-caption-2 text-muted-foreground/70 leading-snug border-t border-border/40 pt-3">
-        {t("training.mesoAlgorithmHint")}
-      </p>
-    </div>
-  );
-};
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function defaultSchedule(): ProgramDay[] {
-  // 1 mezociklus, 1 mikrociklus = 7 dana (svi rest po default-u). Trener dodaje workout-e.
-  // Dan 1 nosi mesocycleStart marker + default mesocycleConfig (6 nedelja, linear).
-  const base = Date.now();
-  return Array.from({ length: 7 }, (_, i) => ({
-    id: `pd-${base}-${i}`,
-    dayNumber: 0,
-    workoutId: null,
-    workoutName: "Rest",
-    isRest: true,
-    ...(i === 0
-      ? {
-          mesocycleStart: true,
-          mesocycleConfig: {
-            weeks: 6 as const,
-            progression: "linear" as const,
-            periodization: "linear" as const,
-            deload: "auto" as const,
-          },
-        }
-      : {}),
-  }));
-}
 
 export default ProgramEditor;

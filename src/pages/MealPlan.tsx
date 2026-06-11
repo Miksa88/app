@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
-import { Check, ChevronDown, ChevronRight, RefreshCw, ShoppingBasket, Sparkles, ThumbsDown } from "lucide-react";
+import { Check, ChevronDown, RefreshCw, ShoppingBasket, Sparkles } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
@@ -15,7 +15,9 @@ import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { useFoodItems } from "@/hooks/useFoodItems";
-import { computeDayRollups, findSwapAlternatives, type MealPlanSlot } from "@/utils/nutrition/mealPlanGenerator";
+import { computeDayRollups } from "@/utils/nutrition/mealPlanGenerator";
+import MealSearchModal from "@/components/food/MealSearchModal";
+import type { FoodItem } from "@/data/foodDatabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { addFoodDislike } from "@/services/dislikeService";
 import { toast } from "sonner";
@@ -46,6 +48,7 @@ const MealPlanPage = () => {
   const { foods: foodPool } = useFoodItems();
   const [openDay, setOpenDay] = useState<number | null>(0);
   const [swapSlotIdx, setSwapSlotIdx] = useState<number | null>(null);
+  const [swapSearch, setSwapSearch] = useState("");
 
   const dayLabels = language === "sr" ? DAY_LABELS_SR : DAY_LABELS_EN;
   const slotLabels = language === "sr" ? SLOT_LABELS_SR : SLOT_LABELS_EN;
@@ -58,16 +61,15 @@ const MealPlanPage = () => {
   const allConfirmed = totalSlots > 0 && confirmedCount === totalSlots;
 
   const swapSlot = swapSlotIdx !== null ? plan?.slots[swapSlotIdx] : null;
-  const swapAlternatives = useMemo(() => {
-    if (!plan || swapSlotIdx === null) return [];
-    // Need profile data for filters — keep simple, no filter (engine already filtered initially)
-    return findSwapAlternatives(plan, swapSlotIdx, [], [], 4);
-  }, [plan, swapSlotIdx]);
+  const swapCurrentFood = swapSlot ? foodPool.find(f => f.id === swapSlot.foodId) ?? null : null;
 
-  const handlePickAlternative = (foodId: string) => {
+  const closeSwapSheet = () => {
+    setSwapSlotIdx(null);
+    setSwapSearch("");
+  };
+
+  const handlePickAlternative = (food: FoodItem) => {
     if (swapSlotIdx === null) return;
-    const food = foodPool.find(f => f.id === foodId);
-    if (!food) return;
     updateSlot(swapSlotIdx, {
       foodId: food.id,
       status: "confirmed",
@@ -76,7 +78,7 @@ const MealPlanPage = () => {
       carbs: food.carbs,
       fat: food.fat,
     });
-    setSwapSlotIdx(null);
+    closeSwapSheet();
   };
 
   const handleDontShowAgain = async (foodId: string) => {
@@ -86,7 +88,7 @@ const MealPlanPage = () => {
     try {
       await addFoodDislike(clientId, food.nameEn);
       toast.success(t("mealPlan.dislikeAdded"));
-      setSwapSlotIdx(null);
+      closeSwapSheet();
       // Auto-regenerate da novi plan ne sadrži ovu hranu
       await regenerate();
     } catch (err) {
@@ -297,90 +299,32 @@ const MealPlanPage = () => {
         })}
       </div>
 
-      {/* Swap bottom sheet */}
-      <AnimatePresence>
-        {swapSlot && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSwapSlotIdx(null)}
-              className="fixed inset-0 bg-black/40 z-50"
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={IOS_SPRING.medium}
-              role="dialog"
-              aria-modal="true"
-              aria-label={t("mealPlan.swap")}
-              className="fixed bottom-0 left-0 right-0 z-50 max-w-lg mx-auto bg-card rounded-t-3xl p-6 pb-10 max-h-[80vh] overflow-y-auto"
-            >
-              <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-4" />
-              <h3 className="text-title-3 font-bold text-foreground mb-1">{t("mealPlan.pickAlternative")}</h3>
-              <p className="text-caption-1 text-muted-foreground mb-4">{slotLabels[swapSlot.slotType]}</p>
-
-              {/* "Ne volim ovo" — flagovi current food da se trajno isključi */}
-              {(() => {
-                const currentFood = foodPool.find(f => f.id === swapSlot.foodId);
-                if (!currentFood) return null;
-                return (
-                  <motion.button
-                    whileTap={{ scale: TAP_SCALE.secondary }}
-                    onClick={() => void handleDontShowAgain(currentFood.id)}
-                    className="w-full mb-4 px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20 text-left flex items-center gap-3 min-h-12"
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
-                      <ThumbsDown size={ICON_SIZE.sm} className="text-destructive" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-callout font-semibold text-destructive">
-                        {t("mealPlan.dontShowAgain")}
-                      </p>
-                      <p className="text-caption-1 text-muted-foreground truncate mt-0.5">
-                        {language === "sr" ? currentFood.nameSr : currentFood.nameEn}
-                      </p>
-                    </div>
-                  </motion.button>
-                );
-              })()}
-
-              <div className="space-y-2">
-                {swapAlternatives.map(food => (
-                  <motion.button
-                    key={food.id}
-                    whileTap={{ scale: TAP_SCALE.secondary }}
-                    onClick={() => handlePickAlternative(food.id)}
-                    className="w-full bg-background-secondary border border-border rounded-2xl p-4 text-left flex items-center gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-body font-semibold text-foreground">
-                        {language === "sr" ? food.nameSr : food.nameEn}
-                      </p>
-                      <p className="text-caption-1 text-muted-foreground tabular-nums mt-0.5">
-                        {food.calories} kcal · {food.protein}P · {food.carbs}C · {food.fat}F · {food.prepTime}
-                      </p>
-                    </div>
-                    <ChevronRight size={16} className="text-muted-foreground/50" aria-hidden="true" />
-                  </motion.button>
-                ))}
-                {swapAlternatives.length === 0 && (
-                  <p className="text-body text-muted-foreground text-center py-6">{t("mealPlan.noAlternatives")}</p>
-                )}
-              </div>
-
-              <button
-                onClick={() => setSwapSlotIdx(null)}
-                className="w-full py-3 text-muted-foreground text-body mt-4 min-h-11"
-              >
-                {t("mealPlan.cancel")}
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Swap bottom sheet — deljeni MealSearchModal (1.7), identičan UX kao Food.tsx */}
+      <MealSearchModal
+        open={!!swapSlot}
+        onOpenChange={(open) => {
+          if (!open) closeSwapSheet();
+        }}
+        title={t("mealPlan.pickAlternative")}
+        currentMeal={swapSlot ? {
+          mealId: swapSlot.foodId,
+          calories: swapSlot.calories,
+          protein: swapSlot.protein,
+          slot: swapSlot.slotType,
+        } : null}
+        foods={foodPool}
+        onSelect={handlePickAlternative}
+        search={swapSearch}
+        onSearchChange={setSwapSearch}
+        searchPlaceholder={t("training.searchExercises")}
+        confirmLabel={t("food.confirmReplace")}
+        getFoodName={f => (language === "sr" ? f.nameSr : f.nameEn)}
+        dislike={swapCurrentFood ? {
+          label: t("mealPlan.dontShowAgain"),
+          foodName: language === "sr" ? swapCurrentFood.nameSr : swapCurrentFood.nameEn,
+          onDislike: () => void handleDontShowAgain(swapCurrentFood.id),
+        } : null}
+      />
     </div>
   );
 };

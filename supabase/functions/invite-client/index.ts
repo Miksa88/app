@@ -15,22 +15,18 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 declare const Deno: {
   serve: (h: (req: Request) => Response | Promise<Response>) => void;
   env: { get: (k: string) => string | undefined };
 };
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const json = (body: unknown, status = 200) =>
+// CORS dolazi iz _shared/cors.ts (origin whitelist preko ALLOWED_ORIGINS)
+const json = (HDRS: Record<string, string>, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: { ...HDRS, "Content-Type": "application/json" },
   });
 
 interface InvitePayload {
@@ -49,23 +45,25 @@ interface InvitePayload {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  // CORS headeri po request-u (origin whitelist)
+  const HDRS = corsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: HDRS });
+  if (req.method !== "POST") return json(HDRS, { error: "Method not allowed" }, 405);
 
   const url = Deno.env.get("SUPABASE_URL");
   const srk = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!url || !srk || !anon) return json({ error: "Server misconfigured" }, 500);
+  if (!url || !srk || !anon) return json(HDRS, { error: "Server misconfigured" }, 500);
 
   // 1. Verify caller is trainer
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return json({ error: "Missing Authorization" }, 401);
+  if (!authHeader) return json(HDRS, { error: "Missing Authorization" }, 401);
 
   const userClient = createClient(url, anon, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !caller) return json({ error: "Invalid token" }, 401);
+  if (authErr || !caller) return json(HDRS, { error: "Invalid token" }, 401);
 
   const admin = createClient(url, srk);
   const { data: callerProfile, error: roleErr } = await admin
@@ -73,9 +71,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .select("role")
     .eq("id", caller.id)
     .maybeSingle();
-  if (roleErr) return json({ error: `Role check: ${roleErr.message}` }, 500);
+  if (roleErr) {
+    // Detalji idu u server log, klijent dobija generičku poruku
+    console.error("[invite-client] role check failed", roleErr.message);
+    return json(HDRS, { error: "Role check failed" }, 500);
+  }
   if (!callerProfile || callerProfile.role !== "trainer") {
-    return json({ error: "Forbidden — trainers only" }, 403);
+    return json(HDRS, { error: "Forbidden — trainers only" }, 403);
   }
 
   // 2. Parse + validate
@@ -83,10 +85,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     payload = await req.json() as InvitePayload;
   } catch {
-    return json({ error: "Invalid JSON" }, 400);
+    return json(HDRS, { error: "Invalid JSON" }, 400);
   }
   if (!payload.email || !payload.email.includes("@")) {
-    return json({ error: "Invalid email" }, 400);
+    return json(HDRS, { error: "Invalid email" }, 400);
   }
 
   // 3. Invite via auth admin (creates auth.users + sends magic-link)
@@ -94,10 +96,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     payload.email,
   );
   if (inviteErr) {
-    return json({ error: `Invite failed: ${inviteErr.message}` }, 500);
+    // Ne echo-ujemo raw poruku (može da otkrije postojanje naloga / interne detalje)
+    console.error("[invite-client] inviteUserByEmail failed", inviteErr.message);
+    return json(HDRS, { error: "Invite failed" }, 500);
   }
   const newUserId = invited.user?.id;
-  if (!newUserId) return json({ error: "Invite returned no user" }, 500);
+  if (!newUserId) return json(HDRS, { error: "Invite failed" }, 500);
 
   // 4. UPSERT profiles (handle_new_user trigger may have fired already)
   const profilePatch = {
@@ -120,8 +124,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .from("profiles")
     .upsert(profilePatch, { onConflict: "id" });
   if (profileErr) {
-    return json({ error: `Profile upsert: ${profileErr.message}` }, 500);
+    console.error("[invite-client] profile upsert failed", profileErr.message);
+    return json(HDRS, { error: "Profile upsert failed" }, 500);
   }
 
-  return json({ ok: true, userId: newUserId, email: payload.email });
+  return json(HDRS, { ok: true, userId: newUserId, email: payload.email });
 });

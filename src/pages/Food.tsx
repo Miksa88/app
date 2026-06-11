@@ -26,7 +26,7 @@ import { ICON_SIZE } from "@/lib/design-tokens";
 import { motion, AnimatePresence } from "framer-motion";
 import { fadeUp, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
 import {
-  Check, X, ArrowRightLeft, Search, Lock,
+  Check, X, ArrowRightLeft, Lock,
   Sunrise, Sun, Moon, Apple, Zap, Dumbbell, UtensilsCrossed, GlassWater,
   Drumstick, Wheat, Droplets, ThumbsDown, Youtube,
   type LucideProps,
@@ -38,7 +38,6 @@ import { useUserStatus } from "@/hooks/useUserStatus";
 import { useFoodItems } from "@/hooks/useFoodItems";
 import { useLogMeal, useSkipMeal, useReplaceMeal } from "@/hooks/mutations/useLogMeal";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
-import { findSimilarMeals } from "@/utils/mealPlanGenerator";
 import type { FoodItem } from "@/data/foodDatabase";
 import {
   generateMealPlan,
@@ -50,11 +49,12 @@ import {
 } from "@/utils/mealPlanGenerator";
 import { buildIngredientExclusionList, filterFoodByExclusions } from "@/utils/nutrition/antiIngredientFilter";
 import type { MetabolicCondition } from "@/types/training";
+import MealSearchModal from "@/components/food/MealSearchModal";
+import { getMealImage } from "@/components/food/mealImages";
 import { FuelingStatusBar } from "@/components/queue/FuelingStatusBar";
 import { SyncEventBanner } from "@/components/queue/SyncEventBanner";
 import { useHaptic } from "@/hooks/useHaptic";
 import { SectionLabel } from "@/components/ui/section-label";
-import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import ExtraMealSheet, { ExtraMealTrigger } from "@/components/food/ExtraMealSheet";
 import { RecipeVideoSheet } from "@/components/food/RecipeVideoSheet";
@@ -62,22 +62,7 @@ import { addFoodDislike } from "@/services/dislikeService";
 import { toast } from "sonner";
 import { PageTitle } from "@/components/PageTitle";
 
-// Meal images mapping — fallback mapa za slike lokalno dostupne u assets/meals
-import greekYogurt from "@/assets/meals/greek-yogurt.jpg";
-import chickenSalad from "@/assets/meals/chicken-salad.jpg";
-import salmonBroccoli from "@/assets/meals/salmon-broccoli.jpg";
-import overnightOats from "@/assets/meals/overnight-oats.jpg";
-import proteinSmoothie from "@/assets/meals/protein-smoothie.jpg";
-import proteinBar from "@/assets/meals/protein-bar.jpg";
-
-const MEAL_IMAGES: Record<string, string> = {
-  "greek-yogurt.jpg": greekYogurt,
-  "chicken-salad.jpg": chickenSalad,
-  "salmon-broccoli.jpg": salmonBroccoli,
-  "overnight-oats.jpg": overnightOats,
-  "protein-smoothie.jpg": proteinSmoothie,
-  "protein-bar.jpg": proteinBar,
-};
+// Meal images mapping + getMealImage žive u MealSearchModal.tsx (deljeno 1.7)
 
 // Meal slot ikone — lucide-react ekvivalenti emoji-ja (fix A9 iz DESIGN_AUDIT.md).
 const SLOT_ICON: Record<string, ComponentType<LucideProps>> = {
@@ -109,20 +94,6 @@ const SLOT_LABELS: Record<string, string> = {
 // Slot indexi koji postaju IR mini-obroci (0-based: 1 = morning_snack,
 // 3 = afternoon_snack). Mirror src/utils/nutrition/irMealStructure.ts.
 const IR_MINI_MEAL_SLOT_INDEXES = new Set<number>([1, 3]);
-
-function getMealImage(meal: GeneratedMeal, foodPool: FoodItem[]): string | null {
-  const dbFood = foodPool.find(f => f.id === meal.mealId);
-  if (dbFood?.imageUrl && MEAL_IMAGES[dbFood.imageUrl]) return MEAL_IMAGES[dbFood.imageUrl];
-  // Fallback mapping by slot/name
-  const name = meal.name.toLowerCase();
-  if (name.includes("yogurt") || name.includes("jogurt")) return greekYogurt;
-  if (name.includes("chicken") || name.includes("piletina") || name.includes("salad")) return chickenSalad;
-  if (name.includes("salmon") || name.includes("losos") || name.includes("fish")) return salmonBroccoli;
-  if (name.includes("oat") || name.includes("ovsene")) return overnightOats;
-  if (name.includes("smoothie") || name.includes("shake")) return proteinSmoothie;
-  if (name.includes("bar") || name.includes("snack")) return proteinBar;
-  return null;
-}
 
 // ============================================================================
 // Default template — koristi se dok nutrition_templates tabela ne bude
@@ -392,9 +363,11 @@ const Food = () => {
     status.nutrition.metabolicFilter,
   );
   const allowedReplaceFoods = filterFoodByExclusions(foodPool, exclusions);
-  const filteredReplaceFoods = allowedReplaceFoods.filter(f =>
-    f.name.toLowerCase().includes(replaceSearch.toLowerCase()),
-  );
+
+  // Trenutni obrok za replace sheet — target za macro-similar suggest
+  const replaceCurrentMeal = showReplaceSheet
+    ? plan.meals.find(m => m.slot === showReplaceSheet) ?? null
+    : null;
 
   const dbFoodForMeal = (meal: GeneratedMeal): FoodItem | undefined =>
     foodPool.find(f => f.id === meal.mealId);
@@ -684,8 +657,8 @@ const Food = () => {
         )}
       </AnimatePresence>
 
-      {/* Replace bottom sheet — auto-suggest po macro sličnosti + fallback search */}
-      <BottomSheet
+      {/* Replace bottom sheet — deljeni MealSearchModal (1.7) */}
+      <MealSearchModal
         open={!!showReplaceSheet}
         onOpenChange={(open) => {
           if (!open) {
@@ -694,78 +667,19 @@ const Food = () => {
           }
         }}
         title={t("food.whatDidYouEat")}
-        maxHeight="70vh"
-      >
-        <div className="pb-2">
-          {/* Slično ovome — auto-suggest top 5 sa istim makroima ±10% */}
-          {(() => {
-            const currentMeal = showReplaceSheet
-              ? plan?.meals.find(m => m.slot === showReplaceSheet)
-              : null;
-            const similarMeals = currentMeal
-              ? findSimilarMeals(
-                  {
-                    mealId: currentMeal.mealId,
-                    calories: currentMeal.calories,
-                    protein: currentMeal.protein,
-                    slot: currentMeal.slot,
-                  },
-                  allowedReplaceFoods,
-                  { tolerance: 0.10, topN: 5 },
-                )
-              : [];
-            if (similarMeals.length === 0 || replaceSearch.trim().length > 0) return null;
-            return (
-              <div className="mb-3">
-                <p className="text-caption-1 font-semibold text-foreground/70 px-1 mb-2">
-                  Slično ovome
-                </p>
-                <div className="space-y-1">
-                  {similarMeals.map(food => (
-                    <button
-                      key={food.id}
-                      onClick={() => handleReplaceConfirm(food)}
-                      className="w-full text-left px-4 py-3 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-colors min-h-12 flex items-center justify-between cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      <div>
-                        <p className="text-body text-foreground">{food.name}</p>
-                        <p className="text-caption-1 text-muted-foreground">{food.calories} kcal · {food.protein}g P</p>
-                      </div>
-                      <span className="text-primary text-caption-1 font-semibold">Zameni</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="relative mb-3">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
-            <input
-              value={replaceSearch}
-              onChange={e => setReplaceSearch(e.target.value)}
-              placeholder={t("training.searchExercises")}
-              className="w-full bg-muted/50 text-foreground placeholder:text-muted-foreground/50 rounded-2xl pl-11 pr-4 py-3 text-body focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
-            />
-          </div>
-
-          <div className="space-y-1">
-            {filteredReplaceFoods.slice(0, 8).map(food => (
-              <button
-                key={food.id}
-                onClick={() => handleReplaceConfirm(food)}
-                className="w-full text-left px-4 py-3 rounded-2xl hover:bg-muted/40 transition-colors min-h-12 flex items-center justify-between cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <div>
-                  <p className="text-body text-foreground">{food.name}</p>
-                  <p className="text-caption-1 text-muted-foreground">{food.calories} kcal · {food.protein}g P</p>
-                </div>
-                <span className="text-primary text-caption-1 font-semibold">{t("food.confirmReplace")}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </BottomSheet>
+        currentMeal={replaceCurrentMeal ? {
+          mealId: replaceCurrentMeal.mealId,
+          calories: replaceCurrentMeal.calories,
+          protein: replaceCurrentMeal.protein,
+          slot: replaceCurrentMeal.slot,
+        } : null}
+        foods={allowedReplaceFoods}
+        onSelect={handleReplaceConfirm}
+        search={replaceSearch}
+        onSearchChange={setReplaceSearch}
+        searchPlaceholder={t("training.searchExercises")}
+        confirmLabel={t("food.confirmReplace")}
+      />
 
       <ExtraMealSheet
         open={showExtraMealSheet}

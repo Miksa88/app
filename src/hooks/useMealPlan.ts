@@ -2,64 +2,22 @@
 // useMealPlan — manages 7-day meal plan + pantry state
 // ============================================================================
 //
-// Persistencija (Faza A1): localStorage. Migracija u Supabase tabelu u IT-29.
+// Refactor 1.5: React Query kao izvor istine za plan.
+//   - useQuery čita plan iz mealPlanStorageService (localStorage, isti ključevi)
+//   - useMutation regenerate/updateSlot piše kroz storage service i ažurira keš
+//   - Generaciona logika ostaje čista u utils/nutrition/mealPlanGenerator.ts
+//
+// Persistencija: localStorage (vidi mealPlanStorageService). Migracija u
+// Supabase tabelu u IT-29.
 // ============================================================================
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { generateMealPlan, type MealPlanWeek, type MealPlanSlot } from "@/utils/nutrition/mealPlanGenerator";
 import { supabase } from "@/integrations/supabase/client";
-import { safeStorage } from "@/lib/safeStorage";
-
-const STORAGE_KEY_PLAN = "fbi:meal_plan";
-const STORAGE_KEY_PANTRY = "fbi:pantry_keys";
-
-function getMonday(date: Date = new Date()): string {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;  // ako je nedelja, idi 6 unazad; inače 1-day
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().split("T")[0];
-}
-
-function loadPlanFromStorage(weekStartDate: string): MealPlanWeek | null {
-  try {
-    const raw = safeStorage.getItem(`${STORAGE_KEY_PLAN}:${weekStartDate}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as MealPlanWeek;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function savePlanToStorage(plan: MealPlanWeek): void {
-  try {
-    safeStorage.setItem(`${STORAGE_KEY_PLAN}:${plan.weekStartDate}`, JSON.stringify(plan));
-  } catch {
-    // localStorage full or unavailable — ignore (UI ostaje u memoriji)
-  }
-}
-
-function loadPantryFromStorage(): Set<string> {
-  try {
-    const raw = safeStorage.getItem(STORAGE_KEY_PANTRY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function savePantryToStorage(keys: Set<string>): void {
-  try {
-    safeStorage.setItem(STORAGE_KEY_PANTRY, JSON.stringify(Array.from(keys)));
-  } catch {
-    // ignore
-  }
-}
+import * as mealPlanStorage from "@/services/mealPlanStorageService";
 
 export interface UseMealPlanResult {
   plan: MealPlanWeek | null;
@@ -78,101 +36,128 @@ export interface UseMealPlanResult {
 export function useMealPlan(): UseMealPlanResult {
   const { clientId } = useAuth();
   const { status } = useUserStatus(clientId);
-  const [plan, setPlan] = useState<MealPlanWeek | null>(null);
-  const [pantryKeys, setPantryKeys] = useState<Set<string>>(() => loadPantryFromStorage());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const [pantryKeys, setPantryKeys] = useState<Set<string>>(() => mealPlanStorage.loadPantry());
 
-  const weekStart = getMonday();
+  const weekStart = mealPlanStorage.getMonday();
+  const queryKey = ["meal-plan", weekStart] as const;
 
-  // Initial load
+  // ── Učitavanje plana iz storage-a ──────────────────────────────────────────
+  const planQuery = useQuery<MealPlanWeek | null>({
+    queryKey,
+    queryFn: () => mealPlanStorage.loadPlan(weekStart),
+    staleTime: Infinity, // keš je izvor istine; mutacije ga ažuriraju direktno
+  });
+
+  // ── Regeneracija plana (generator je čist; side effect = storage write) ───
+  const regenerateMutation = useMutation<MealPlanWeek | null>({
+    mutationFn: async () => {
+      if (!status) return null;
+
+      // Pull allergies + foodDislikes iz profila
+      let allergies: string[] = [];
+      let foodDislikes: string[] = [];
+      if (clientId) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("allergies, food_dislikes")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (data) {
+          allergies = data.allergies ?? [];
+          foodDislikes = data.food_dislikes ?? [];
+        }
+      }
+
+      const dailyTarget = {
+        calories: status.nutrition.currentCalorieTarget,
+        protein: status.nutrition.macros.proteinG,
+        carbs: status.nutrition.macros.carbsG,
+        fat: status.nutrition.macros.fatG,
+      };
+      // mealCount: 5 ako je >2200 kcal, 4 ako je >1600 kcal, inace 3
+      const mealCount = dailyTarget.calories > 2200 ? 5 : dailyTarget.calories > 1600 ? 4 : 3;
+
+      const newPlan = generateMealPlan({
+        dailyTarget,
+        mealCount,
+        allergies,
+        foodDislikes,
+        weekStartDate: weekStart,
+      });
+
+      mealPlanStorage.savePlan(newPlan);
+      return newPlan;
+    },
+    onSuccess: (newPlan) => {
+      if (newPlan) queryClient.setQueryData(queryKey, newPlan);
+    },
+  });
+
+  // ── Auto-generate ako nema sačuvanog plana za ovu nedelju ─────────────────
+  const shouldAutoGenerate =
+    planQuery.isSuccess &&
+    planQuery.data === null &&
+    !!clientId &&
+    !!status &&
+    !regenerateMutation.isPending;
+
   useEffect(() => {
-    const stored = loadPlanFromStorage(weekStart);
-    if (stored) {
-      setPlan(stored);
-      setIsLoading(false);
-      return;
-    }
-    // Auto-generate ako nema sačuvanog
-    if (clientId && status) {
-      void regenerate();
-    } else {
-      setIsLoading(false);
-    }
+    if (shouldAutoGenerate) regenerateMutation.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, status, weekStart]);
+  }, [shouldAutoGenerate]);
 
   const regenerate = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-    if (!status) {
-      setIsLoading(false);
-      return;
-    }
-    // Pull allergies + foodDislikes iz profila
-    let allergies: string[] = [];
-    let foodDislikes: string[] = [];
-    if (clientId) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("allergies, food_dislikes")
-        .eq("id", clientId)
-        .maybeSingle();
-      if (data) {
-        allergies = data.allergies ?? [];
-        foodDislikes = data.food_dislikes ?? [];
-      }
-    }
+    await regenerateMutation.mutateAsync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenerateMutation.mutateAsync]);
 
-    const dailyTarget = {
-      calories: status.nutrition.currentCalorieTarget,
-      protein: status.nutrition.macros.proteinG,
-      carbs: status.nutrition.macros.carbsG,
-      fat: status.nutrition.macros.fatG,
-    };
-    // mealCount: 5 ako je >2200 kcal, 4 ako je >1600 kcal, inace 3
-    const mealCount = dailyTarget.calories > 2200 ? 5 : dailyTarget.calories > 1600 ? 4 : 3;
-
-    const newPlan = generateMealPlan({
-      dailyTarget,
-      mealCount,
-      allergies,
-      foodDislikes,
-      weekStartDate: weekStart,
-    });
-
-    setPlan(newPlan);
-    savePlanToStorage(newPlan);
-    setIsLoading(false);
-  }, [clientId, status, weekStart]);
+  // ── Slot mutacije — write-through na storage + query keš ──────────────────
+  const mutatePlan = useCallback(
+    (transform: (prev: MealPlanWeek) => MealPlanWeek): void => {
+      queryClient.setQueryData<MealPlanWeek | null>(queryKey, prev => {
+        if (!prev) return prev;
+        const next = transform(prev);
+        mealPlanStorage.savePlan(next);
+        return next;
+      });
+    },
+    // queryKey je stabilan po weekStart-u
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, weekStart],
+  );
 
   const updateSlot = useCallback((slotIdx: number, updates: Partial<MealPlanSlot>): void => {
-    setPlan(prev => {
-      if (!prev) return prev;
-      const newSlots = prev.slots.map((s, i) => (i === slotIdx ? { ...s, ...updates } : s));
-      const next = { ...prev, slots: newSlots };
-      savePlanToStorage(next);
-      return next;
-    });
-  }, []);
+    mutatePlan(prev => ({
+      ...prev,
+      slots: prev.slots.map((s, i) => (i === slotIdx ? { ...s, ...updates } : s)),
+    }));
+  }, [mutatePlan]);
+
+  const confirmAll = useCallback((): void => {
+    mutatePlan(prev => ({
+      ...prev,
+      slots: prev.slots.map(s => ({ ...s, status: "confirmed" as const })),
+    }));
+  }, [mutatePlan]);
 
   const togglePantry = useCallback((key: string): void => {
     setPantryKeys(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      savePantryToStorage(next);
+      mealPlanStorage.savePantry(next);
       return next;
     });
   }, []);
 
-  const confirmAll = useCallback((): void => {
-    setPlan(prev => {
-      if (!prev) return prev;
-      const newSlots = prev.slots.map(s => ({ ...s, status: "confirmed" as const }));
-      const next = { ...prev, slots: newSlots };
-      savePlanToStorage(next);
-      return next;
-    });
-  }, []);
-
-  return { plan, isLoading, pantryKeys, regenerate, updateSlot, togglePantry, confirmAll };
+  return {
+    plan: planQuery.data ?? null,
+    isLoading: planQuery.isLoading || regenerateMutation.isPending,
+    pantryKeys,
+    regenerate,
+    updateSlot,
+    togglePantry,
+    confirmAll,
+  };
 }

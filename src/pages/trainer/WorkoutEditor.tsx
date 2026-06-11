@@ -1,33 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { fadeUp, IOS_SPRING, MOTION_EASE, MOTION_DURATION } from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
-import { ChevronDown, MoreHorizontal, Plus, Trash2, GripVertical } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { WorkoutSection, WorkoutExerciseItem, SECTION_TYPES } from "@/data/trainingMockData";
 import { MASTER_WORKOUTS } from "@/data/masterWorkouts";
 import type { ExerciseItem } from "@/hooks/useExercises";
 import { useWorkout, useUpsertWorkout } from "@/hooks/useWorkouts";
-import { useToast } from "@/hooks/use-toast";
+import { resolveEditorParams, useEditor } from "@/hooks/useEditor";
 import ExercisePicker from "./ExercisePicker";
+import { ExerciseRow } from "./WorkoutExerciseRow";
 
 const WorkoutEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
-  const { toast } = useToast();
   // `default-master-*` ID = master template iz hardkodirane liste. Save uvek pravi NOVI red.
-  const isDefault = !!id?.startsWith("default-");
-  const defaultSourceId = isDefault ? id!.replace(/^default-/, "") : null;
-  const isNew = id === "new" || !id || isDefault;
+  const { isDefault, defaultSourceId, isNew, queryId } = resolveEditorParams(id);
   const isAI = searchParams.get("ai") === "true";
-  const { data: existing } = useWorkout(isNew ? null : id);
+  const { data: existing } = useWorkout(queryId);
   const masterTemplate = isDefault ? MASTER_WORKOUTS.find((w) => w.id === defaultSourceId) : null;
   const upsertWorkoutMutation = useUpsertWorkout();
 
@@ -35,17 +33,29 @@ const WorkoutEditor = () => {
   const [description, setDescription] = useState("");
   const [sections, setSections] = useState<WorkoutSection[]>([]);
 
-  useEffect(() => {
-    if (existing) {
-      setName(existing.name);
-      setDescription(existing.description ?? "");
-      setSections(existing.sections);
-    } else if (masterTemplate) {
-      setName(masterTemplate.name);
-      setDescription(masterTemplate.description);
-      setSections(masterTemplate.sections);
-    }
-  }, [existing, masterTemplate]);
+  // Zajednički editor lifecycle — hidracija + save flow (vidi useEditor.ts)
+  const { handleSave } = useEditor({
+    existing,
+    master: masterTemplate,
+    hydrate: (src) => {
+      setName(src.name);
+      setDescription(src.description ?? "");
+      setSections(src.sections);
+    },
+    name,
+    fingerprint: { name, description, sections },
+    persist: () =>
+      upsertWorkoutMutation.mutateAsync({
+        id: isNew ? undefined : id,
+        name,
+        description: description || null,
+        sections,
+      }),
+    createdTitle: t("training.workoutCreated"),
+    savedTitle: t("training.workoutSaved"),
+    afterSave: () => navigate(-1),
+    isNew,
+  });
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [pickerTargetSection, setPickerTargetSection] = useState<string | null>(null);
@@ -130,28 +140,6 @@ const WorkoutEditor = () => {
     }
     setShowExercisePicker(false);
     setPickerTargetSection(null);
-  };
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      toast({ title: t("training.nameRequired"), variant: "destructive" });
-      return;
-    }
-    try {
-      await upsertWorkoutMutation.mutateAsync({
-        id: isNew ? undefined : id,
-        name,
-        description: description || null,
-        sections,
-      });
-      toast({ title: isNew ? t("training.workoutCreated") : t("training.workoutSaved") });
-      navigate(-1);
-    } catch (err) {
-      toast({
-        title: err instanceof Error ? err.message : "Save failed",
-        variant: "destructive",
-      });
-    }
   };
 
   if (showExercisePicker) {
@@ -454,92 +442,6 @@ const WorkoutEditor = () => {
           </>
         )}
     </div>
-  );
-};
-
-// ============================================================================
-// ExerciseRow — draggable pojedinačna vežba (Reorder.Item sa drag handle-om)
-// ============================================================================
-
-interface ExerciseRowProps {
-  ex: WorkoutExerciseItem;
-  exIdx: number;
-  sectionId: string;
-  onRemove: (sectionId: string, exerciseId: string) => void;
-  onUpdate: (sectionId: string, exerciseId: string, field: keyof WorkoutExerciseItem, value: WorkoutExerciseItem[keyof WorkoutExerciseItem]) => void;
-  t: (key: string) => string;
-}
-
-const ExerciseRow = ({ ex, exIdx, sectionId, onRemove, onUpdate, t }: ExerciseRowProps) => {
-  const dragControls = useDragControls();
-
-  return (
-    <Reorder.Item
-      value={ex}
-      dragListener={false}
-      dragControls={dragControls}
-      className="relative bg-card rounded-2xl card-shadow overflow-hidden touch-manipulation"
-      whileDrag={{
-        scale: 1.03,
-        boxShadow: "0 16px 40px -8px rgba(0,0,0,0.22)",
-        // z-modal (100) — kartica koja se drži uvek je iznad sibling-a
-        zIndex: 100,
-      }}
-      style={{ position: "relative" }}
-      transition={{ type: "spring", stiffness: 400, damping: 28 }}
-    >
-      {/* Row 1: drag handle + index + name + delete */}
-      <div className="flex items-center gap-2 px-3 pt-3">
-        <button
-          type="button"
-          onPointerDown={(e) => dragControls.start(e)}
-          className="min-w-8 min-h-8 flex items-center justify-center text-muted-foreground/40 active:text-muted-foreground active:bg-muted/40 rounded-md touch-none cursor-grab active:cursor-grabbing"
-          aria-label={t("training.dragReorder")}
-        >
-          <GripVertical size={16} aria-hidden />
-        </button>
-        <span className="text-caption-1 font-semibold text-muted-foreground tabular-nums w-5 shrink-0">
-          {exIdx + 1}
-        </span>
-        <p className="text-body font-medium text-foreground flex-1 truncate">{ex.name}</p>
-        <button
-          type="button"
-          onClick={() => onRemove(sectionId, ex.id)}
-          className="min-w-11 min-h-11 flex items-center justify-center rounded-full active:bg-destructive/10"
-          aria-label={t("common.delete")}
-        >
-          <Trash2 size={ICON_SIZE.xs} className="text-destructive/70" />
-        </button>
-      </div>
-
-      {/* Row 2: Sets / Reps / Weight / Rest — iOS pill grid */}
-      <div className="grid grid-cols-4 gap-1.5 px-3 pb-3 pt-1">
-        {[
-          { label: t("training.sets"), value: ex.sets, type: "number", field: "sets" as const, placeholder: "0" },
-          { label: t("training.reps"), value: ex.reps, type: "text", field: "reps" as const, placeholder: "8–12" },
-          { label: t("training.weight"), value: ex.weight, type: "text", field: "weight" as const, placeholder: "kg" },
-          { label: t("training.rest"), value: ex.rest, type: "text", field: "rest" as const, placeholder: "60s" },
-        ].map(({ label, value, type, field, placeholder }) => (
-          <div key={field} className="flex flex-col items-center gap-1">
-            <span className="text-caption-2 text-muted-foreground/80 font-medium">{label}</span>
-            <input
-              type={type}
-              value={value}
-              placeholder={placeholder}
-              onChange={(e) =>
-                onUpdate(
-                  sectionId,
-                  ex.id,
-                  field,
-                  type === "number" ? parseInt(e.target.value) || 0 : e.target.value
-                )
-              }
-              className="w-full bg-muted/50 rounded-lg text-footnote font-semibold text-foreground text-center tabular-nums py-2 px-1 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 placeholder:font-normal"
-            />
-          </div>
-        ))}
-      </div>
-    </Reorder.Item>
   );
 };
 
