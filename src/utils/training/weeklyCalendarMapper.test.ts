@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   mapQueueToWeek,
   getWeekStartDate,
-  WEEK_DAY_LABELS,
 } from './weeklyCalendarMapper';
 import type { MesocycleQueue, QueuedSession } from '@/types/training';
 
@@ -89,92 +88,123 @@ describe('getWeekStartDate', () => {
 });
 
 // ----------------------------------------------------------------------------
-// 3× nedeljno distribucija (Pon/Sre/Pet)
+// Iskreni model: completed po completedAt, next na danas, ostalo empty
 // ----------------------------------------------------------------------------
 
-describe('mapQueueToWeek — 3× nedeljno distribucija', () => {
+describe('mapQueueToWeek — iskreni model (pointer queue, bez lažnog Rest-a)', () => {
   const weekStart = new Date(2026, 3, 20);  // Pon 2026-04-20
-  const today = weekStart;
 
-  it('prikazuje training dane samo na Pon/Sre/Pet, ostale dane kao Rest', () => {
+  it('completed sesije se mapiraju po completedAt kalendarskom danu', () => {
     const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'next' }),      // Pon
-      makeSession('B1', daysFromMonday(weekStart, 2)),                           // Sre
-      makeSession('C1', daysFromMonday(weekStart, 4)),                           // Pet
+      makeSession('A1', daysFromMonday(weekStart, 0), {
+        status: 'completed',
+        completedAt: daysFromMonday(weekStart, 0),   // Pon
+      }),
+      makeSession('B1', daysFromMonday(weekStart, 2), {
+        status: 'completed',
+        completedAt: daysFromMonday(weekStart, 2),   // Sre
+      }),
+      makeSession('A2', daysFromMonday(weekStart, 4), { status: 'next' }),
     ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, today);
+    const friday = daysFromMonday(weekStart, 4);
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, friday);
 
-    expect(view.days).toHaveLength(7);
-    expect(view.days[0].kind.type).toBe('training');  // Pon
-    expect(view.days[1].kind.type).toBe('rest');       // Uto
-    expect(view.days[2].kind.type).toBe('training');   // Sre
-    expect(view.days[3].kind.type).toBe('rest');       // Čet
-    expect(view.days[4].kind.type).toBe('training');   // Pet
-    expect(view.days[5].kind.type).toBe('rest');       // Sub
-    expect(view.days[6].kind.type).toBe('rest');       // Ned
+    expect(view.days[0].kind.type).toBe('completed');  // Pon
+    expect(view.days[1].kind.type).toBe('empty');      // Uto — bez tvrdnje
+    expect(view.days[2].kind.type).toBe('completed');  // Sre
+    expect(view.days[3].kind.type).toBe('empty');      // Čet
+    expect(view.days[4].kind.type).toBe('next');       // Pet (danas)
+    expect(view.days[5].kind.type).toBe('empty');
+    expect(view.days[6].kind.type).toBe('empty');
+  });
+
+  it('sledeća sesija se prikazuje na DANAS čak i kad je scheduledDate stale (u prošlosti)', () => {
+    // Regresija za bug "svih 7 dana Rest dok NEXT SESSION postoji":
+    // scheduledDate iz queueBuilder-a je u prošloj nedelji, ali queue pointer
+    // kaže da je A1 sledeća — strip mora da je prikaže na danas.
+    const staleDate = daysFromMonday(weekStart, -10);
+    const sessions = [makeSession('A1', staleDate, { status: 'next' })];
+    const wednesday = daysFromMonday(weekStart, 2);
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, wednesday);
+
+    expect(view.days[2].kind.type).toBe('next');
+    if (view.days[2].kind.type === 'next') {
+      expect(view.days[2].kind.session.sessionId).toBe('A1');
+    }
+    // Nijedan dan nije lažno markiran kao trening osim danas
+    expect(view.days.filter(d => d.kind.type !== 'empty')).toHaveLength(1);
+  });
+
+  it('kad je današnja sesija završena, danas prikazuje completed (ne next)', () => {
+    const wednesday = daysFromMonday(weekStart, 2);
+    const sessions = [
+      makeSession('A1', wednesday, { status: 'completed', completedAt: wednesday }),
+      makeSession('B1', daysFromMonday(weekStart, 4), { status: 'pending' }),
+    ];
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, wednesday);
+
+    expect(view.days[2].kind.type).toBe('completed');
+    // nextUp i dalje postoji (B1), ali nije prikazan u strip-u
+    expect(view.nextUp?.session.sessionId).toBe('B1');
+    expect(view.nextUp?.dayIndex).toBeNull();
+  });
+
+  it('completed sesija bez completedAt se ne mapira ni na jedan dan', () => {
+    const sessions = [
+      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed', completedAt: null }),
+    ];
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
+    expect(view.days.every(d => d.kind.type !== 'completed')).toBe(true);
   });
 });
 
 // ----------------------------------------------------------------------------
-// 4× nedeljno distribucija (Pon/Uto/Čet/Pet)
+// nextUp — sledeća sesija po queue redosledu
 // ----------------------------------------------------------------------------
 
-describe('mapQueueToWeek — 4× nedeljno distribucija', () => {
+describe('mapQueueToWeek — nextUp', () => {
   const weekStart = new Date(2026, 3, 20);
-  const today = weekStart;
 
-  it('prikazuje training dane na Pon/Uto/Čet/Pet', () => {
+  it('vraca prvu non-completed sesiju po queue redosledu', () => {
     const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'next' }),
-      makeSession('B1', daysFromMonday(weekStart, 1)),
-      makeSession('C1', daysFromMonday(weekStart, 3)),
-      makeSession('D1', daysFromMonday(weekStart, 4)),
+      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed', completedAt: daysFromMonday(weekStart, 0) }),
+      makeSession('B1', daysFromMonday(weekStart, 2), { status: 'next' }),
+      makeSession('C1', daysFromMonday(weekStart, 4), { status: 'pending' }),
     ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, today);
+    const tuesday = daysFromMonday(weekStart, 1);
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, tuesday);
 
-    expect(view.days.map(d => d.kind.type)).toEqual([
-      'training', 'training', 'rest',
-      'training', 'training', 'rest', 'rest',
-    ]);
+    expect(view.nextUp?.session.sessionId).toBe('B1');
+    expect(view.nextUp?.dayIndex).toBe(1);  // prikazana na danas (Uto)
+  });
+
+  it('vraca null ako su sve sesije completed', () => {
+    const sessions = [
+      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed', completedAt: daysFromMonday(weekStart, 0) }),
+      makeSession('B1', daysFromMonday(weekStart, 2), { status: 'completed', completedAt: daysFromMonday(weekStart, 2) }),
+    ];
+    const sunday = daysFromMonday(weekStart, 6);
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, sunday);
+    expect(view.nextUp).toBeNull();
+  });
+
+  it('dayIndex je null kad today nije u prikazanoj nedelji', () => {
+    const sessions = [makeSession('A1', daysFromMonday(weekStart, 0), { status: 'next' })];
+    const nextWeekDay = daysFromMonday(weekStart, 9);
+    const view = mapQueueToWeek(makeQueue(sessions), weekStart, nextWeekDay);
+    expect(view.nextUp?.session.sessionId).toBe('A1');
+    expect(view.nextUp?.dayIndex).toBeNull();
+    // I nijedan dan u strip-u ne tvrdi trening
+    expect(view.days.every(d => d.kind.type === 'empty')).toBe(true);
   });
 });
 
 // ----------------------------------------------------------------------------
-// 5× nedeljno distribucija (Pon/Uto/Sre/Pet/Sub)
+// Day flags i dayNumber
 // ----------------------------------------------------------------------------
 
-describe('mapQueueToWeek — 5× nedeljno distribucija', () => {
+describe('mapQueueToWeek — day flags i dayNumber', () => {
   const weekStart = new Date(2026, 3, 20);
-  const today = weekStart;
-
-  it('prikazuje training dane na Pon/Uto/Sre/Pet/Sub', () => {
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'next' }),
-      makeSession('B1', daysFromMonday(weekStart, 1)),
-      makeSession('C1', daysFromMonday(weekStart, 2)),
-      makeSession('D1', daysFromMonday(weekStart, 4)),
-      makeSession('E1', daysFromMonday(weekStart, 5)),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, today);
-
-    expect(view.days.map(d => d.kind.type)).toEqual([
-      'training', 'training', 'training',
-      'rest', 'training', 'training', 'rest',
-    ]);
-  });
-});
-
-// ----------------------------------------------------------------------------
-// Day labels i dayNumber
-// ----------------------------------------------------------------------------
-
-describe('mapQueueToWeek — day labels i dayNumber', () => {
-  const weekStart = new Date(2026, 3, 20);
-
-  it('dayLabel redosled: Pon, Uto, Sre, Čet, Pet, Sub, Ned', () => {
-    const view = mapQueueToWeek(makeQueue([]), weekStart, weekStart);
-    expect(view.days.map(d => d.dayLabel)).toEqual(WEEK_DAY_LABELS);
-  });
 
   it('dayNumber reflektuje dan u mesecu (20-26)', () => {
     const view = mapQueueToWeek(makeQueue([]), weekStart, weekStart);
@@ -196,86 +226,6 @@ describe('mapQueueToWeek — day labels i dayNumber', () => {
     expect(view.days[1].isPast).toBe(true);   // Uto
     expect(view.days[2].isPast).toBe(false);  // Sre (today)
     expect(view.days[3].isPast).toBe(false);  // Čet
-  });
-});
-
-// ----------------------------------------------------------------------------
-// nextUp — sledeća sesija
-// ----------------------------------------------------------------------------
-
-describe('mapQueueToWeek — nextUp', () => {
-  const weekStart = new Date(2026, 3, 20);
-
-  it('vraca prvu non-completed sesiju >= today', () => {
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed' }),
-      makeSession('B1', daysFromMonday(weekStart, 2), { status: 'next' }),
-      makeSession('C1', daysFromMonday(weekStart, 4), { status: 'pending' }),
-    ];
-    const tuesday = daysFromMonday(weekStart, 1);
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, tuesday);
-
-    expect(view.nextUp?.session.sessionId).toBe('B1');
-    expect(view.nextUp?.dayIndex).toBe(2);  // Sre
-  });
-
-  it('preskace completed sesije i vraca sledecu', () => {
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed' }),
-      makeSession('B1', daysFromMonday(weekStart, 2), { status: 'completed' }),
-      makeSession('C1', daysFromMonday(weekStart, 4), { status: 'next' }),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
-    expect(view.nextUp?.session.sessionId).toBe('C1');
-  });
-
-  it('vraca null ako su sve sesije completed', () => {
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 0), { status: 'completed' }),
-      makeSession('B1', daysFromMonday(weekStart, 2), { status: 'completed' }),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
-    expect(view.nextUp).toBeNull();
-  });
-
-  it('nextUp.dayIndex je null ako je sesija izvan trenutne nedelje', () => {
-    const nextWeek = daysFromMonday(weekStart, 10);  // sledeca nedelja
-    const sessions = [
-      makeSession('A1', nextWeek, { status: 'next' }),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
-    expect(view.nextUp?.session.sessionId).toBe('A1');
-    expect(view.nextUp?.dayIndex).toBeNull();
-  });
-});
-
-// ----------------------------------------------------------------------------
-// Shift indikator — orange dot
-// ----------------------------------------------------------------------------
-
-describe('mapQueueToWeek — shift indikator', () => {
-  const weekStart = new Date(2026, 3, 20);
-
-  it('isShifted=true kad session ima shiftedFrom != null', () => {
-    const prevWeek = daysFromMonday(weekStart, -3);
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 2), {
-        status: 'next',
-        shiftedFrom: prevWeek,
-      }),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
-    expect(view.days[2].isShifted).toBe(true);
-  });
-
-  it('isShifted=false kad session.shiftedFrom je null ili undefined', () => {
-    const sessions = [
-      makeSession('A1', daysFromMonday(weekStart, 2), { shiftedFrom: null }),
-      makeSession('B1', daysFromMonday(weekStart, 4)),
-    ];
-    const view = mapQueueToWeek(makeQueue(sessions), weekStart, weekStart);
-    expect(view.days[2].isShifted).toBe(false);
-    expect(view.days[4].isShifted).toBe(false);
   });
 });
 

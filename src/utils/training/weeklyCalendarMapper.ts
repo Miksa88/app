@@ -1,16 +1,23 @@
 // ============================================================================
-// weeklyCalendarMapper — pure funkcija za hibridni kalendar/queue UI
-// Spec: Faza 4.3 (Korekcija Faze 4 — Hibridni model)
+// weeklyCalendarMapper — pure funkcija za iskreni kalendar/queue UI
+// Spec: 01_TRAINING_FLOW_MASTER.md Pravilo 5 ("bez krivice" UI)
 // ============================================================================
 //
-// Hibridni model:
-//   - Queue (pointer A1→B1→A2→...) je BIOLOŠKI izvor istine za redosled sesija
-//   - scheduledDate na QueuedSession je KALENDARSKI sloj (koji dan u nedelji)
-//   - WeeklyCalendar UI rekonstruiše 7-dnevni prozor (Pon-Ned) iz queue-a,
-//     sa Rest danima na praznim slotovima
+// Queue model je POINTER-BASED — nema zakazanih dana u nedelji. Stari hibridni
+// model je crtao "Rest" na svim danima čiji scheduledDate nije pogođen, što je
+// bila kontradikcija (NEXT SESSION postoji, a strip kaže da je cela nedelja
+// odmor). scheduledDate iz queueBuilder-a je interna analytics vrednost, ne
+// kalendarska istina.
+//
+// Iskreni model (redizajn 2026-06-11):
+//   - 'completed' — sesija je STVARNO odrađena tog dana (match po completedAt)
+//   - 'next'      — sledeća sesija iz queue-a, prikazana na DANAS (jedini dan
+//                   za koji možemo iskreno reći "ovo je sledeće")
+//   - 'empty'     — bez tvrdnje; ne znamo da li je Rest jer queue nema fiksne
+//                   dane. Anti-anxiety: NEMA "missed", NEMA lažnog "Rest".
 //
 // Pure funkcija: ulaz su queue + datumi, izlaz je WeeklyCalendarView.
-// NE piše u DB. Shift detekcija je odvojena (sessionResolver.ts).
+// NE piše u DB.
 // ============================================================================
 
 import type { MesocycleQueue, QueuedSession } from '@/types/training';
@@ -19,31 +26,22 @@ import type { MesocycleQueue, QueuedSession } from '@/types/training';
 // Tipovi
 // ----------------------------------------------------------------------------
 
-export type WeekDayLabel = 'Pon' | 'Uto' | 'Sre' | 'Čet' | 'Pet' | 'Sub' | 'Ned';
-
-export const WEEK_DAY_LABELS: WeekDayLabel[] = [
-  'Pon', 'Uto', 'Sre', 'Čet', 'Pet', 'Sub', 'Ned',
-];
-
 export type WeekDayKind =
-  | { type: 'training'; session: QueuedSession }
-  | { type: 'rest' };
+  | { type: 'completed'; session: QueuedSession }
+  | { type: 'next'; session: QueuedSession }
+  | { type: 'empty' };
 
 export interface WeekDayView {
-  /** Kalendarski datum (lokalna TZ, 00:00). */
+  /** Kalendarski datum (lokalna TZ, 00:00). UI formira day label iz locale-a. */
   date: Date;
-  /** Srpska skraćenica (Pon-Ned). */
-  dayLabel: WeekDayLabel;
   /** Dan u mesecu (1-31). */
   dayNumber: number;
   /** Da li je ovo današnji dan. */
   isToday: boolean;
   /** Da li je ovaj dan u prošlosti (< today). */
   isPast: boolean;
-  /** Trening sesija ako postoji slot za ovaj dan, inače Rest. */
+  /** Završena sesija / sledeća sesija (samo danas) / bez tvrdnje. */
   kind: WeekDayKind;
-  /** Diskretan orange dot indikator kad je sesija shift-ovana iz prošlog datuma. */
-  isShifted: boolean;
 }
 
 export interface WeeklyCalendarView {
@@ -51,8 +49,9 @@ export interface WeeklyCalendarView {
   weekStartDate: Date;
   /** Tačno 7 ćelija (Pon-Ned). */
   days: WeekDayView[];
-  /** Sledeća sesija koju treba odraditi (status !== 'completed', date >= today).
-   *  Može biti izvan trenutne nedelje. */
+  /** Sledeća sesija iz queue-a (prva non-completed po queue redosledu).
+   *  dayIndex je indeks današnjeg dana ako je sesija prikazana u strip-u,
+   *  inače null (npr. današnja sesija je već završena). */
   nextUp: { session: QueuedSession; dayIndex: number | null } | null;
 }
 
@@ -98,59 +97,51 @@ export function mapQueueToWeek(
   const todayNormalized = new Date(today);
   todayNormalized.setHours(0, 0, 0, 0);
 
+  // Sledeća sesija = prva non-completed po QUEUE redosledu (pointer istina),
+  // ne po datumima — queue nema zakazane dane.
+  const nextSession = queue.sessions.find(s => s.status !== 'completed') ?? null;
+
   const days: WeekDayView[] = [];
+  let nextShownDayIndex: number | null = null;
 
   for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
     const cellDate = new Date(weekStart);
     cellDate.setDate(weekStart.getDate() + dayIdx);
 
-    // Pronađi sesiju čiji scheduledDate pada na ovaj kalendarski dan
-    const matchedSession = queue.sessions.find(s =>
-      sameCalendarDay(new Date(s.scheduledDate), cellDate),
-    );
-
     const isToday = sameCalendarDay(cellDate, todayNormalized);
     const isPast = cellDate < todayNormalized;
 
+    // Završena sesija tog kalendarskog dana — jedina kalendarska ISTINA
+    // koju queue nosi (completedAt je fakt iz istorije).
+    const completedSession = queue.sessions.find(s =>
+      s.status === 'completed' &&
+      s.completedAt != null &&
+      sameCalendarDay(new Date(s.completedAt), cellDate),
+    );
+
+    let kind: WeekDayKind;
+    if (completedSession) {
+      kind = { type: 'completed', session: completedSession };
+    } else if (isToday && nextSession) {
+      // Sledeća sesija se prikazuje samo na DANAS — ne izmišljamo budući raspored.
+      kind = { type: 'next', session: nextSession };
+      nextShownDayIndex = dayIdx;
+    } else {
+      kind = { type: 'empty' };
+    }
+
     days.push({
       date: cellDate,
-      dayLabel: WEEK_DAY_LABELS[dayIdx],
       dayNumber: cellDate.getDate(),
       isToday,
       isPast,
-      kind: matchedSession
-        ? { type: 'training', session: matchedSession }
-        : { type: 'rest' },
-      isShifted: matchedSession?.shiftedFrom != null,
+      kind,
     });
-  }
-
-  // nextUp: prva non-completed sesija čiji scheduledDate >= today
-  // (može biti izvan trenutne nedelje, npr. u sledećoj nedelji)
-  const nextSession = queue.sessions.find(s => {
-    if (s.status === 'completed') return false;
-    const d = new Date(s.scheduledDate);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() >= todayNormalized.getTime();
-  });
-
-  let nextUp: WeeklyCalendarView['nextUp'] = null;
-  if (nextSession) {
-    const nextDate = new Date(nextSession.scheduledDate);
-    nextDate.setHours(0, 0, 0, 0);
-
-    // dayIndex u trenutnoj nedelji (0-6) ili null ako je izvan
-    const diffDays = Math.floor(
-      (nextDate.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    const dayIndex = diffDays >= 0 && diffDays < 7 ? diffDays : null;
-
-    nextUp = { session: nextSession, dayIndex };
   }
 
   return {
     weekStartDate: weekStart,
     days,
-    nextUp,
+    nextUp: nextSession ? { session: nextSession, dayIndex: nextShownDayIndex } : null,
   };
 }

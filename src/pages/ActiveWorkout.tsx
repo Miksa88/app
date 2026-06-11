@@ -49,7 +49,7 @@ const ActiveWorkout = () => {
   const { data: session, isLoading, error } = useActiveWorkoutSession();
   const completeSet = useCompleteSet({ silent: true });
   const finishWorkout = useFinishWorkout();
-  const { status } = useUserStatus(clientId);
+  const { status, refetch: refetchStatus } = useUserStatus(clientId);
 
   const slots = useMemo<ActiveWorkoutSlot[]>(() => session?.slots ?? [], [session]);
 
@@ -63,6 +63,7 @@ const ActiveWorkout = () => {
     resting,
     restTime,
     fatigueDialogOpen,
+    fatigueDialogResolved,
     showExitConfirm,
     showSwapSheet,
   } = state;
@@ -82,8 +83,11 @@ const ActiveWorkout = () => {
   // Pre-workout fatigue dialog — pokazuje se jednom dnevno pri ulasku.
   // Ako je već odgovorila danas, dialog se ne otvara (signal važi do sledeceg
   // process-workout-completion-a koji čisti preWorkoutFatigue flag).
+  // P0 bugfix: `fatigueDialogResolved` blokira reopen-petlju — posle odgovora
+  // ili X dismiss-a effect ne sme ponovo da otvori dijalog u istom mount-u,
+  // čak i dok `status.bio` u kešu još nije osvežen.
   useEffect(() => {
-    if (!status?.bio || fatigueDialogOpen) return;
+    if (!status?.bio || fatigueDialogOpen || fatigueDialogResolved) return;
     const answeredAt = status.bio.preWorkoutFatigueAnsweredAt;
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -91,7 +95,7 @@ const ActiveWorkout = () => {
       ? new Date(answeredAt) >= startOfToday
       : false;
     if (!answeredToday) dispatch({ type: "SET_FATIGUE_DIALOG", open: true });
-  }, [status?.bio, fatigueDialogOpen, dispatch]);
+  }, [status?.bio, fatigueDialogOpen, fatigueDialogResolved, dispatch]);
 
   // Povrede iz profila — surgical swap (useProfileInjuries hook, Task 1.1)
   const { data: profileInjuries = [] } = useProfileInjuries(clientId);
@@ -418,8 +422,14 @@ const ActiveWorkout = () => {
           onOpenChange={(open) => dispatch({ type: "SET_FATIGUE_DIALOG", open })}
           clientId={clientId}
           onAnswered={() => {
-            // signal je sačuvan — programGenerator/DPO će ga primeniti pri
-            // sledećoj sesiji rebuild-a (queueAdvance / refresh).
+            // signal se snima u pozadini — programGenerator/DPO će ga
+            // primeniti pri sledećoj sesiji rebuild-a (queueAdvance / refresh).
+          }}
+          onSaved={() => {
+            // Osveži user status posle uspešnog snimanja da
+            // preWorkoutFatigueAnsweredAt bude ažuran (useUserStatus nije
+            // React Query — manuelni refetch umesto invalidacije).
+            void refetchStatus();
           }}
         />
       )}

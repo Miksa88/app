@@ -122,9 +122,11 @@ export const tenantConfig: TenantConfig = {
     metabolicModules: true,
     cycleTracking: true,
     domsDetection: true,
-    // HealthKit nije realno povezan (placeholder UI) — ali gašenje menja vidljivi
-    // UI (Profile red, HealthPage, onboarding korak), pa default ostaje true.
-    healthKit: true,
+    // HealthKit nije realno povezan (placeholder UI) — MVP_PRESET preporuka:
+    // "better no number than wrong number". Default OFF dok integracija ne
+    // postane realna; gašenje sakriva Profile red, HealthPage, onboarding
+    // korak i Steps prsten na Home.
+    healthKit: false,
     // Pause/Freeze (MVP_PRESET gap #1) — default ON za sve tenante.
     clientPause: true,
     // Klijent-facing zamena vežbi (MVP_PRESET gap #2) — default ON.

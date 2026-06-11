@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import GradientButton from "@/components/GradientButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import iphoneMockup from "@/assets/iphone-mockup.png";
+import PhoneHeroMockup from "@/components/login/PhoneHeroMockup";
 import { Eye, EyeOff, X, Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
-import { MOTION_DURATION, staggerContainer, staggerItem, IOS_SPRING, TAP_SCALE } from "@/lib/motion";
+import { MOTION_DURATION, MOTION_EASE, staggerContainer, staggerItem, TAP_SCALE, shouldReduceMotion } from "@/lib/motion";
 import { signInWithPassword } from "@/services/authService";
 import { getProfileRole } from "@/services/profileService";
 
@@ -26,6 +26,17 @@ const Login = () => {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const haptic = useHaptic();
+
+  // iOS drawer enter/exit — tween sa Apple UIKit krivom (cubic-bezier(0.32,0.72,0,1)),
+  // ≤300ms, uz prefers-reduced-motion fallback (instant, bez slide-a).
+  const reduceMotion = shouldReduceMotion();
+  const sheetTransition = reduceMotion
+    ? { duration: 0.01 }
+    : { duration: MOTION_DURATION.base, ease: MOTION_EASE.iosDefault };
+  // Swap social ↔ email forma unutar sheet-a — brz cross-fade
+  const sheetSwapTransition = reduceMotion
+    ? { duration: 0.01 }
+    : { duration: MOTION_DURATION.fast, ease: MOTION_EASE.iosDefault };
 
   // Route posle uspešnog login-a — po profile.role iz Supabase-a (ne po email stringu)
   const routeByRole = async (userId: string) => {
@@ -89,15 +100,9 @@ const Login = () => {
         animate="show"
         className="w-full max-w-sm flex flex-col items-center flex-1 justify-center"
       >
-        <motion.div
-          variants={staggerItem}
-          className="relative w-[220px] h-[440px] mb-4"
-        >
-          <img
-            alt="App preview"
-            src={iphoneMockup}
-            className="w-full h-full object-contain drop-shadow-2xl"
-          />
+        {/* Hero mockup — čist DOM (theme-synced mini Home ekran), bez slike */}
+        <motion.div variants={staggerItem} className="mb-6">
+          <PhoneHeroMockup />
         </motion.div>
 
         <motion.h1
@@ -125,12 +130,13 @@ const Login = () => {
 
         <p className="text-center text-subhead text-muted-foreground">
           {t("login.alreadyHaveAccount") || "Already have an account?"}{" "}
-          <button
+          <motion.button
+            whileTap={{ scale: TAP_SCALE.secondary }}
             onClick={() => setShowSignIn(true)}
-            className="text-primary font-semibold"
+            className="text-primary font-semibold min-h-11 px-2"
           >
             {t("login.signInLink") || "Sign In"}
-          </button>
+          </motion.button>
         </p>
       </motion.div>
 
@@ -148,13 +154,18 @@ const Login = () => {
               onClick={() => { setShowSignIn(false); setShowEmailForm(false); }}
             />
 
-            {/* Bottom sheet */}
+            {/* Bottom sheet — sidran uz dno VIEWPORTA (inset-x-0 bottom-0 + dvh cap),
+                tako da su svi CTA vidljivi na 375×812 bez skrola van sheet-a.
+                dvh umesto vh: iOS Safari toolbar ne sme da gurne sadržaj ispod fold-a. */}
             <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={IOS_SPRING.snappy}
-              className="fixed bottom-0 left-0 right-0 z-sheet bg-card rounded-t-3xl px-6 pt-6 pb-safe-cta shadow-2xl max-h-[85vh] overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("login.signInTitle") || "Sign In"}
+              initial={reduceMotion ? { opacity: 0 } : { y: "100%" }}
+              animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { y: "100%" }}
+              transition={sheetTransition}
+              className="fixed inset-x-0 bottom-0 z-sheet bg-card rounded-t-3xl px-6 pt-6 pb-safe-cta shadow-elevated max-h-[85dvh] overflow-y-auto overscroll-contain"
             >
               {/* Handle bar */}
               <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-5" />
@@ -164,13 +175,14 @@ const Login = () => {
                 <h2 className="text-title-2 font-bold text-foreground">
                   {t("login.signInTitle") || "Sign In"}
                 </h2>
-                <button
+                <motion.button
+                  whileTap={{ scale: TAP_SCALE.icon }}
                   onClick={() => { setShowSignIn(false); setShowEmailForm(false); }}
                   className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
                   aria-label={t("common.close")}
                 >
                   <X size={16} className="text-muted-foreground" />
-                </button>
+                </motion.button>
               </div>
 
               <AnimatePresence mode="wait">
@@ -180,6 +192,7 @@ const Login = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    transition={sheetSwapTransition}
                     className="space-y-3"
                   >
                     {/* Apple button - original black like Apple's guidelines */}
@@ -222,9 +235,10 @@ const Login = () => {
                 ) : (
                   <motion.form
                     key="email-form"
-                    initial={{ opacity: 0, x: 20 }}
+                    initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -20 }}
+                    transition={sheetSwapTransition}
                     onSubmit={handleSubmit}
                     className="space-y-4"
                   >
@@ -295,13 +309,14 @@ const Login = () => {
                       {isLoading ? t("common.loading") : (t("login.signIn") || "Sign In")}
                     </GradientButton>
 
-                    <button
+                    <motion.button
+                      whileTap={{ scale: TAP_SCALE.secondary }}
                       type="button"
                       onClick={() => setShowEmailForm(false)}
-                      className="w-full text-center text-subhead text-muted-foreground py-2"
+                      className="w-full text-center text-subhead text-muted-foreground py-2 min-h-11"
                     >
                       ← {t("login.back") || "Back"}
-                    </button>
+                    </motion.button>
                   </motion.form>
                 )}
               </AnimatePresence>

@@ -35,17 +35,28 @@ import { isPauseExpired } from '@/services/clientPauseService';
 import { WeeklyCalendar } from '@/components/queue/WeeklyCalendar';
 import { SyncEventBanner } from '@/components/queue/SyncEventBanner';
 import { canSwapNextTwoSessions } from '@/utils/training/sessionResolver';
-import { fadeUp } from '@/lib/motion';
+import { fadeUp, MOTION_DURATION, type MotionPreset } from '@/lib/motion';
 import { AlertBanner } from '@/components/ui/alert-banner';
 import { MotionCard } from '@/components/ui/motion-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PageTitle } from '@/components/PageTitle';
+
+// Brži page-enter (item 8): fadeUp sa duration cap-om na MOTION_DURATION.base
+// — sadržaj vidljiv odmah po dolasku podataka, bez dugog fade-a.
+const quickFade = (delay = 0): MotionPreset => {
+  const preset = fadeUp(delay);
+  const duration = typeof preset.transition.duration === 'number'
+    ? Math.min(preset.transition.duration, MOTION_DURATION.base)
+    : MOTION_DURATION.base;
+  return { ...preset, transition: { ...preset.transition, duration } };
+};
 
 const Gym = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { clientId } = useAuth();
-  const { status } = useUserStatus(clientId);
-  const { session: nextSession, isMesocycleComplete } = useNextSession(clientId);
+  const { status, isLoading: statusLoading } = useUserStatus(clientId);
+  const { session: nextSession, isLoading: sessionLoading, isMesocycleComplete } = useNextSession(clientId);
   const { queue } = useMesocycleQueue(clientId);
   const swapMutation = useSwapNextSessions(clientId, { t });
   const [trialExpired] = useState(false);
@@ -103,12 +114,12 @@ const Gym = () => {
 
       <div className="px-5 space-y-3">
         {/* Sync banner (luteal/deload/illness/...) */}
-        <motion.div {...fadeUp(0.08)}>
+        <motion.div {...quickFade(0.05)}>
           <SyncEventBanner variant="inline" />
         </motion.div>
 
-        {/* Weekly Calendar — hibridni model (Faza 4.3) */}
-        <MotionCard {...fadeUp(0.1)} className="p-4">
+        {/* Weekly Calendar — iskreni queue model */}
+        <MotionCard {...quickFade(0.08)} className="p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-caption-1 text-muted-foreground uppercase tracking-wider">
               {t('gym.weeklyLabel')}
@@ -128,18 +139,26 @@ const Gym = () => {
           <WeeklyCalendar />
         </MotionCard>
 
+        {/* Skeleton za session karticu — sadržaj ne sme biti nevidljiv dok se
+            queue učitava (item 8: ~2s praznine bez skeletona) */}
+        {(statusLoading || sessionLoading) && !nextSession && !isMesocycleComplete && (
+          <div aria-busy="true" aria-label={t('a11y.loading')} className="space-y-3">
+            <Skeleton className="h-56 rounded-2xl bg-muted/40" />
+          </div>
+        )}
+
         {/* Mesocycle complete state */}
         {isMesocycleComplete && (
-          <motion.div {...fadeUp(0.12)}>
-            <AlertBanner tone="success" icon={PartyPopper} title="Mezociklus završen!">
-              Sledeći mezociklus se generiše automatski sa novim ciljevima.
+          <motion.div {...quickFade(0.1)}>
+            <AlertBanner tone="success" icon={PartyPopper} title={t('gym.mesocycleCompleteTitle')}>
+              {t('gym.mesocycleCompleteBody')}
             </AlertBanner>
           </motion.div>
         )}
 
         {/* Next session card — premium gradient hero */}
         {nextSession && !isMesocycleComplete && (
-          <MotionCard {...fadeUp(0.15)} className="relative overflow-hidden p-5">
+          <MotionCard {...quickFade(0.1)} className="relative overflow-hidden p-5">
             {/* Gradient top accent strip */}
             <div className="absolute top-0 left-0 right-0 h-1 gradient-primary" aria-hidden="true" />
 
@@ -162,13 +181,13 @@ const Gym = () => {
               {status?.training.isInDeload && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-info/10 text-info text-caption-1 font-medium">
                   <Timer size={ICON_SIZE.xs} aria-hidden="true" />
-                  Deload
+                  {t('gym.deloadBadge')}
                 </span>
               )}
               {status?.training.isInReturnFromBreak && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-warning/10 text-warning-foreground text-caption-1 font-medium">
                   <Zap size={ICON_SIZE.xs} aria-hidden="true" />
-                  Return from Break
+                  {t('gym.returnFromBreakBadge')}
                 </span>
               )}
             </div>
@@ -198,8 +217,8 @@ const Gym = () => {
           </MotionCard>
         )}
 
-        {/* Empty state */}
-        {!nextSession && !isMesocycleComplete && (
+        {/* Empty state — tek kad učitavanje završi (ne flash-uje tokom loada) */}
+        {!statusLoading && !sessionLoading && !nextSession && !isMesocycleComplete && (
           <EmptyState
             title={t("gym.emptyQueueTitle")}
             description={t("gym.emptyQueueDesc")}

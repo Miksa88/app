@@ -30,7 +30,9 @@ describe('tenantConfig (default = fitbyivana full)', () => {
     expect(isFeatureEnabled('metabolicModules')).toBe(true);
     expect(isFeatureEnabled('cycleTracking')).toBe(true);
     expect(isFeatureEnabled('domsDetection')).toBe(true);
-    expect(isFeatureEnabled('healthKit')).toBe(true);
+    // healthKit je placeholder bez realne integracije — MVP_PRESET preporuka
+    // "better no number than wrong number" → default OFF.
+    expect(isFeatureEnabled('healthKit')).toBe(false);
   });
 });
 

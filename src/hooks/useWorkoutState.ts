@@ -32,6 +32,13 @@ export interface WorkoutState {
   restTime: number;
   /** Dijalozi */
   fatigueDialogOpen: boolean;
+  /**
+   * Fatigue dijalog je rešen u ovom mount-u (odgovor ILI X dismiss).
+   * P0 bugfix: bez ovoga auto-open effect u ActiveWorkout ponovo otvara
+   * dijalog čim se zatvori, jer se `status.bio` ne osveži sinhrono — korisnica
+   * ostaje zaglavljena u petlji. Resolved blokira reopen do sledećeg mount-a.
+   */
+  fatigueDialogResolved: boolean;
   showExitConfirm: boolean;
   showSwapSheet: boolean;
 }
@@ -74,6 +81,7 @@ const initialState: WorkoutState = {
   resting: false,
   restTime: 0,
   fatigueDialogOpen: false,
+  fatigueDialogResolved: false,
   showExitConfirm: false,
   showSwapSheet: false,
 };
@@ -169,7 +177,11 @@ function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutStat
       };
 
     case "SET_FATIGUE_DIALOG":
-      return { ...state, fatigueDialogOpen: action.open };
+      // Svako zatvaranje (odgovor ili X) markira resolved — dijalog se
+      // auto-otvara najviše jednom po mount-u.
+      return action.open
+        ? { ...state, fatigueDialogOpen: true }
+        : { ...state, fatigueDialogOpen: false, fatigueDialogResolved: true };
 
     case "SET_EXIT_CONFIRM":
       return { ...state, showExitConfirm: action.open };

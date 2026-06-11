@@ -157,6 +157,39 @@ vi.mock("@/hooks/useActiveWorkoutSession", () => ({
   useActiveWorkoutSession: () => SESSION_HOOK_FIXTURE,
 }));
 
+// useUserStatus — mutable fixture; status kontroliše fatigue dialog effect.
+// refetch je mock koji NE menja status (simulira stale keš — upravo scenario
+// P0 reopen-loop buga).
+const mockRefetchStatus = vi.fn(() => Promise.resolve());
+const USER_STATUS_FIXTURE: {
+  status: unknown;
+  isLoading: boolean;
+  error: null;
+  refetch: () => Promise<void>;
+} = {
+  status: null,
+  isLoading: false,
+  error: null,
+  refetch: mockRefetchStatus,
+};
+
+vi.mock("@/hooks/useUserStatus", () => ({
+  useUserStatus: () => USER_STATUS_FIXTURE,
+}));
+
+const mockSaveFatigueSignal = vi.fn<
+  (clientId: string, fatigued: boolean) => Promise<void>
+>(() => Promise.resolve());
+vi.mock("@/services/biofeedbackService", () => ({
+  saveFatigueSignal: (clientId: string, fatigued: boolean) =>
+    mockSaveFatigueSignal(clientId, fatigued),
+}));
+
+/** UserStatus stub — samo bio deo koji fatigue effect čita */
+function statusWithAnsweredAt(answeredAt: string | null) {
+  return { bio: { preWorkoutFatigueAnsweredAt: answeredAt } };
+}
+
 // ----------------------------------------------------------------------------
 // Helper
 // ----------------------------------------------------------------------------
@@ -188,6 +221,10 @@ describe("ActiveWorkout (IT-9 wiring)", () => {
     mockCompleteSet.mockReset();
     mockFinishWorkout.mockReset();
     mockHaptic.mockReset();
+    mockSaveFatigueSignal.mockReset();
+    mockSaveFatigueSignal.mockImplementation(() => Promise.resolve());
+    mockRefetchStatus.mockReset();
+    USER_STATUS_FIXTURE.status = null;
   });
 
   afterEach(() => {
@@ -250,5 +287,85 @@ describe("ActiveWorkout (IT-9 wiring)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // --------------------------------------------------------------------------
+  // PreWorkoutFatigueDialog reopen-loop (P0 bugfix)
+  //
+  // Bug: posle odgovora (ili X dismiss-a) status keš ostaje stale
+  // (preWorkoutFatigueAnsweredAt nije danas) → auto-open effect je odmah
+  // ponovo otvarao dijalog. Fix: fatigueDialogResolved u reducer-u.
+  // --------------------------------------------------------------------------
+
+  describe("PreWorkoutFatigueDialog reopen-loop (P0)", () => {
+    const DIALOG_TITLE = "How are you feeling?";
+
+    it("odgovor zatvara dijalog i NE reopen-uje (status keš ostaje stale)", async () => {
+      USER_STATUS_FIXTURE.status = statusWithAnsweredAt(null);
+      await renderActiveWorkout();
+
+      // Dijalog se auto-otvorio (nije odgovoreno danas)
+      expect(screen.getByText(DIALOG_TITLE)).toBeInTheDocument();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /Rested — standard workout/ }),
+      );
+
+      // Optimistički zatvoren — i NE sme da se ponovo otvori iako je
+      // status i dalje stale (refetch mock ne menja status)
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+      expect(mockSaveFatigueSignal).toHaveBeenCalledWith("client-a", false);
+
+      // Re-render ciklusi (effect bi bez fix-a reopen-ovao odmah)
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+
+      // Posle uspešnog save-a se osvežava user status (stale keš fix)
+      expect(mockRefetchStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it("X (dismiss) zatvara dijalog i NE reopen-uje", async () => {
+      USER_STATUS_FIXTURE.status = statusWithAnsweredAt(null);
+      await renderActiveWorkout();
+
+      expect(screen.getByText(DIALOG_TITLE)).toBeInTheDocument();
+
+      // Radix DialogContent X dugme (sr-only "Close")
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+      expect(mockSaveFatigueSignal).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+    });
+
+    it("sledeći mount (novi dan, answeredAt nije danas) opet pita", async () => {
+      USER_STATUS_FIXTURE.status = statusWithAnsweredAt(null);
+      const first = await renderActiveWorkout();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: /Rested — standard workout/ }),
+      );
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+
+      first.unmount();
+
+      // Novi mount — answeredAt od juče (nije danas) → dijalog se opet otvara
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      USER_STATUS_FIXTURE.status = statusWithAnsweredAt(yesterday);
+      await renderActiveWorkout();
+
+      expect(screen.getByText(DIALOG_TITLE)).toBeInTheDocument();
+    });
+
+    it("answeredAt danas → dijalog se uopšte ne otvara", async () => {
+      USER_STATUS_FIXTURE.status = statusWithAnsweredAt(
+        new Date().toISOString(),
+      );
+      await renderActiveWorkout();
+
+      expect(screen.queryByText(DIALOG_TITLE)).not.toBeInTheDocument();
+    });
   });
 });

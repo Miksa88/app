@@ -2,8 +2,10 @@
 // PreWorkoutFatigueDialog — component testovi
 // ============================================================================
 //
-// Pokriva: render pitanja, izbor "Umorna"/"Odmorna" → saveFatigueSignal +
-// onAnswered callback + zatvaranje, i error putanju (toast, dijalog ostaje).
+// Pokriva: render pitanja (i18n preko LanguageProvider, default EN),
+// optimističko zatvaranje (klik → onAnswered + onOpenChange(false) ODMAH,
+// save u pozadini), onSaved posle uspešnog snimanja, error putanju
+// (toast, dijalog je već zatvoren) i guard protiv duplog tap-a.
 // ============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -14,6 +16,8 @@ import {
   waitFor,
   cleanup,
 } from "@testing-library/react";
+
+import { LanguageProvider } from "@/contexts/LanguageContext";
 
 vi.mock("framer-motion", () => import("@/test/mocks/framer-motion"));
 
@@ -39,17 +43,21 @@ import PreWorkoutFatigueDialog from "./PreWorkoutFatigueDialog";
 function renderDialog(open = true) {
   const onOpenChange = vi.fn();
   const onAnswered = vi.fn();
+  const onSaved = vi.fn();
 
   render(
-    <PreWorkoutFatigueDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      clientId="client-1"
-      onAnswered={onAnswered}
-    />,
+    <LanguageProvider>
+      <PreWorkoutFatigueDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        clientId="client-1"
+        onAnswered={onAnswered}
+        onSaved={onSaved}
+      />
+    </LanguageProvider>,
   );
 
-  return { onOpenChange, onAnswered };
+  return { onOpenChange, onAnswered, onSaved };
 }
 
 describe("PreWorkoutFatigueDialog", () => {
@@ -63,71 +71,73 @@ describe("PreWorkoutFatigueDialog", () => {
     cleanup();
   });
 
-  it("open=true renderuje pitanje i obe opcije", () => {
+  it("open=true renderuje pitanje i obe opcije (i18n, default EN)", () => {
     renderDialog();
 
-    expect(screen.getByText("Kako se osećaš?")).toBeInTheDocument();
+    expect(screen.getByText("How are you feeling?")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Umorna — lakši trening danas/ }),
+      screen.getByRole("button", { name: /Tired — lighter workout today/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Odmorna — standardni trening/ }),
+      screen.getByRole("button", { name: /Rested — standard workout/ }),
     ).toBeInTheDocument();
   });
 
   it("open=false ne renderuje sadržaj", () => {
     renderDialog(false);
-    expect(screen.queryByText("Kako se osećaš?")).not.toBeInTheDocument();
+    expect(screen.queryByText("How are you feeling?")).not.toBeInTheDocument();
   });
 
-  it("'Umorna' snima fatigued=true, zove onAnswered(true) i zatvara dijalog", async () => {
-    const { onAnswered, onOpenChange } = renderDialog();
+  it("'Umorna' zatvara ODMAH (optimistički), snima fatigued=true u pozadini i zove onSaved", async () => {
+    const { onAnswered, onOpenChange, onSaved } = renderDialog();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Umorna — lakši trening danas/ }),
+      screen.getByRole("button", { name: /Tired — lighter workout today/ }),
     );
 
-    await waitFor(() => expect(onAnswered).toHaveBeenCalledWith(true));
-    expect(saveFatigueSignalMock).toHaveBeenCalledWith("client-1", true);
+    // Optimistički: callback-ovi se zovu sinhrono, ne čeka se mreža
+    expect(onAnswered).toHaveBeenCalledWith(true);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(saveFatigueSignalMock).toHaveBeenCalledWith("client-1", true);
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
   it("'Odmorna' snima fatigued=false i zove onAnswered(false)", async () => {
-    const { onAnswered, onOpenChange } = renderDialog();
+    const { onAnswered, onOpenChange, onSaved } = renderDialog();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Odmorna — standardni trening/ }),
+      screen.getByRole("button", { name: /Rested — standard workout/ }),
     );
 
-    await waitFor(() => expect(onAnswered).toHaveBeenCalledWith(false));
-    expect(saveFatigueSignalMock).toHaveBeenCalledWith("client-1", false);
+    expect(onAnswered).toHaveBeenCalledWith(false);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(saveFatigueSignalMock).toHaveBeenCalledWith("client-1", false);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
   });
 
-  it("greška pri snimanju: toast.error, dijalog ostaje otvoren, onAnswered se NE zove", async () => {
+  it("greška pri snimanju: dijalog je već zatvoren (optimistički), toast.error, onSaved se NE zove", async () => {
     saveFatigueSignalMock.mockImplementation(() =>
       Promise.reject(new Error("Mreža pukla")),
     );
-    const { onAnswered, onOpenChange } = renderDialog();
+    const { onAnswered, onOpenChange, onSaved } = renderDialog();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Umorna — lakši trening danas/ }),
+      screen.getByRole("button", { name: /Tired — lighter workout today/ }),
     );
+
+    // Optimistički UX: zatvaranje i onAnswered se dese i pre greške
+    expect(onAnswered).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
 
     await waitFor(() =>
       expect(toastErrorMock).toHaveBeenCalledWith("Mreža pukla"),
     );
-    expect(onAnswered).not.toHaveBeenCalled();
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
-    // Posle greške dugmad su ponovo aktivna (submitting reset)
-    expect(
-      screen.getByRole("button", { name: /Umorna — lakši trening danas/ }),
-    ).toBeEnabled();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it("dupli klik ne snima dvaput (submitting guard)", async () => {
-    // Drži promise pending dok ne kliknemo drugi put
+  it("dupli klik ne snima dvaput (answered guard)", async () => {
     let resolveSave: () => void = () => {};
     saveFatigueSignalMock.mockImplementation(
       () => new Promise<void>((res) => (resolveSave = res)),
@@ -135,7 +145,7 @@ describe("PreWorkoutFatigueDialog", () => {
     const { onAnswered } = renderDialog();
 
     const btn = screen.getByRole("button", {
-      name: /Umorna — lakši trening danas/,
+      name: /Tired — lighter workout today/,
     });
     fireEvent.click(btn);
     fireEvent.click(btn); // drugi klik dok prvi traje

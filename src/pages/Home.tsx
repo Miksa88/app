@@ -30,6 +30,7 @@ import { useDailyTotals } from "@/hooks/useDailyTotals";
 import { useMealPlan } from "@/hooks/useMealPlan";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import { fadeUp, MOTION_DURATION } from "@/lib/motion";
+import { isFeatureEnabled } from "@/tenant.config";
 import { selectNextMeal } from "@/utils/nutrition/nextMeal";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -74,8 +75,12 @@ const Home = () => {
   const calorieRemaining = Math.max(0, calorieGoal - calorieCurrent);
   // dailySteps — placeholder dok HealthKit/Google Fit ne bude wired (X-10).
   // Trenutno čitamo iz daily_check_ins.daily_steps preko status (nije još
-  // surfaced u status). Default 0 pokazuje "treba uneti" CTA.
+  // surfaced u status).
   const dailyStepsToday = 0;
+  // MVP_PRESET: "better no number than wrong number" — Steps prsten se
+  // prikazuje samo kad je healthKit feature uključen I postoji realan podatak.
+  // Mrtva "0 / 10,000" nula podriva poverenje u ostale brojeve.
+  const showStepsRing = isFeatureEnabled("healthKit") && dailyStepsToday > 0;
 
   // Card 2: Današnji trening
   const todayWorkout = nextSession ?? null;
@@ -138,7 +143,7 @@ const Home = () => {
               {unreadCount > 0 && (
                 <span
                   className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-caption-2 font-bold flex items-center justify-center ring-2 ring-background-secondary"
-                  aria-label={`${unreadCount} novih poruka`}
+                  aria-label={t("home.unreadMessagesAria").replace("{n}", String(unreadCount))}
                 >
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
@@ -201,7 +206,9 @@ const Home = () => {
           <h2 id="card-today-title" className="text-caption-1 text-muted-foreground uppercase tracking-wider font-medium mb-4">
             {t("home.todayLabel")}
           </h2>
-          <div className="grid grid-cols-2 gap-4">
+          {/* Kad Steps prsten nije vidljiv, Calories stoji sama — veći ring,
+              levo poravnato, bez praznog drugog stupca. */}
+          <div className={showStepsRing ? "grid grid-cols-2 gap-4" : "flex"}>
             <StatRing
               label={t("home.calories")}
               value={calorieCurrent}
@@ -209,16 +216,19 @@ const Home = () => {
               suffix={`/ ${calorieGoal} kcal`}
               footnote={t("home.caloriesRemainingShort").replace("{n}", String(calorieRemaining))}
               tone="primary"
+              size={showStepsRing ? 72 : 88}
             />
-            <StatRing
-              label={t("home.steps")}
-              value={dailyStepsToday}
-              total={10000}
-              suffix="/ 10,000"
-              footnote={dailyStepsToday > 0 ? t("home.stepsGoodJob") : t("home.stepsTarget")}
-              tone="info"
-              icon={Footprints}
-            />
+            {showStepsRing && (
+              <StatRing
+                label={t("home.steps")}
+                value={dailyStepsToday}
+                total={10000}
+                suffix="/ 10,000"
+                footnote={dailyStepsToday > 0 ? t("home.stepsGoodJob") : t("home.stepsTarget")}
+                tone="info"
+                icon={Footprints}
+              />
+            )}
           </div>
         </motion.section>
 
@@ -333,7 +343,9 @@ const Home = () => {
                   <Utensils size={24} className="text-warning" aria-hidden="true" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-headline font-semibold text-foreground truncate">
+                  {/* line-clamp-2 umesto truncate — duga imena obroka
+                      ("Oatmeal with Banana & ...") se prelamaju u 2 reda */}
+                  <p className="text-headline font-semibold text-foreground line-clamp-2">
                     {nextMeal.name || t("home.mealDefault")}
                   </p>
                   <p className="text-footnote text-muted-foreground tabular-nums">
@@ -392,11 +404,13 @@ interface StatRingProps {
   footnote?: string;
   tone: "primary" | "info";
   icon?: LucideIcon;
+  /** Prečnik prstena u px — 72 default; 88 kad metrika stoji sama u kartici. */
+  size?: number;
 }
 
-const StatRing = ({ label, value, total, suffix, footnote, tone, icon: Icon }: StatRingProps) => {
+const StatRing = ({ label, value, total, suffix, footnote, tone, icon: Icon, size = 72 }: StatRingProps) => {
   const pct = total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0;
-  const radius = 30;
+  const radius = size / 2 - 6;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (pct / 100) * circumference;
 
@@ -405,8 +419,8 @@ const StatRing = ({ label, value, total, suffix, footnote, tone, icon: Icon }: S
 
   return (
     <div className="flex items-center gap-3">
-      <div className="relative w-[72px] h-[72px] shrink-0">
-        <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full -rotate-90">
           {tone === "primary" && (
             <defs>
               <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -416,16 +430,16 @@ const StatRing = ({ label, value, total, suffix, footnote, tone, icon: Icon }: S
             </defs>
           )}
           <circle
-            cx="36"
-            cy="36"
+            cx={size / 2}
+            cy={size / 2}
             r={radius}
             fill="none"
             stroke="hsl(var(--muted))"
             strokeWidth="6"
           />
           <circle
-            cx="36"
-            cy="36"
+            cx={size / 2}
+            cy={size / 2}
             r={radius}
             fill="none"
             stroke={strokeColor}

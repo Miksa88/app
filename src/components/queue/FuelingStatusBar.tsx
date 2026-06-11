@@ -22,6 +22,7 @@ import { motion } from 'framer-motion';
 import { MOTION_DURATION, MOTION_EASE, IOS_SPRING } from '@/lib/motion';
 import { Sparkles, Coffee, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useUserStatus } from '@/hooks/useUserStatus';
 import { getDailyTotals, type DailyTotals } from '@/services/mealLogService';
 import { AlertBanner } from '@/components/ui/alert-banner';
@@ -35,6 +36,7 @@ interface FuelingStatusBarProps {
 }
 
 export const FuelingStatusBar = ({ className = '', compact = false }: FuelingStatusBarProps) => {
+  const { t } = useLanguage();
   const { clientId } = useAuth();
   const { status, isLoading } = useUserStatus(clientId);
   const [totals, setTotals] = useState<DailyTotals | null>(null);
@@ -69,6 +71,12 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
   const allDone = mealsLogged >= TOTAL_MEAL_SLOTS;
   const hasNoise = totals.liquidCalories > status.nutrition.currentCalorieTarget * 0.10;
 
+  // Lokalizovan aria opis za dots (item 4: bez hardkodovanog sr teksta)
+  const dotsAria = t('food.fueling.dotsAria')
+    .replace('{logged}', String(mealsLogged))
+    .replace('{skipped}', String(mealsSkipped))
+    .replace('{remaining}', String(mealsRemaining));
+
   if (compact) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
@@ -76,6 +84,7 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
           logged={mealsLogged}
           skipped={mealsSkipped}
           remaining={mealsRemaining}
+          ariaLabel={dotsAria}
         />
         <span className="text-caption-1 text-muted-foreground">
           {mealsLogged}/{TOTAL_MEAL_SLOTS}
@@ -89,7 +98,7 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Sparkles size={16} className="text-primary" aria-hidden="true" />
-          <span className="text-subhead font-semibold text-foreground">Fueling status</span>
+          <span className="text-subhead font-semibold text-foreground">{t('food.fueling.title')}</span>
         </div>
         {allDone && (
           <motion.span
@@ -99,29 +108,38 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
             className="text-caption-1 text-success font-semibold inline-flex items-center gap-1"
           >
             <Check size={ICON_SIZE.xs} strokeWidth={3} aria-hidden="true" />
-            Sve odrađeno
+            {t('food.fueling.allDone')}
           </motion.span>
         )}
       </div>
 
       <div className="flex items-center gap-5">
-        <FuelingRing progress={progressPct} logged={mealsLogged} total={TOTAL_MEAL_SLOTS} allDone={allDone} />
+        <FuelingRing
+          progress={progressPct}
+          logged={mealsLogged}
+          total={TOTAL_MEAL_SLOTS}
+          allDone={allDone}
+          unitLabel={t('food.fueling.mealsUnit')}
+        />
         <div className="flex-1 flex flex-col gap-3">
-          <FuelingDots logged={mealsLogged} skipped={mealsSkipped} remaining={mealsRemaining} size="lg" />
+          <FuelingDots logged={mealsLogged} skipped={mealsSkipped} remaining={mealsRemaining} size="lg" ariaLabel={dotsAria} />
           <div className="space-y-1 text-caption-1">
             {mealsLogged > 0 && (
               <p className="text-muted-foreground">
-                <span className="text-success font-semibold">●</span> {mealsLogged} logovano
+                <span className="text-success font-semibold">●</span>{' '}
+                {t('food.fueling.loggedCount').replace('{n}', String(mealsLogged))}
               </p>
             )}
             {mealsSkipped > 0 && (
               <p className="text-muted-foreground">
-                <span className="text-muted-foreground/60">◐</span> {mealsSkipped} preskočeno
+                <span className="text-muted-foreground/60">◐</span>{' '}
+                {t('food.fueling.skippedCount').replace('{n}', String(mealsSkipped))}
               </p>
             )}
             {mealsRemaining > 0 && (
               <p className="text-muted-foreground">
-                <span className="text-muted-foreground/40">○</span> {mealsRemaining} preostalo
+                <span className="text-muted-foreground/40">○</span>{' '}
+                {t('food.fueling.remainingCount').replace('{n}', String(mealsRemaining))}
               </p>
             )}
           </div>
@@ -135,7 +153,7 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
           className="mt-4"
         >
           <AlertBanner tone="warning" icon={Coffee}>
-            Tečne kalorije visoke — pre sledećeg unosa popij vodu.
+            {t('food.fueling.liquidWarning')}
           </AlertBanner>
         </motion.div>
       )}
@@ -152,6 +170,8 @@ interface FuelingRingProps {
   logged: number;
   total: number;
   allDone: boolean;
+  /** Lokalizovana jedinica ispod brojača ("obroka" / "meals") */
+  unitLabel: string;
 }
 
 const RING_SIZE = 104;
@@ -159,7 +179,7 @@ const RING_STROKE = 10;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-const FuelingRing = ({ progress, logged, total, allDone }: FuelingRingProps) => {
+const FuelingRing = ({ progress, logged, total, allDone, unitLabel }: FuelingRingProps) => {
   const dashOffset = RING_CIRCUMFERENCE * (1 - progress / 100);
 
   return (
@@ -207,7 +227,7 @@ const FuelingRing = ({ progress, logged, total, allDone }: FuelingRingProps) => 
           <span className="text-muted-foreground">/{total}</span>
         </span>
         <span className="text-caption-2 text-muted-foreground uppercase tracking-wider mt-0.5">
-          obroka
+          {unitLabel}
         </span>
       </div>
     </div>
@@ -223,12 +243,14 @@ interface FuelingDotsProps {
   skipped: number;
   remaining: number;
   size?: 'sm' | 'lg';
+  /** Lokalizovan aria opis stanja obroka */
+  ariaLabel: string;
 }
 
-const FuelingDots = ({ logged, skipped, remaining, size = 'sm' }: FuelingDotsProps) => {
+const FuelingDots = ({ logged, skipped, remaining, size = 'sm', ariaLabel }: FuelingDotsProps) => {
   const dotSize = size === 'lg' ? 'w-3.5 h-3.5' : 'w-3 h-3';
   return (
-    <div className="flex items-center gap-2" role="img" aria-label={`${logged} obroka odrađeno, ${skipped} preskočeno, ${remaining} preostalo`}>
+    <div className="flex items-center gap-2" role="img" aria-label={ariaLabel}>
       {Array.from({ length: logged }).map((_, i) => (
         <motion.div
           key={`l${i}`}

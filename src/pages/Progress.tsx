@@ -27,6 +27,7 @@ import { useState, useMemo } from 'react';
 import {
   Dumbbell, Trophy, Lock, Plus, Calendar,
   Activity, Sparkles, RotateCcw, Moon, Droplets, Thermometer, RefreshCcw,
+  TrendingUp, Ruler, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import CircularProgress from '@/components/CircularProgress';
@@ -123,6 +124,40 @@ const Progress = () => {
             label={t('progress.totalPlanned') ?? 'Total planned'}
           />
         </motion.div>
+
+        {/* Empty state za nove korisnice — smireno objašnjenje šta će se ovde
+            pojaviti (težina trend, mere, fotke) + CTA ka prvom check-inu.
+            Bez gamification pritiska, bez praznine. */}
+        {completedSessions.length === 0 && (
+          <MotionCard {...fadeUp(0.12)} className="p-5">
+            <h3 className="text-body font-semibold text-foreground">
+              {t('progress.emptyJourneyTitle')}
+            </h3>
+            <p className="text-footnote text-muted-foreground mt-1 leading-snug">
+              {t('progress.emptyJourneyDesc')}
+            </p>
+            <div className="mt-4 space-y-3">
+              {([
+                { icon: TrendingUp, key: 'progress.emptyJourneyWeight' },
+                { icon: Ruler, key: 'progress.emptyJourneyMeasurements' },
+                { icon: Camera, key: 'progress.emptyJourneyPhotos' },
+              ] as const).map(({ icon: Icon, key }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-muted/40 flex items-center justify-center shrink-0">
+                    <Icon size={16} className="text-primary" aria-hidden="true" />
+                  </div>
+                  <p className="text-footnote text-muted-foreground">{t(key)}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => navigate('/weekly-check-in')}
+              className="mt-4 w-full min-h-11 rounded-2xl gradient-primary text-primary-foreground text-callout font-semibold flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background-secondary"
+            >
+              {t('progress.emptyJourneyCta')}
+            </button>
+          </MotionCard>
+        )}
 
         {/* Tabs */}
         <motion.div {...fadeUp(0.15)}>
