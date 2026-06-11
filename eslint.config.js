@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", ".claude", "playwright-report", "test-results", "graphify-out"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -52,6 +52,52 @@ export default tseslint.config(
           message:
             "Avoid raw `gradient-primary` on <button>. Use <Button variant=\"cta\"> or <MotionButton variant=\"cta\">.",
         },
+      ],
+    },
+  },
+  {
+    // FAZA 2.1 (PLAN_RADA_WHITELABEL.md) — pages/components NIKAD direktno na
+    // Supabase. Sav data-access ide kroz src/services + hookove.
+    files: ["src/pages/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/integrations/supabase/client",
+              message:
+                "Direktan supabase import je zabranjen u pages/components. Koristi servis iz src/services + React Query hook.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // FAZA 2.1 — console.* zabranjen u src; koristi logger (src/lib/logger.ts).
+    // dev → konzola, prod → Sentry za error. Izuzeci: logger sam, sentry init, testovi.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/lib/logger.ts",
+      "src/lib/sentry.ts",
+      "src/**/*.test.{ts,tsx}",
+      "src/test/**",
+    ],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    // FAZA 2.1 — tvrdi limit veličine fajla: drži refaktor Faze 1 (nijedan
+    // fajl >700 linija) da ne regresira. Aspiraciona granica za nove fajlove
+    // je ~400 — dekompozuj pre nego što priđeš limitu.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/integrations/supabase/types.ts"],
+    rules: {
+      "max-lines": [
+        "error",
+        { max: 700, skipBlankLines: false, skipComments: false },
       ],
     },
   },
