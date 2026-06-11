@@ -36,6 +36,7 @@ import WorkoutTopBar from "@/components/workout/WorkoutTopBar";
 import { toast } from "sonner";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { useProfileInjuries } from "@/hooks/useProfile";
+import { isFeatureEnabled } from "@/tenant.config";
 
 const ActiveWorkout = () => {
   const navigate = useNavigate();
@@ -383,7 +384,9 @@ const ActiveWorkout = () => {
         />
       )}
 
-      {clientId && (
+      {/* White-label (Faza 3.2): pre-workout fatigue dialog samo ako tenant
+          koristi biofeedback pravila */}
+      {clientId && isFeatureEnabled("biofeedbackRules") && (
         <PreWorkoutFatigueDialog
           open={fatigueDialogOpen}
           onOpenChange={(open) => dispatch({ type: "SET_FATIGUE_DIALOG", open })}

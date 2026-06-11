@@ -5,6 +5,10 @@ import { registerAllSubscribers } from "@/services/subscribers";
 import { initSentry } from "@/lib/sentry";
 import { initNative } from "@/lib/native";
 import { registerServiceWorker } from "@/lib/webPush";
+import { applyTenantTheme } from "@/tenant.config";
+
+// White-label (Faza 3.1): tenant brend boje + document.title pre prvog rendera
+applyTenantTheme();
 
 // Sentry init — mora pre bilo kakvog render-a da uhvati crash-eve rano
 initSentry();

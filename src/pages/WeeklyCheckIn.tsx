@@ -55,6 +55,7 @@ import {
   DEFAULT_UNITS,
 } from '@/services/userPreferencesService';
 import { useRecentWeightAvg } from '@/hooks/useRecentWeightAvg';
+import { isFeatureEnabled } from '@/tenant.config';
 
 // ============================================================================
 // Constants
@@ -390,6 +391,9 @@ export default function WeeklyCheckIn() {
             </p>
           </div>
 
+          {/* White-label (Faza 3.2): biofeedback slideri (§4.3) samo ako tenant
+              koristi biofeedback pravila — sleep/stres ostaju (lifestyle adjustments) */}
+          {isFeatureEnabled('biofeedbackRules') && (<>
           {/* Libido score slider 1-10 — pocetnici.md §4.3 */}
           <div className="flex flex-col gap-2 mt-5">
             <div className="flex items-center justify-between">
@@ -443,6 +447,7 @@ export default function WeeklyCheckIn() {
               {t('weeklyCheckIn.fields.waterRetentionHint')}
             </p>
           </div>
+          </>)}
 
           {/* Identity score — segmented 1–5 */}
           <div className="flex flex-col gap-2 mt-5">

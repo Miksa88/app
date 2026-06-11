@@ -45,6 +45,7 @@ import {
 } from "@/hooks/useUserPreferences";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/services/userPreferencesService";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
+import { tenantConfig, isFeatureEnabled } from "@/tenant.config";
 
 type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis" | "units";
 
@@ -239,7 +240,10 @@ const Profile = () => {
   ];
 
   const goalsTrackingItems = [
-    { icon: Heart, label: t("profile.appleHealth"), sub: healthConnected ? t("profile.connected") : t("profile.notConnected"), page: "health" as SettingsPage },
+    // White-label (Faza 3.3): Apple Health red samo ako tenant koristi healthKit
+    ...(isFeatureEnabled("healthKit")
+      ? [{ icon: Heart, label: t("profile.appleHealth"), sub: healthConnected ? t("profile.connected") : t("profile.notConnected"), page: "health" as SettingsPage }]
+      : []),
     { icon: Target, label: t("profile.myGoals"), sub: goals.map((g) => t(goalKeys[g] || g)).join(", ") || t("profile.notSet"), page: "goals" as SettingsPage },
     { icon: Salad, label: t("profile.allergies"), sub: allergies.join(", ") || t("profile.none"), page: "allergies" as SettingsPage },
     { icon: Bell, label: t("profile.notifications"), sub: Object.values(notifs).some(Boolean) ? t("profile.enabled") : t("profile.disabled"), page: "notifications" as SettingsPage },
@@ -247,22 +251,24 @@ const Profile = () => {
     { icon: Scale, label: t("profile.weightHistory"), sub: "", page: "weightHistory" as SettingsPage },
   ];
 
+  // White-label (Faza 3.1): kontakt/social linkovi iz tenant configa.
+  // Prazna vrednost u configu → red ostaje vidljiv ali bez akcije (kao do sada).
   const supportLegalItems = [
-    { icon: Mail, label: t("profile.supportEmail"), page: null as SettingsPage },
+    { icon: Mail, label: t("profile.supportEmail"), page: null as SettingsPage, href: tenantConfig.contact.email ? `mailto:${tenantConfig.contact.email}` : undefined },
     { icon: FileText, label: t("profile.termsConditions"), page: null as SettingsPage },
     { icon: Shield, label: t("profile.privacyPolicy"), page: null as SettingsPage },
   ];
 
   const followUsItems = [
-    { icon: Instagram, label: t("profile.instagram"), page: null as SettingsPage },
-    { icon: Music, label: t("profile.tiktok"), page: null as SettingsPage },
+    { icon: Instagram, label: t("profile.instagram"), page: null as SettingsPage, href: tenantConfig.contact.instagram || undefined },
+    { icon: Music, label: t("profile.tiktok"), page: null as SettingsPage, href: tenantConfig.contact.tiktok || undefined },
   ];
 
-  const renderSettingsGroup = (items: Array<{ icon: React.ComponentType<LucideProps>; label: string; sub?: string; page: SettingsPage }>) => (
+  const renderSettingsGroup = (items: Array<{ icon: React.ComponentType<LucideProps>; label: string; sub?: string; page: SettingsPage; href?: string }>) => (
     <Card className="overflow-hidden">
-      {items.map(({ icon: Icon, label, sub, page }, i) => (
+      {items.map(({ icon: Icon, label, sub, page, href }, i) => (
         <button key={label}
-          onClick={() => { if (page === "analysis") { navigate("/analysis"); } else if (page) { setActivePage(page); } }}
+          onClick={() => { if (page === "analysis") { navigate("/analysis"); } else if (page) { setActivePage(page); } else if (href) { window.open(href, "_blank", "noopener,noreferrer"); } }}
           className={`w-full flex items-center gap-4 px-4 py-3 text-left ios-row-h ${i < items.length - 1 ? "border-b border-border" : ""}`}>
           <Icon size={20} className="text-muted-foreground" />
           <div className="flex-1 min-w-0">

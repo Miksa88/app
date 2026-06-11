@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from "react";
 import { safeStorage } from "@/lib/safeStorage";
+import { tenantConfig } from "@/tenant.config";
 import sr from "@/locales/sr.json";
 import en from "@/locales/en.json";
 
@@ -30,7 +31,8 @@ export const useLanguage = () => useContext(LanguageContext);
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = safeStorage.getItem("app-language") as Language | null;
-    return saved || "en";
+    // White-label: default jezik dolazi iz tenant configa (Faza 3.1)
+    return saved || tenantConfig.defaultLanguage;
   });
 
   const setLanguage = (lang: Language) => {

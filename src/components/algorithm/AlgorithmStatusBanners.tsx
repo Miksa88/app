@@ -9,6 +9,7 @@
 
 import { Calendar, Flame, Sparkles, Footprints, Coffee, Heart, Droplets, ShieldCheck, BatteryLow } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { isFeatureEnabled } from '@/tenant.config';
 
 export interface AlgorithmStatusInput {
   // Mezociklus
@@ -82,7 +83,9 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
 
   // Re-entry posle pauze — najviši prioritet kad je aktivan
   // (smanjene težine, lakša nedelja, kalorije malo niže za fat loss zaštitu)
-  if (props.isInReturnFromBreak) {
+  // White-label (Faza 3.2): tenant feature flagovi gase pojedinačne banere.
+  // Default config (sve true) → nula promene ponašanja.
+  if (isFeatureEnabled('mesocycles') && props.isInReturnFromBreak) {
     banners.push(
       <Banner
         key="returnFromBreak"
@@ -96,7 +99,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // Diet Break — najviši prioritet (2 nedelje pauze od dijete)
-  if (props.dietBreakActive) {
+  if (isFeatureEnabled('dietBreak') && props.dietBreakActive) {
     banners.push(
       <Banner
         key="dietBreak"
@@ -110,7 +113,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // Mezociklus — samo Overreach i Deload se prikazuju (ostalo ne treba banner)
-  const phase = describeMezoPhase(props);
+  const phase = isFeatureEnabled('mesocycles') ? describeMezoPhase(props) : null;
   if (phase === 'overreach') {
     banners.push(
       <Banner
@@ -136,7 +139,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // Refeed dan
-  if (props.activeRefeedDay) {
+  if (isFeatureEnabled('emergencyRefeed') && props.activeRefeedDay) {
     banners.push(
       <Banner
         key="refeed"
@@ -151,7 +154,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
 
   // Smart Cut pauziran (libido pad signališe preagresivan deficit)
   // pocetnici.md §4.3: libido <4/10 → pauseSmartCut, povratak na maintenance
-  if (props.smartCutPaused) {
+  if (isFeatureEnabled('smartCut') && props.smartCutPaused) {
     banners.push(
       <Banner
         key="smartCutPaused"
@@ -162,7 +165,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
         motionProps={motionProps}
       />
     );
-  } else if (props.currentSmartCutStep > 0) {
+  } else if (isFeatureEnabled('smartCut') && props.currentSmartCutStep > 0) {
     // Smart Cut — samo prikazujemo da se nešto promenilo, bez tehničkih termina
     banners.push(
       <Banner
@@ -180,7 +183,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // Water retention alert (pocetnici.md §4.3 — kortizol/so/alkohol driven)
-  if (props.waterRetentionAlert) {
+  if (isFeatureEnabled('biofeedbackRules') && props.waterRetentionAlert) {
     banners.push(
       <Banner
         key="waterRetention"
@@ -194,7 +197,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // DOMS chronic (2+ "Teško" zaredom — volumen je smanjen za 1 seriju)
-  if (props.chronicHardWorkouts) {
+  if (isFeatureEnabled('domsDetection') && props.chronicHardWorkouts) {
     banners.push(
       <Banner
         key="chronicHard"
@@ -208,7 +211,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   }
 
   // Pre-workout fatigue ("Umorna" pre treninga → MAINTAIN sledeću sesiju)
-  if (props.preWorkoutFatigue) {
+  if (isFeatureEnabled('biofeedbackRules') && props.preWorkoutFatigue) {
     banners.push(
       <Banner
         key="preWorkoutFatigue"
@@ -224,7 +227,7 @@ export default function AlgorithmStatusBanners(props: AlgorithmStatusInput) {
   // NEAT — child-friendly call to action
   const isOnCut =
     props.targetMode === 'deficit' || props.targetMode === 'recomposition';
-  if (isOnCut && props.neatDailyAvg !== null && props.neatDailyAvg < NEAT_GATE) {
+  if (isFeatureEnabled('neatGate') && isOnCut && props.neatDailyAvg !== null && props.neatDailyAvg < NEAT_GATE) {
     const stepsToGo = NEAT_GATE - Math.round(props.neatDailyAvg);
     banners.push(
       <Banner

@@ -6,6 +6,7 @@ import GradientButton from "@/components/GradientButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHealth } from "@/contexts/HealthContext";
 import { MOTION_DURATION , IOS_SPRING} from "@/lib/motion";
+import { isFeatureEnabled } from "@/tenant.config";
 
 interface PermissionsScreenProps {
   onComplete: () => void;
@@ -18,9 +19,16 @@ const PermissionsScreen = ({ onComplete }: PermissionsScreenProps) => {
   const [healthGranted, setHealthGranted] = useState<boolean | null>(null);
   const [currentStep, setCurrentStep] = useState(0); // 0 = notifications, 1 = health
 
+  // White-label (Faza 3.3): health korak postoji samo ako tenant koristi healthKit
+  const healthStepEnabled = isFeatureEnabled("healthKit");
+
   const handleNotifications = (allow: boolean) => {
     setNotificationsGranted(allow);
-    setCurrentStep(1);
+    if (healthStepEnabled) {
+      setCurrentStep(1);
+    } else {
+      onComplete();
+    }
   };
 
   const handleHealth = (allow: boolean) => {
@@ -38,14 +46,16 @@ const PermissionsScreen = ({ onComplete }: PermissionsScreenProps) => {
       onAllow: () => handleNotifications(true),
       onSkip: () => handleNotifications(false),
     },
-    {
-      icon: Heart,
-      color: "bg-destructive",
-      title: t("permissions.healthTitle"),
-      description: t("permissions.healthDesc"),
-      onAllow: () => handleHealth(true),
-      onSkip: () => handleHealth(false),
-    },
+    ...(healthStepEnabled
+      ? [{
+          icon: Heart,
+          color: "bg-destructive",
+          title: t("permissions.healthTitle"),
+          description: t("permissions.healthDesc"),
+          onAllow: () => handleHealth(true),
+          onSkip: () => handleHealth(false),
+        }]
+      : []),
   ];
 
   const current = permissions[currentStep];
