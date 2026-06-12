@@ -282,7 +282,7 @@ export const ClientProfileSettingsTab = ({
             <p className="text-caption-2 text-muted-foreground/60 mb-1.5">{t("clients.fieldType")}</p>
             <div className="flex gap-2">
               {(['online', 'in_person', 'hybrid'] as const).map(tp => (
-                <span key={tp} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition-all ${
+                <span key={tp} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition ${
                   client.type === tp ? 'gradient-primary text-primary-foreground shadow-fab' : 'bg-muted/50 text-muted-foreground border border-border'
                 }`}>
                   {tp === 'online' ? t("clients.online") : tp === 'in_person' ? t("clients.inPerson") : t("clients.hybrid")}
@@ -294,7 +294,7 @@ export const ClientProfileSettingsTab = ({
             <p className="text-caption-2 text-muted-foreground/60 mb-1.5">{t("clients.fieldStatus")}</p>
             <div className="flex gap-2">
               {(['active', 'paused', 'finished'] as const).map(st => (
-                <span key={st} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition-all ${
+                <span key={st} className={`px-3.5 py-2 rounded-xl text-caption-1 font-semibold transition ${
                   client.status === st ? 'gradient-primary text-primary-foreground shadow-fab' : 'bg-muted/50 text-muted-foreground border border-border'
                 }`}>
                   {st === 'active' ? t("clients.active") : st === 'paused' ? t("clients.paused") : t("clients.finished")}

@@ -23,14 +23,14 @@ const AppearancePage = () => {
           const selected = theme === value;
           return (
             <button key={value} onClick={() => setTheme(value)}
-              className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition-all ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
+              className={`w-full flex items-center gap-4 px-4 py-4 rounded-xl min-h-14 transition active:scale-[0.97] ${selected ? "bg-primary/10 border-2 border-primary" : "bg-card card-shadow border-2 border-transparent"}`}>
               <Icon size={ICON_SIZE.lg} className={selected ? "text-primary" : "text-muted-foreground"} />
               <div className="flex-1 text-left">
                 <p className={`text-body ${selected ? "text-primary font-semibold" : "text-foreground"}`}>{label}</p>
                 <p className="text-footnote text-muted-foreground">{desc}</p>
               </div>
               {selected &&
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={IOS_SPRING.precise}>
+                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={IOS_SPRING.precise}>
                   <Check size={20} className="text-primary" />
                 </motion.div>
               }

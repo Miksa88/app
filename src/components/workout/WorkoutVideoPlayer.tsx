@@ -78,7 +78,7 @@ const WorkoutVideoPlayer = ({
             }}
           >
             <div
-              className="h-full bg-white rounded-full relative transition-all"
+              className="h-full bg-white rounded-full relative transition-[width]"
               style={{ width: `${progress}%` }}
             >
               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity" />

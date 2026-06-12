@@ -230,7 +230,7 @@ const Progress = () => {
           <div className="flex items-center gap-2 mb-4">
             <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full gradient-primary rounded-full transition-all duration-xslow"
+                className="h-full gradient-primary rounded-full transition-[width] duration-xslow"
                 style={{ width: `${((2 + levelProgress / 100) / 10) * 100}%` }}
               />
             </div>

@@ -122,7 +122,7 @@ interface DayCellProps {
 
 const DayCell = ({ day, dayLabel, t, onClick }: DayCellProps) => {
   const base =
-    'relative aspect-[3/4] rounded-2xl flex flex-col items-center justify-between py-2 px-1 transition-all duration-base min-h-[72px] w-full text-center';
+    'relative aspect-[3/4] rounded-2xl flex flex-col items-center justify-between py-2 px-1 transition duration-base min-h-[72px] w-full text-center';
 
   // Header (lokalizovan dan + dayNumber)
   const header = (

@@ -29,7 +29,7 @@ const GoalStep = ({ selected, onSelect }: GoalStepProps) => {
             transition={{ delay: i * 0.08, duration: MOTION_DURATION.base }}
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => onSelect(goal.id)}
-            className={`w-full rounded-[20px] p-5 text-left transition-all duration-fast min-h-[100px] flex items-center gap-4 ${
+            className={`w-full rounded-[20px] p-5 text-left transition duration-fast min-h-[100px] flex items-center gap-4 ${
               isSelected
                 ? "gradient-primary text-primary-foreground shadow-fab border-2 border-transparent"
                 : "bg-card card-shadow border-2 border-transparent hover:border-primary/20"

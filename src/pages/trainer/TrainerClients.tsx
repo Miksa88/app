@@ -122,7 +122,7 @@ const TrainerClients = () => {
             <button
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
-              className={`px-4 py-2 rounded-full text-caption-1 font-semibold whitespace-nowrap transition-all min-h-11 ${
+              className={`px-4 py-2 rounded-full text-caption-1 font-semibold whitespace-nowrap transition active:scale-[0.97] min-h-11 ${
                 activeFilter === f.key
                   ? "gradient-primary text-primary-foreground"
                   : "bg-card text-muted-foreground border border-border"

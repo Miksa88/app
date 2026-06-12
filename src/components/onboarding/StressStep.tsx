@@ -44,10 +44,10 @@ const StressStep = ({ level, onLevelChange }: StressStepProps) => {
             key={opt.value}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08, duration: MOTION_DURATION.slow }}
+            transition={{ delay: i * 0.08, duration: MOTION_DURATION.base }}
             whileTap={{ scale: 0.97 }}
             onClick={() => onLevelChange(opt.value)}
-            className={`w-full text-left rounded-[20px] p-5 transition-all min-h-11 ${
+            className={`w-full text-left rounded-[20px] p-5 transition-shadow min-h-11 ${
               isSelected
                 ? "bg-card ring-2 ring-primary card-shadow"
                 : "bg-card card-shadow"

@@ -353,7 +353,7 @@ const ExerciseDetail = () => {
               <button
                 key={l}
                 onClick={() => setLevel(l as 'beginner' | 'intermediate' | 'advanced')}
-                className={`flex-1 py-3 rounded-xl text-footnote font-semibold transition-all ${
+                className={`flex-1 py-3 rounded-xl text-footnote font-semibold transition active:scale-[0.97] ${
                   level === l ? "gradient-primary text-primary-foreground shadow-fab" : "bg-card text-muted-foreground card-shadow"
                 }`}
               >

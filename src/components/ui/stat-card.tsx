@@ -70,7 +70,7 @@ export const StatCard = ({
       <Component
         onClick={onClick}
         className={`w-full rounded-2xl text-center flex flex-col items-center ${baseClasses} ${
-          onClick ? "active:brightness-95 transition-all" : ""
+          onClick ? "active:brightness-95 transition-[filter]" : ""
         }`}
       >
         {icon && (
@@ -95,7 +95,7 @@ export const StatCard = ({
       <Component
         onClick={onClick}
         className={`w-full rounded-2xl text-left ${baseClasses} ${
-          onClick ? "active:brightness-95 transition-all" : ""
+          onClick ? "active:brightness-95 transition-[filter]" : ""
         }`}
       >
         <div className="flex items-start justify-between mb-3">
@@ -135,7 +135,7 @@ export const StatCard = ({
     <Component
       onClick={onClick}
       className={`w-full rounded-2xl text-left flex flex-col gap-1 ${baseClasses} ${
-        onClick ? "active:brightness-95 transition-all" : ""
+        onClick ? "active:brightness-95 transition-[filter]" : ""
       }`}
     >
       {icon && (

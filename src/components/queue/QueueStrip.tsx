@@ -107,7 +107,7 @@ const PARTITION_COLOR: Record<Partition, string> = {
 
 const SessionCell = ({ session, isCompleted, isNext, isPending, onClick }: SessionCellProps) => {
   const isInteractive = !isPending;
-  const baseClass = 'shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all min-h-11';
+  const baseClass = 'shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center gap-1 transition min-h-11';
 
   if (isNext) {
     const reduce = shouldReduceMotion();
@@ -130,7 +130,7 @@ const SessionCell = ({ session, isCompleted, isNext, isPending, onClick }: Sessi
     return (
       <button
         onClick={onClick}
-        className={`${baseClass} ${PARTITION_COLOR[session.partition]} opacity-80`}
+        className={`${baseClass} ${PARTITION_COLOR[session.partition]} opacity-80 active:scale-[0.97]`}
         aria-label={`Završen ${session.label}`}
       >
         <Check size={ICON_SIZE.md} strokeWidth={3} />

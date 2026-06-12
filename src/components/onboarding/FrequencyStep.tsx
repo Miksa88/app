@@ -45,7 +45,7 @@ const FrequencyStep = ({ selected, onSelect, experienceLevel }: FrequencyStepPro
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => onSelect(value)}
             aria-pressed={isSelected}
-            className={`w-full rounded-[20px] p-5 text-left transition-all duration-fast min-h-[88px] flex items-center gap-4 ${
+            className={`w-full rounded-[20px] p-5 text-left transition duration-fast min-h-[88px] flex items-center gap-4 ${
               isSelected
                 ? "gradient-primary text-primary-foreground shadow-fab border-2 border-transparent"
                 : "bg-card card-shadow border-2 border-transparent hover:border-primary/20"

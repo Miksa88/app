@@ -102,7 +102,7 @@ export const FuelingStatusBar = ({ className = '', compact = false }: FuelingSta
         </div>
         {allDone && (
           <motion.span
-            initial={{ scale: 0, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={IOS_SPRING.precise}
             className="text-caption-1 text-success font-semibold inline-flex items-center gap-1"
@@ -254,8 +254,8 @@ const FuelingDots = ({ logged, skipped, remaining, size = 'sm', ariaLabel }: Fue
       {Array.from({ length: logged }).map((_, i) => (
         <motion.div
           key={`l${i}`}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: i * 0.05, ...IOS_SPRING.precise }}
           className={`${dotSize} rounded-full bg-success`}
         />

@@ -90,7 +90,7 @@ export default function PreWorkoutFatigueDialog({
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => handleAnswer(true)}
             aria-label={t('workout.fatigueTiredAria')}
-            className="min-h-[120px] rounded-2xl bg-card card-shadow border-2 border-transparent transition-all flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="min-h-[120px] rounded-2xl bg-card card-shadow border-2 border-transparent transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <span className="text-4xl" aria-hidden="true">😴</span>
             <span className="text-subhead font-semibold text-foreground">
@@ -105,7 +105,7 @@ export default function PreWorkoutFatigueDialog({
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => handleAnswer(false)}
             aria-label={t('workout.fatigueRestedAria')}
-            className="min-h-[120px] rounded-2xl bg-card card-shadow border-2 border-transparent transition-all flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="min-h-[120px] rounded-2xl bg-card card-shadow border-2 border-transparent transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <span className="text-4xl" aria-hidden="true">💪</span>
             <span className="text-subhead font-semibold text-foreground">

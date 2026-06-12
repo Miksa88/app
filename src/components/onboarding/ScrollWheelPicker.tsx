@@ -134,7 +134,7 @@ const ScrollWheelPicker = ({
               }}
             >
               <span
-                className={`transition-all duration-150 ${
+                className={`transition-[font-size,color] duration-150 ${
                   isSelected
                     ? "text-title-3 font-bold text-foreground"
                     : "text-body font-normal text-muted-foreground/40"

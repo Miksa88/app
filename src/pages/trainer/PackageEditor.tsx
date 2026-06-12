@@ -212,7 +212,7 @@ const PackageEditor = () => {
                   whileTap={{ scale: TAP_SCALE.secondary }}
                   onClick={() => setTier(opt.value)}
                   aria-pressed={isSelected}
-                  className={`p-3 rounded-2xl text-center transition-all ${
+                  className={`p-3 rounded-2xl text-center transition ${
                     isSelected
                       ? "gradient-primary text-primary-foreground shadow-fab"
                       : "bg-card card-shadow"

@@ -90,8 +90,8 @@ const SignUpSheet = ({ onComplete }: SignUpSheetProps) => {
       {/* Top section with checkmark */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 pb-8">
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, ...IOS_SPRING.bouncy }}
           className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center mb-6 shadow-fab"
         >

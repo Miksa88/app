@@ -48,7 +48,7 @@ const AllergiesStep = ({ selected, onToggle }: AllergiesStepProps) => {
             whileTap={{ scale: TAP_SCALE.secondary }}
             onClick={() => handleToggle(allergy.id)}
             aria-pressed={isSelected}
-            className={`rounded-2xl p-4 text-center transition-all min-h-[80px] flex flex-col items-center justify-center gap-2 ${
+            className={`rounded-2xl p-4 text-center transition min-h-[80px] flex flex-col items-center justify-center gap-2 ${
               isSelected
                 ? "bg-card border-2 border-primary shadow-fab"
                 : "bg-card card-shadow border-2 border-transparent"
@@ -60,8 +60,8 @@ const AllergiesStep = ({ selected, onToggle }: AllergiesStepProps) => {
             </span>
             {isSelected && !isNone && (
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 className="absolute top-2 right-2 w-5 h-5 rounded-full gradient-primary flex items-center justify-center"
               >
                 <Check size={ICON_SIZE.xs} className="text-primary-foreground" strokeWidth={3} />

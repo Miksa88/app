@@ -131,7 +131,7 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
                     whileTap={{ scale: TAP_SCALE.secondary }}
                     onClick={() => setSelected(opt.type)}
                     aria-pressed={isSelected}
-                    className={`w-full rounded-2xl p-4 text-left flex items-center gap-3 border-2 transition-all min-h-14 ${
+                    className={`w-full rounded-2xl p-4 text-left flex items-center gap-3 border-2 transition-colors min-h-14 ${
                       isSelected
                         ? "border-primary bg-primary/5"
                         : "border-transparent bg-muted/30 hover:bg-muted/50"
@@ -162,7 +162,7 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
                     onClick={() => setDurationDays(days)}
                     role="radio"
                     aria-checked={durationDays === days}
-                    className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-all min-h-11 ${
+                    className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-colors min-h-11 ${
                       durationDays === days
                         ? "border-primary bg-primary/5 text-foreground"
                         : "border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50"
@@ -176,7 +176,7 @@ const QuickPauseSheet = ({ open, onOpenChange }: QuickPauseSheetProps) => {
                   onClick={() => setDurationDays(null)}
                   role="radio"
                   aria-checked={durationDays === null}
-                  className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-all min-h-11 ${
+                  className={`rounded-xl px-2 py-2.5 text-footnote font-semibold border-2 transition-colors min-h-11 ${
                     durationDays === null
                       ? "border-primary bg-primary/5 text-foreground"
                       : "border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50"

@@ -39,7 +39,7 @@ const WorkoutSetCard = ({
       ref={isActive ? activeSetRef : undefined}
       initial={false}
       animate={{ opacity: 1 }}
-      className={`bg-card rounded-xl card-shadow overflow-hidden transition-all ${
+      className={`bg-card rounded-xl card-shadow overflow-hidden transition ${
         isDone ? "border-2 border-success/40" : isActive ? "border-2 border-primary/30" : "opacity-50"
       }`}
     >

@@ -42,7 +42,7 @@ export const ActionCard = ({
   return (
     <Component
       onClick={onClick}
-      className={`w-full bg-card rounded-2xl p-5 card-shadow flex items-center gap-4 text-left min-h-14 active:brightness-95 transition-all ${className}`}
+      className={`w-full bg-card rounded-2xl p-5 card-shadow flex items-center gap-4 text-left min-h-14 active:brightness-95 transition-[filter] ${className}`}
     >
       <div
         className={`w-11 h-11 rounded-xl ${iconBg} flex items-center justify-center shrink-0`}

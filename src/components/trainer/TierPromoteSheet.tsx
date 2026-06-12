@@ -95,7 +95,7 @@ const TierPromoteSheet = ({ open, onOpenChange, clientId, currentTier, onPromote
                     whileTap={{ scale: TAP_SCALE.secondary }}
                     onClick={() => setSelected(opt.value)}
                     aria-pressed={isSelected}
-                    className={`w-full rounded-2xl p-4 flex items-center gap-3 text-left border-2 transition-all min-h-14 ${
+                    className={`w-full rounded-2xl p-4 flex items-center gap-3 text-left border-2 transition-colors min-h-14 ${
                       isSelected ? "border-primary bg-primary/5" : "border-transparent bg-muted/30"
                     }`}
                   >

@@ -117,7 +117,7 @@ const Login = () => {
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: MOTION_DURATION.slow, delay: 0.3 }}
+        transition={{ duration: MOTION_DURATION.base, delay: 0.3 }}
         className="w-full max-w-sm space-y-3 mb-8 mt-10"
       >
         <GradientButton

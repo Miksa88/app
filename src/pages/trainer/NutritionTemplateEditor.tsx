@@ -265,7 +265,7 @@ const NutritionTemplateEditor = () => {
                     <button
                       key={g.id}
                       onClick={() => setGoalType(g.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border-2 transition-all min-h-11 ${
+                      className={`w-full text-left p-3.5 rounded-xl border-2 transition active:scale-[0.97] min-h-11 ${
                         goalType === g.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/50"
                       }`}
                     >
@@ -309,7 +309,7 @@ const NutritionTemplateEditor = () => {
                     <button
                       key={preset.id}
                       onClick={() => selectMacroPreset(preset.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border-2 transition-all min-h-11 ${
+                      className={`w-full text-left p-3.5 rounded-xl border-2 transition active:scale-[0.97] min-h-11 ${
                         macroPreset === preset.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/50"
                       }`}
                     >
@@ -413,7 +413,7 @@ const NutritionTemplateEditor = () => {
                     <button
                       key={opt.id}
                       onClick={() => setCalorieStrategy(opt.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border-2 transition-all min-h-11 ${
+                      className={`w-full text-left p-3.5 rounded-xl border-2 transition active:scale-[0.97] min-h-11 ${
                         calorieStrategy === opt.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/50"
                       }`}
                     >
@@ -536,7 +536,7 @@ const NutritionTemplateEditor = () => {
                     <button
                       key={r.id}
                       onClick={() => toggleRestriction(r.id)}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl transition-all min-h-11 ${
+                      className={`w-full flex items-center justify-between p-3 rounded-xl transition active:scale-[0.97] min-h-11 ${
                         restrictions.includes(r.id) ? "bg-primary/5 border-2 border-primary" : "bg-muted/50 border-2 border-transparent"
                       }`}
                     >

@@ -288,7 +288,7 @@ const ActiveWorkout = () => {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: MOTION_DURATION.slow }}
+            transition={{ duration: MOTION_DURATION.base }}
             className="px-5 pt-4"
           >
             <div className="mb-5 card-shadow rounded-2xl overflow-hidden">

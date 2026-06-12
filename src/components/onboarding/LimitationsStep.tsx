@@ -48,7 +48,7 @@ const LimitationsStep = ({ selected, onToggle }: LimitationsStepProps) => {
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => handleToggle(area.id)}
             aria-pressed={isSelected}
-            className={`w-full rounded-2xl px-4 py-4 text-left transition-all ios-row-h flex items-center gap-3 ${
+            className={`w-full rounded-2xl px-4 py-4 text-left transition ios-row-h flex items-center gap-3 ${
               isSelected
                 ? "bg-card border-2 border-primary shadow-fab"
                 : "bg-card card-shadow border-2 border-transparent"
@@ -60,8 +60,8 @@ const LimitationsStep = ({ selected, onToggle }: LimitationsStepProps) => {
             </span>
             {isSelected && (
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center"
               >
                 <Check size={ICON_SIZE.xs} className="text-primary-foreground" strokeWidth={3} />

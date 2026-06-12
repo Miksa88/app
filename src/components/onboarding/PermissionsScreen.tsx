@@ -72,8 +72,8 @@ const PermissionsScreen = ({ onComplete }: PermissionsScreenProps) => {
       >
         {/* Icon */}
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, ...IOS_SPRING.bouncy }}
           className={`w-20 h-20 rounded-[22px] ${current.color} flex items-center justify-center mb-8 shadow-lg`}
         >
@@ -112,7 +112,7 @@ const PermissionsScreen = ({ onComplete }: PermissionsScreenProps) => {
           {permissions.map((_, i) => (
             <div
               key={i}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={`w-2 h-2 rounded-full transition-[width,background-color] ${
                 i === currentStep ? "bg-primary w-6" : i < currentStep ? "bg-primary" : "bg-muted"
               }`}
             />

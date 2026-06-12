@@ -130,7 +130,7 @@ const ProcessingScreen = ({ onComplete, firstName }: ProcessingScreenProps) => {
                 <AnimatePresence>
                   {isCompleted && (
                     <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
+                      initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={IOS_SPRING.precise}
                     >

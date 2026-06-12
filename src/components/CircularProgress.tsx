@@ -85,7 +85,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="transition-all duration-xslow ease-out"
+          className="transition-[stroke-dashoffset] duration-xslow ease-out"
         />
       </svg>
       {children && (

@@ -105,12 +105,12 @@ const PostWorkout = () => {
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: MOTION_DURATION.slow, ease: MOTION_EASE.easeOut }}
+        transition={{ duration: MOTION_DURATION.base, ease: MOTION_EASE.easeOut }}
         className="text-center z-10"
       >
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.3, ...IOS_SPRING.bouncy }}
           className="mb-4 flex items-center justify-center"
           aria-hidden="true"
@@ -128,7 +128,7 @@ const PostWorkout = () => {
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5, duration: MOTION_DURATION.slow }}
+        transition={{ delay: 0.5, duration: MOTION_DURATION.base }}
         className="grid grid-cols-2 gap-3 mt-10 w-full max-w-sm z-10"
       >
         {stats.map(({ icon: Icon, label, value, unit }, i) => (
@@ -183,7 +183,7 @@ const PostWorkout = () => {
                 disabled={submitting || difficulty !== null}
                 aria-pressed={isSelected}
                 aria-label={`${opt.label} — kako je bio trening`}
-                className={`min-h-[88px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all border-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+                className={`min-h-[88px] rounded-2xl flex flex-col items-center justify-center gap-1 transition border-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
                   isSelected
                     ? 'gradient-primary text-primary-foreground border-transparent shadow-fab'
                     : 'bg-card text-foreground border-transparent card-shadow hover:border-primary/30'

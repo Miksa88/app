@@ -95,7 +95,7 @@ const ExercisePicker = ({
             <button
               key={chip.value}
               onClick={() => setActiveFilter(chip.value)}
-              className={`px-3 py-2 rounded-full text-footnote font-medium whitespace-nowrap transition-all ${
+              className={`px-3 py-2 rounded-full text-footnote font-medium whitespace-nowrap transition active:scale-[0.97] ${
                 activeFilter === chip.value
                   ? "gradient-primary text-primary-foreground"
                   : "bg-card text-muted-foreground card-shadow"
@@ -143,7 +143,7 @@ const ExercisePicker = ({
               transition={{ delay: i * 0.015 }}
               whileTap={{ scale: TAP_SCALE.secondary }}
               onClick={() => toggleSelect(ex.id)}
-              className={`w-full bg-card rounded-xl p-3 card-shadow flex items-center gap-3 text-left transition-all ${
+              className={`w-full bg-card rounded-xl p-3 card-shadow flex items-center gap-3 text-left transition ${
                 isSelected ? "ring-2 ring-primary" : ""
               } ${equipmentMissing ? "opacity-70" : ""}`}
             >
@@ -163,8 +163,8 @@ const ExercisePicker = ({
               )}
               {isSelected && (
                 <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
                   className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center shrink-0"
                 >
                   <Check size={ICON_SIZE.xs} className="text-primary-foreground" />

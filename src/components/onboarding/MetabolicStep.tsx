@@ -50,7 +50,7 @@ const MetabolicStep = ({ selected, onToggle }: MetabolicStepProps) => {
             transition={{ delay: i * 0.04, duration: MOTION_DURATION.base }}
             whileTap={{ scale: 0.96 }}
             onClick={() => handleToggle(cond.id)}
-            className={`px-4 py-3 rounded-2xl text-subhead font-medium transition-all min-h-11 flex items-center gap-2 ${
+            className={`px-4 py-3 rounded-2xl text-subhead font-medium transition min-h-11 flex items-center gap-2 ${
               isSelected
                 ? "gradient-primary text-primary-foreground shadow-fab"
                 : "bg-card card-shadow text-foreground border-2 border-transparent"

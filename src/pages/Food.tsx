@@ -411,7 +411,7 @@ const Food = () => {
                 {...fadeUp(0.15 + i * 0.04)}
                 whileTap={{ scale: TAP_SCALE.secondary }}
                 onClick={() => status === 'pending' && setSelectedMeal(meal)}
-                className={`w-full bg-card rounded-2xl card-shadow overflow-hidden flex items-center text-left transition-all ${
+                className={`w-full bg-card rounded-2xl card-shadow overflow-hidden flex items-center text-left transition ${
                   status === 'eaten' ? "border-l-4 border-success" :
                   status === 'replaced' ? "border-l-4 border-amber-500" :
                   isSkipped ? "opacity-60" : ""

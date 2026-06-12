@@ -123,7 +123,7 @@ const PaywallScreen = ({ onComplete, onBack }: PaywallScreenProps) => {
             <button
               key={plan.id}
               onClick={() => setSelectedPlan(plan.id)}
-              className={`relative rounded-2xl p-4 text-left transition-all ${
+              className={`relative rounded-2xl p-4 text-left transition active:scale-[0.97] ${
                 isSelected
                   ? "border-2 border-primary bg-card"
                   : "border-2 border-border bg-card"

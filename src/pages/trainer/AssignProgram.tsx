@@ -116,7 +116,7 @@ const AssignProgram = () => {
                 transition={{ delay: i * 0.03 }}
                 whileTap={{ scale: TAP_SCALE.secondary }}
                 onClick={() => toggleClient(client.clientId)}
-                className={`w-full bg-card rounded-xl p-4 card-shadow flex items-center gap-3 text-left transition-all ${
+                className={`w-full bg-card rounded-xl p-4 card-shadow flex items-center gap-3 text-left transition-shadow ${
                   isSelected ? "ring-2 ring-primary" : ""
                 }`}
               >
