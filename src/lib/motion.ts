@@ -91,12 +91,16 @@ export interface MotionPreset {
 
 export const fadeUp = (delay = 0): MotionPreset => {
   const reduce = shouldReduceMotion();
+  // Emil pravilo: ekrani koji se otvaraju 10+ puta dnevno ne smeju imati
+  // primetan entrance. Kratak fade (200ms), manji y-shift, delay cap 150ms —
+  // duge stagger sekvence po stranicama su delovale tromo i ostavljale
+  // sadržaj poluproziran (rAF pauza u backgrounded tabu).
   return {
-    initial: reduce ? { opacity: 0 } : { opacity: 0, y: 16 },
+    initial: reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
     animate: { opacity: 1, y: 0 },
     transition: reduce
       ? { duration: 0.01, delay: 0 }
-      : { duration: MOTION_DURATION.spring, delay, ease: MOTION_EASE.easeOut },
+      : { duration: 0.2, delay: Math.min(delay, 0.15), ease: MOTION_EASE.easeOut },
   };
 };
 
