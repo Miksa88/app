@@ -1,5 +1,22 @@
 # fitbyivana — Master Algoritam
 
+## Quirks & Rules (institucionalna memorija — pročitaj PRE izmena)
+
+Rešeno jednom, dokumentovano ovde da se NIKAD ne ponovi:
+
+1. **Jezik: `sr` je default** (`tenant.config.ts → defaultLanguage`). Srpski-first proizvod; localStorage izbor korisnika uvek pobeđuje. NE menjati default bez eksplicitne odluke. (Regresija 2026-06-12: agent postavio 'en' → cela app na engleskom za nove korisnike + pali E2E.)
+2. **`type="number"` inputi**: desktop Safari/Chrome prikazuju spinner strelice na focus → razlivaju uske inpute. Globalni fix postoji u `index.css` (appearance: textfield). Nove numeričke inpute ne stilizovati mimo toga.
+3. **E2E testovi moraju biti jezički otporni**: ili pin jezika kroz `loginAsTestUser` helper (localStorage init script), ili dvojezični matcheri. Specovi koji ne koriste helper (auth, onboarding) MORAJU dvojezične regexe.
+4. **framer-motion entrance animacije se zamrzavaju u backgrounded/headless tabu** (rAF pauza) — screenshot poluprovidne stranice je artefakt, ne bug. Sadržaj nikad ne sme zavisiti od završetka animacije.
+5. **Exercise pager u ActiveWorkout klizi x:±30px** — root mora `overflow-x-clip` ili stranica dobija horizontalni scroll.
+6. **No-touch zone bez eksplicitnog naloga**: `src/utils/` algoritamska logika, RLS politike, `t()` API, queue pointer semantika (pointer-based, bez date-skip logike — pauza ne pomera pointer).
+7. **Interni žargon ne sme u klijent copy** (recovery −0.15, metabolic noise, TDEE×0.92, RIR...) — klijentski ključevi su ljudski jezik; `trainer.*` ključevi smeju stručne termine.
+8. **Brending SAMO iz `tenant.config.ts`** — nijedan naziv appa/boja hardkodovan (regresija: "FlexFemme Fit" u TrainerProfile).
+
+### Pravila za agente (behavioral constraints šablon)
+
+Svaki dispatch agenta mora da sadrži: (1) tačan scope fajlova, (2) "NE diraj" listu, (3) "ponašanje identično osim..." klauzulu, (4) gate (`npm run verify` + build). Jedan bug = jedan fix = jedan test koji ga čuva (MASTER_BUG_LISTA.md proces).
+
 ## Master spec
 
 Algoritam je organizovan oko dva master spec dokumenta:
