@@ -199,7 +199,7 @@ const Login = () => {
                     <motion.button
                       whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => toast.info(t("login.oauthComingSoon") || "OAuth uskoro — za sada koristi email")}
-                      className="w-full flex items-center justify-center gap-3 bg-foreground text-background font-semibold py-4 rounded-[14px] text-body"
+                      className="w-full flex items-center justify-center gap-3 bg-foreground text-background font-semibold py-4 rounded-xl text-body"
                     >
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 21.99 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 21.99C7.79 22.03 6.8 20.68 5.96 19.47C4.25 16.99 2.97 12.5 4.7 9.44C5.56 7.93 7.13 6.97 8.82 6.95C10.1 6.93 11.32 7.82 12.11 7.82C12.89 7.82 14.37 6.74 15.92 6.91C16.57 6.94 18.39 7.18 19.56 8.9C19.47 8.96 17.39 10.16 17.41 12.72C17.44 15.82 20.06 16.82 20.09 16.83C20.07 16.89 19.67 18.29 18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.6 4.35 14.9 5.19C14.21 6.04 13.07 6.7 11.95 6.61C11.8 5.46 12.36 4.26 13 3.5Z" />
@@ -211,7 +211,7 @@ const Login = () => {
                     <motion.button
                       whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => toast.info(t("login.oauthComingSoon") || "OAuth uskoro — za sada koristi email")}
-                      className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground"
+                      className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-xl text-body text-foreground"
                     >
                       <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -226,7 +226,7 @@ const Login = () => {
                     <motion.button
                       whileTap={{ scale: TAP_SCALE.primary }}
                       onClick={() => setShowEmailForm(true)}
-                      className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-[14px] text-body text-foreground"
+                      className="w-full flex items-center justify-center gap-3 bg-background border border-border font-medium py-4 rounded-xl text-body text-foreground"
                     >
                       <Mail size={20} />
                       {t("login.continueEmail") || "Continue with email"}
@@ -243,7 +243,7 @@ const Login = () => {
                     className="space-y-4"
                   >
                     <div>
-                      <div className={`bg-background rounded-[10px] border overflow-hidden ${errors.email || errors.password ? "border-destructive" : "border-border"}`}>
+                      <div className={`bg-background rounded-xl border overflow-hidden ${errors.email || errors.password ? "border-destructive" : "border-border"}`}>
                         <label htmlFor="login-email" className="sr-only">{t("login.email")}</label>
                         <input
                           id="login-email"

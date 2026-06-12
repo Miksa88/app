@@ -25,14 +25,14 @@ const buttonVariants = cva(
         glass: "bg-card/60 backdrop-blur-xl backdrop-saturate-150 border border-border/40 text-foreground active:bg-card/80 shadow-hairline",
       },
       size: {
-        // 44px min-h-a (iOS HIG 44pt touch target)
-        default: "min-h-[44px] px-4 py-2",
-        sm: "min-h-[44px] rounded-md px-3",
-        lg: "min-h-[48px] rounded-md px-8",
+        // 44px min-h-a (iOS HIG 44pt touch target) — min-h-11 = 44px, Tailwind notacija
+        default: "min-h-11 px-4 py-2",
+        sm: "min-h-11 rounded-md px-3",
+        lg: "min-h-12 rounded-md px-8",
         // Full-width bottom CTA (iOS HIG 56pt) — font-size 17px bez font-weight collision sa variants
-        xl: "min-h-[56px] w-full rounded-2xl text-[1.0625rem]",
-        icon: "min-h-[44px] min-w-[44px] h-11 w-11",
-        "icon-round": "min-h-[44px] min-w-[44px] h-11 w-11 rounded-full",
+        xl: "min-h-14 w-full rounded-2xl text-[1.0625rem]",
+        icon: "min-h-11 min-w-11 h-11 w-11",
+        "icon-round": "min-h-11 min-w-11 h-11 w-11 rounded-full",
       },
     },
     defaultVariants: {

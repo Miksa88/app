@@ -23,7 +23,7 @@ const WelcomeScreen = ({ firstName, onComplete }: WelcomeScreenProps) => {
         initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.2, ...IOS_SPRING.bouncy }}
-        className="bg-card rounded-[20px] card-shadow p-8 max-w-sm w-full text-center"
+        className="bg-card rounded-2xl card-shadow p-8 max-w-sm w-full text-center"
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}

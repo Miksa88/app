@@ -199,7 +199,8 @@ const TrainerDashboard = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-body font-semibold text-foreground">
-                  {t("trainer.atRiskCountLabel").replace("{count}", String(redFlagCount))}
+                  {/* Pravilan plural preko Intl.PluralRules — en: one/other, sr paucal: 1 klijentkinja / 2–4 klijentkinje / 5+ klijentkinja */}
+                  {t(`trainer.atRiskCountLabel.${new Intl.PluralRules(language).select(redFlagCount)}`).replace("{count}", String(redFlagCount))}
                 </p>
                 {atRiskNames && (
                   <p className="text-footnote text-muted-foreground mt-0.5 truncate">

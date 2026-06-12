@@ -49,7 +49,7 @@ const GradientButton: React.FC<GradientButtonProps> = ({
       aria-busy={loading}
       aria-label={ariaLabel}
       className={`
-        rounded-[14px] ${sizeClasses[size]} ${variantClasses[variant]}
+        rounded-xl ${sizeClasses[size]} ${variantClasses[variant]}
         transition-colors duration-150 disabled:opacity-35 disabled:pointer-events-none
         active:brightness-95
         ${className}

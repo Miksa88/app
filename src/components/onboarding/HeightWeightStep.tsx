@@ -72,7 +72,7 @@ const HeightWeightStep = ({
           }`}
         >
           <div
-            className={`absolute top-[2px] ${IOS_SWITCH.thumb} rounded-full bg-white shadow-md transition-transform duration-fast ${
+            className={`absolute top-[2px] ${IOS_SWITCH.thumb} rounded-full bg-white shadow-sm transition-transform duration-fast ${
               isMetric ? "translate-x-[22px]" : "translate-x-[2px]"
             }`}
           />

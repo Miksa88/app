@@ -32,7 +32,7 @@ export const NavSearchBar = forwardRef<HTMLInputElement, NavSearchBarProps>(
           ref={ref}
           type="search"
           className={cn(
-            "w-full h-11 min-h-[44px] bg-card text-foreground placeholder:text-muted-foreground/50 rounded-full pl-11 pr-4 text-body card-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-0 transition-shadow duration-fast",
+            "w-full h-11 min-h-11 bg-card text-foreground placeholder:text-muted-foreground/50 rounded-full pl-11 pr-4 text-body card-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-0 transition-shadow duration-fast",
             className,
           )}
           {...props}

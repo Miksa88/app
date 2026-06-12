@@ -52,7 +52,8 @@ const WorkoutExerciseInfo = ({
       <p className="text-subhead text-muted-foreground mb-2">
         {setsDone}/{setsTotal} {t("gym.sets")} · {t("workout.target")}{" "}
         {slot.targetReps ?? `${slot.repRange[0]}-${slot.repRange[1]}`} {t("workout.reps")}
-        {slot.targetRIR !== undefined ? ` · ${t("workout.rir")} ${slot.targetRIR}` : ""}
+        {/* Plain-language umesto internog "RIR" žargona — klijentkinje su početnice */}
+        {slot.targetRIR !== undefined ? ` · ${t("workout.rirHint").replace("{n}", String(slot.targetRIR))}` : ""}
       </p>
       {slot.targetWeight !== undefined && slot.targetWeight !== null && (
         <div className="mb-5 flex items-center flex-wrap gap-2">

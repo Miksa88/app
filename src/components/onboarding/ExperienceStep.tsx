@@ -52,7 +52,7 @@ const ExperienceStep = ({ selected, onSelect }: ExperienceStepProps) => {
             whileTap={{ scale: TAP_SCALE.primary }}
             onClick={() => onSelect(level.id)}
             aria-pressed={isSelected}
-            className={`w-full rounded-[20px] p-5 text-left transition duration-fast min-h-[100px] flex items-start gap-4 ${
+            className={`w-full rounded-2xl p-5 text-left transition duration-fast min-h-[100px] flex items-start gap-4 ${
               isSelected
                 ? "gradient-primary text-primary-foreground shadow-fab border-2 border-transparent"
                 : "bg-card card-shadow border-2 border-transparent hover:border-primary/20"

@@ -231,7 +231,7 @@ const WorkoutEditor = () => {
                 transition={{ duration: 0.3, ease: MOTION_EASE.iosDefault, delay: sIdx * 0.04 }}
               >
                 {/* Section header — tinted LABEL (flat, bez card-shadow) za jasnu parent-child hijerarhiju */}
-                <div className={`rounded-xl flex items-center min-h-[44px] ${tone.bg}`}>
+                <div className={`rounded-xl flex items-center min-h-11 ${tone.bg}`}>
                   <button
                     type="button"
                     onClick={() => toggleCollapse(section.id)}

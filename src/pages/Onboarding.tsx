@@ -261,7 +261,7 @@ const Onboarding = () => {
             {/* Step 0: Name */}
             {step === 0 && (
               <div className="space-y-4">
-                <div className="bg-card rounded-[14px] card-shadow overflow-hidden">
+                <div className="bg-card rounded-xl card-shadow overflow-hidden">
                   <label htmlFor="onboarding-firstname" className="sr-only">{t("onboarding.firstNamePlaceholder")}</label>
                   <input
                     id="onboarding-firstname"

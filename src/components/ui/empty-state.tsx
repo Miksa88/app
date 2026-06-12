@@ -48,7 +48,7 @@ export const EmptyState = ({
     {cta && (
       <button
         onClick={cta.onClick}
-        className="mt-4 gradient-primary text-primary-foreground px-5 py-2.5 rounded-xl text-subhead font-semibold min-h-[44px] shadow-fab"
+        className="mt-4 gradient-primary text-primary-foreground px-5 py-2.5 rounded-xl text-subhead font-semibold min-h-11 shadow-fab"
       >
         {cta.label}
       </button>

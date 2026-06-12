@@ -112,6 +112,17 @@ export const RADIUS = {
 export type RadiusKey = keyof typeof RADIUS;
 
 // ============================================================================
+// SHADOW konvencije (uniformity pass 2026-06-12) — dokumentovani izuzeci:
+// - `card-shadow`     → standard za SVE kartice/sheet površine (151+ mesta).
+// - `shadow-fab`      → FAB + hero CTA površine (primary-tinted glow).
+// - `shadow-sm`       → ISKLJUČIVO switch/segmented-control thumb (mali beli
+//                       krug na toggle-u) — jača senka bi izgledala odlepljeno.
+// - `shadow-lg`/`md`  → samo shadcn overlay primitivi (dialog, sheet, toast,
+//                       tooltip) — overlay sme jaču senku jer lebdi iznad
+//                       sadržaja; ne koristiti na karticama.
+// ============================================================================
+
+// ============================================================================
 // IOS_SWITCH — track + thumb sizing (UI audit 2026-05-11 Pillar 5)
 // Apple iOS HIG metrics; jedan source-of-truth za sve switch toggle UI.
 // ============================================================================

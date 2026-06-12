@@ -480,7 +480,7 @@ const NutritionTemplateEditor = () => {
                       <motion.div
                         animate={{ x: differentOnTrainingDays ? 20 : 0 }}
                         transition={IOS_SPRING.precise}
-                        className="w-6 h-6 rounded-full bg-background shadow-md"
+                        className="w-6 h-6 rounded-full bg-background shadow-sm"
                       />
                     </button>
                   </div>

@@ -75,7 +75,7 @@ const PermissionsScreen = ({ onComplete }: PermissionsScreenProps) => {
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, ...IOS_SPRING.bouncy }}
-          className={`w-20 h-20 rounded-[22px] ${current.color} flex items-center justify-center mb-8 shadow-lg`}
+          className={`w-20 h-20 rounded-3xl ${current.color} flex items-center justify-center mb-8 card-shadow`}
         >
           <Icon size={36} className="text-primary-foreground" />
         </motion.div>

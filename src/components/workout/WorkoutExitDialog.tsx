@@ -33,13 +33,13 @@ const WorkoutExitDialog = ({ open, onOpenChange, onLeave }: WorkoutExitDialogPro
         <AlertDialogFooter className="gap-3 sm:gap-3">
           <AlertDialogCancel
             onClick={() => onOpenChange(false)}
-            className="flex-1 min-h-11 rounded-[14px]"
+            className="flex-1 min-h-11 rounded-xl"
           >
             {t("workout.stay")}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onLeave}
-            className="flex-1 min-h-11 rounded-[14px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="flex-1 min-h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {t("workout.leave")}
           </AlertDialogAction>
