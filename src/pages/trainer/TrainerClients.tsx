@@ -13,21 +13,22 @@ import { Button } from "@/components/ui/button";
 import { useTrainerClients } from "@/hooks/useTrainerClients";
 import type { ClientListItem } from "@/services/trainerService";
 
-function getRelativeTime(dateStr: string | null): string {
+// t se prosleđuje — module-level funkcija nema pristup LanguageContext-u
+function getRelativeTime(dateStr: string | null, t: (key: string) => string): string {
   if (!dateStr) return "—";
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return t("trainer.minsAgo").replace("{n}", String(mins));
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t("trainer.hoursAgo").replace("{n}", String(hours));
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t("trainer.daysAgo").replace("{n}", String(days));
 }
 
-function displayName(c: ClientListItem): string {
+function displayName(c: ClientListItem, fallback = "—"): string {
   const full = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
   if (full) return full;
-  return c.email?.split("@")[0] ?? "Client";
+  return c.email?.split("@")[0] ?? fallback;
 }
 
 const TrainerClients = () => {
@@ -61,14 +62,14 @@ const TrainerClients = () => {
       className="w-full bg-card rounded-2xl p-4 card-shadow flex items-center gap-4 text-left"
     >
       <UserAvatar
-        name={displayName(client)}
+        name={displayName(client, t("trainer.clientFallback"))}
         imageUrl={client.avatarUrl ?? undefined}
         size="md"
         status={client.isAtRisk ? "trial" : "active"}
         layoutId={`client-avatar-${client.clientId}`}
       />
       <div className="flex-1 min-w-0">
-        <p className="text-body font-semibold text-foreground truncate">{displayName(client)}</p>
+        <p className="text-body font-semibold text-foreground truncate">{displayName(client, t("trainer.clientFallback"))}</p>
         {client.email && (
           <p className="text-caption-1 text-muted-foreground truncate mt-0.5">{client.email}</p>
         )}
@@ -80,16 +81,16 @@ const TrainerClients = () => {
           )}
           {client.isInDeload && (
             <span className="text-caption-2 font-semibold px-2 py-0.5 rounded-full bg-info/10 text-info">
-              Deload
+              {t("trainer.deload")}
             </span>
           )}
           {client.cyclePhase && (
             <span className="text-caption-2 font-semibold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
-              {client.cyclePhase}
+              {t(`trainer.cycle.${client.cyclePhase}`)}
             </span>
           )}
           <span className="text-caption-2 text-muted-foreground/70">
-            {getRelativeTime(client.lastUpdatedAt)}
+            {getRelativeTime(client.lastUpdatedAt, t)}
           </span>
         </div>
       </div>

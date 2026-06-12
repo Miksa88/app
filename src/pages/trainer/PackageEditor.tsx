@@ -200,7 +200,7 @@ const PackageEditor = () => {
       <div className="px-5 pt-4 space-y-4">
         <motion.div {...fadeUp(0.05)}>
           <p className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Tier
+            {t("trainer.tierLabel")}
           </p>
           <div className="grid grid-cols-3 gap-2">
             {TIER_OPTIONS.map((opt) => {
@@ -318,11 +318,11 @@ const PackageEditor = () => {
               </label>
               <div className="flex gap-2">
                 {[
-                  { value: "7", label: "7 d" },
-                  { value: "30", label: "30 d" },
-                  { value: "90", label: "3 m" },
-                  { value: "180", label: "6 m" },
-                  { value: "365", label: "1 g" },
+                  { value: "7", label: t("trainer.dur7d") },
+                  { value: "30", label: t("trainer.dur30d") },
+                  { value: "90", label: t("trainer.dur3m") },
+                  { value: "180", label: t("trainer.dur6m") },
+                  { value: "365", label: t("trainer.dur1y") },
                 ].map((opt) => (
                   <button
                     key={opt.value}
@@ -349,12 +349,12 @@ const PackageEditor = () => {
         <motion.div {...fadeUp(0.12)}>
           <Card className="p-4 space-y-3">
             <p className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider">
-              Auto-assignment
+              {t("trainer.autoAssignment")}
             </p>
 
             <div>
               <label className="text-caption-2 text-muted-foreground mb-1 block">
-                Default workout frequency
+                {t("trainer.defaultFrequency")}
               </label>
               <div className="flex gap-2">
                 {["", "3", "4", "5"].map((f) => (
@@ -368,7 +368,7 @@ const PackageEditor = () => {
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {f === "" ? "any" : `${f}×`}
+                    {f === "" ? t("trainer.any") : `${f}×`}
                   </button>
                 ))}
               </div>
@@ -376,7 +376,7 @@ const PackageEditor = () => {
 
             <div>
               <label className="text-caption-2 text-muted-foreground mb-1 block">
-                Target experience
+                {t("trainer.targetExperience")}
               </label>
               <div className="flex gap-2">
                 {(["any", "beginner", "intermediate"] as PackageTargetExperience[]).map((te) => (
@@ -390,7 +390,7 @@ const PackageEditor = () => {
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {te}
+                    {te === "any" ? t("trainer.any") : t(`training.level_${te}`)}
                   </button>
                 ))}
               </div>
@@ -401,16 +401,16 @@ const PackageEditor = () => {
         <motion.div {...fadeUp(0.14)}>
           <Card className="p-4">
             <p className="text-caption-1 font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Features
+              {t("trainer.features")}
             </p>
             {([
-              { key: "trainingProgram" as const, label: "Training program" },
-              { key: "nutritionPlan" as const, label: "Nutrition plan" },
-              { key: "weeklyCheckins" as const, label: "Weekly check-ins" },
-              { key: "directMessaging" as const, label: "Direct messaging" },
-              { key: "progressPhotos" as const, label: "Progress photos" },
-              { key: "metricsTracking" as const, label: "Metrics tracking" },
-              { key: "videoCalls" as const, label: "Video calls" },
+              { key: "trainingProgram" as const, label: t("trainer.feature.trainingProgram") },
+              { key: "nutritionPlan" as const, label: t("trainer.feature.nutritionPlan") },
+              { key: "weeklyCheckins" as const, label: t("trainer.feature.weeklyCheckins") },
+              { key: "directMessaging" as const, label: t("trainer.feature.directMessaging") },
+              { key: "progressPhotos" as const, label: t("trainer.feature.progressPhotos") },
+              { key: "metricsTracking" as const, label: t("trainer.feature.metricsTracking") },
+              { key: "videoCalls" as const, label: t("trainer.feature.videoCalls") },
             ]).map(({ key, label }, i, arr) => (
               <button
                 key={key}
@@ -434,7 +434,7 @@ const PackageEditor = () => {
 
             {features.videoCalls && (
               <div className="mt-3 pt-3 border-t border-border/50 flex items-center gap-2">
-                <span className="text-caption-1 text-muted-foreground">Sessions/month:</span>
+                <span className="text-caption-1 text-muted-foreground">{t("trainer.sessionsPerMonth")}:</span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -467,7 +467,7 @@ const PackageEditor = () => {
               className="w-full py-3 text-destructive text-body min-h-11 flex items-center justify-center gap-2"
             >
               <Trash2 size={ICON_SIZE.sm} aria-hidden="true" />
-              Archive
+              {t("trainer.archive")}
             </button>
           )}
         </motion.div>

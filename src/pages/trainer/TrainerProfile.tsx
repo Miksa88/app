@@ -17,6 +17,7 @@ import trainerAvatar from "@/assets/trainer-avatar.jpg";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Card } from "@/components/ui/card";
 import { useHaptic } from "@/hooks/useHaptic";
+import { tenantConfig } from "@/tenant.config";
 
 type SettingsPage = null | "business" | "availability" | "notifications" | "appearance" | "language" | "workingHours" | "brand" | "defaults" | "vacation";
 
@@ -33,7 +34,7 @@ const TrainerProfile = () => {
     ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
     : (user?.user_metadata?.first_name as string | undefined)
       ?? user?.email?.split("@")[0]
-      ?? "Trainer";
+      ?? t("trainer.trainerFallback");
   const displayEmail = user?.email ?? "";
   const realClientCount = trainerClients.length;
 
@@ -75,7 +76,7 @@ const TrainerProfile = () => {
     { icon: Clock, label: t("trainerProfile.workingHours"), sub: `${workingHours.from} - ${workingHours.to}`, page: "workingHours" as const },
     { icon: Palette, label: t("profile.appearance"), sub: theme === "system" ? t("appearance.system") : theme === "dark" ? t("appearance.dark") : t("appearance.light"), page: "appearance" as const },
     { icon: Globe, label: t("profile.language"), sub: language === "sr" ? "Srpski" : "English", page: "language" as const },
-    { icon: Palette, label: t("trainerProfile.brand"), sub: t("trainerProfile.brandNameDefault"), page: "brand" as const },
+    { icon: Palette, label: t("trainerProfile.brand"), sub: tenantConfig.appName, page: "brand" as const },
     { icon: Briefcase, label: t("defaults.title"), sub: t("overload.moderate"), page: "defaults" as const },
     { icon: Plane, label: t("trainer.vacation.title"), sub: "", page: "vacation" as const },
   ];
@@ -270,22 +271,23 @@ const TrainerProfile = () => {
                   <div className="bg-card rounded-xl card-shadow p-4 space-y-4 mt-4">
                     <div>
                       <label className="text-caption-1 text-muted-foreground">{t("trainerProfile.appName")}</label>
-                      <p className="text-body text-foreground mt-1">{t("trainerProfile.brandNameDefault")}</p>
+                      {/* White-label: ime i boja dolaze iz tenant configa, ne iz prevoda */}
+                      <p className="text-body text-foreground mt-1">{tenantConfig.appName}</p>
                     </div>
                     <div className="separator-ios" />
                     <div>
                       <label className="text-caption-1 text-muted-foreground">{t("trainerProfile.primaryColor")}</label>
                       <div className="flex items-center gap-2 mt-1">
                         <div className="w-6 h-6 rounded-full gradient-primary" />
-                        <p className="text-body text-foreground tabular-nums">{t("trainerProfile.brandColorDefault")}</p>
+                        <p className="text-body text-foreground tabular-nums">{`hsl(${tenantConfig.colors.primary})`}</p>
                       </div>
                     </div>
                     <div className="separator-ios" />
                     <div>
                       <label className="text-caption-1 text-muted-foreground">{t("trainerProfile.appStatus")}</label>
                       <div className="mt-1 space-y-1">
-                        <p className="text-body text-foreground">iOS <span className="text-success">● Live</span> v2.1</p>
-                        <p className="text-body text-foreground">Android <span className="text-success">● Live</span> v2.1</p>
+                        <p className="text-body text-foreground">iOS <span className="text-success">● {t("trainerProfile.statusLive")}</span> v2.1</p>
+                        <p className="text-body text-foreground">Android <span className="text-success">● {t("trainerProfile.statusLive")}</span> v2.1</p>
                       </div>
                     </div>
                   </div>

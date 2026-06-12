@@ -118,13 +118,13 @@ export const DailyTargetsCard = ({
         </div>
         <div className="flex gap-2 text-caption-1">
           <span className="flex-1 text-info font-semibold">
-            Protein {proteinGrams}g ({macroRatio.protein}%)
+            {t("nutrition.protein")} {proteinGrams}g ({macroRatio.protein}%)
           </span>
           <span className="flex-1 text-warning-foreground font-semibold">
-            Carbs {carbsGrams}g ({macroRatio.carbs}%)
+            {t("nutrition.carbs")} {carbsGrams}g ({macroRatio.carbs}%)
           </span>
           <span className="flex-1 text-destructive font-semibold">
-            Fat {fatGrams}g ({macroRatio.fat}%)
+            {t("nutrition.fat")} {fatGrams}g ({macroRatio.fat}%)
           </span>
         </div>
       </button>

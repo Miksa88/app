@@ -70,14 +70,19 @@ const WorkoutEditor = () => {
   };
 
   const addSection = (type: WorkoutSection["type"]) => {
+    // Default imena sekcija na jeziku appa — trener ih može preimenovati
     const nameMap: Record<string, string> = {
-      regular: "Main", warmup: "Warmup", cooldown: "Cooldown",
-      superset: `Superset ${String.fromCharCode(65 + sections.length)}`,
-      circuit: "Circuit", amrap: "AMRAP", interval: "Interval",
+      regular: t("trainer.section.main"),
+      warmup: t("trainer.section.warmup"),
+      cooldown: t("trainer.section.cooldown"),
+      superset: t("trainer.section.superset").replace("{letter}", String.fromCharCode(65 + sections.length)),
+      circuit: t("trainer.section.circuit"),
+      amrap: t("trainer.section.amrap"),
+      interval: t("trainer.section.interval"),
     };
     setSections([...sections, {
       id: `s-${Date.now()}`,
-      name: nameMap[type] || "Section",
+      name: nameMap[type] || t("trainer.section.default"),
       type,
       exercises: [],
     }]);

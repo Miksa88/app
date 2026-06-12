@@ -356,8 +356,8 @@ const NutritionTemplateEditor = () => {
                         );
                       })}
                       <p className="text-caption-2 text-muted-foreground text-center">
-                        Total: {macros.protein + macros.carbs + macros.fat}%
-                        {macros.protein + macros.carbs + macros.fat !== 100 && " ⚠️ Must equal 100%"}
+                        {t("food.total")}: {macros.protein + macros.carbs + macros.fat}%
+                        {macros.protein + macros.carbs + macros.fat !== 100 && ` ${t("trainer.mustEqual100")}`}
                       </p>
                     </div>
                   )}
@@ -446,7 +446,7 @@ const NutritionTemplateEditor = () => {
                   {calorieStrategy === "range" && (
                     <div className="pt-2 grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-caption-1 text-muted-foreground">Min kcal</label>
+                        <label className="text-caption-1 text-muted-foreground">{t("trainer.minKcal")}</label>
                         <input
                           type="number"
                           value={calorieRange.min}
@@ -455,7 +455,7 @@ const NutritionTemplateEditor = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-caption-1 text-muted-foreground">Max kcal</label>
+                        <label className="text-caption-1 text-muted-foreground">{t("trainer.maxKcal")}</label>
                         <input
                           type="number"
                           value={calorieRange.max}
@@ -488,7 +488,7 @@ const NutritionTemplateEditor = () => {
                   {differentOnTrainingDays && (
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <div>
-                        <label className="text-caption-1 text-muted-foreground">{t("nutrition.trainingDay")} modifier</label>
+                        <label className="text-caption-1 text-muted-foreground">{t("trainer.trainingDayModifier")}</label>
                         <input
                           type="number"
                           value={trainingDayMod}
@@ -498,7 +498,7 @@ const NutritionTemplateEditor = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-caption-1 text-muted-foreground">{t("nutrition.restDay")} modifier</label>
+                        <label className="text-caption-1 text-muted-foreground">{t("trainer.restDayModifier")}</label>
                         <input
                           type="number"
                           value={restDayMod}

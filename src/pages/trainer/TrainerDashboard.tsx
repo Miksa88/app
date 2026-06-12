@@ -20,11 +20,12 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { SectionLabel } from "@/components/ui/section-label";
 import { ActionCard } from "@/components/ui/action-card";
 import { useHaptic } from "@/hooks/useHaptic";
+import { useProfileFirstName } from "@/hooks/useProfile";
 import trainerAvatar from "@/assets/trainer-avatar.jpg";
 
 const TrainerDashboard = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const { counters, atRiskClients } = useTrainerDashboard();
   const { clients } = useTrainerClients();
@@ -33,8 +34,11 @@ const TrainerDashboard = () => {
   const { data: nutritionTemplates = [] } = useNutritionTemplates();
   const haptic = useHaptic();
 
+  // Pozdrav: user_metadata → profiles.first_name → email prefiks
+  const { data: profileFirstName } = useProfileFirstName(user?.id);
   const trainerFirstName = String(
     user?.user_metadata?.first_name
+      ?? profileFirstName
       ?? user?.email?.split("@")[0].split("+")[0]
       ?? "",
   );
@@ -66,9 +70,10 @@ const TrainerDashboard = () => {
   ].filter(Boolean).join(" + ");
 
   const today = new Date();
-  const dayName = today.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+  // Datum prati izabrani jezik aplikacije, ne hardkodovani locale
+  const dayName = today.toLocaleDateString(language === "sr" ? "sr-RS" : "en-US", { weekday: 'long', day: 'numeric', month: 'long' });
   const hour = today.getHours();
-  const greeting = hour < 12 ? "Dobro jutro" : hour < 18 ? "Dobar dan" : "Dobro veče";
+  const greeting = hour < 12 ? t("trainer.greetingMorning") : hour < 18 ? t("trainer.greetingAfternoon") : t("trainer.greetingEvening");
 
   return (
     <div className="min-h-screen bg-background-secondary pb-32">
@@ -112,12 +117,12 @@ const TrainerDashboard = () => {
             <div className="flex items-center gap-2 mb-2">
               <Sparkles size={ICON_SIZE.xs} className="opacity-80" aria-hidden="true" />
               <span className="text-caption-1 font-medium opacity-90 uppercase tracking-wider">
-                Tvoj dan
+                {t("trainer.yourDay")}
               </span>
             </div>
             <div className="flex items-end gap-2 mb-1">
               <p className="text-display-xl tabular-nums">{activeCount}</p>
-              <p className="text-body opacity-90 mb-2">klijentkinja aktivno</p>
+              <p className="text-body opacity-90 mb-2">{t("trainer.clientsActive")}</p>
             </div>
             <div className="flex items-center gap-4 mt-5">
               <button
@@ -126,7 +131,7 @@ const TrainerDashboard = () => {
               >
                 <div className="flex items-center gap-2">
                   <Users size={16} aria-hidden="true" />
-                  <span className="text-footnote font-semibold">Vidi sve</span>
+                  <span className="text-footnote font-semibold">{t("trainer.seeAll")}</span>
                 </div>
                 <ArrowUpRight size={16} className="opacity-80" aria-hidden="true" />
               </button>
@@ -145,14 +150,14 @@ const TrainerDashboard = () => {
 
         {/* ============ Today's KPIs — agregirani brojevi iz user_status ============ */}
         <motion.div {...fadeUp(0.18)}>
-          <SectionLabel>Danas</SectionLabel>
+          <SectionLabel>{t("trainer.today")}</SectionLabel>
           <div className="grid grid-cols-2 gap-3">
             <StatCard
               layout="apple-health"
               icon={<Users size={ICON_SIZE.md} />}
               iconBg="bg-primary/10"
               iconColor="text-primary"
-              label="Klijentkinje"
+              label={t("trainer.clientsLabel")}
               value={String(activeCount)}
             />
             <StatCard
@@ -160,7 +165,7 @@ const TrainerDashboard = () => {
               icon={<AlertTriangle size={ICON_SIZE.md} />}
               iconBg="bg-destructive/10"
               iconColor="text-destructive"
-              label="Na oprezu"
+              label={t("trainer.atRiskLabel")}
               value={String(redFlagCount)}
             />
             <StatCard
@@ -168,7 +173,7 @@ const TrainerDashboard = () => {
               icon={<Activity size={ICON_SIZE.md} />}
               iconBg="bg-info/10"
               iconColor="text-info"
-              label="Deload"
+              label={t("trainer.deload")}
               value={String(counters?.deloadCount ?? 0)}
             />
             <StatCard
@@ -176,7 +181,7 @@ const TrainerDashboard = () => {
               icon={<Dumbbell size={ICON_SIZE.md} />}
               iconBg="bg-warning/10"
               iconColor="text-warning"
-              label="Lutealna faza"
+              label={t("trainer.lutealPhase")}
               value={String(counters?.cyclePhaseCounts.luteal ?? 0)}
             />
           </div>
@@ -194,11 +199,11 @@ const TrainerDashboard = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-body font-semibold text-foreground">
-                  {redFlagCount} klijentkinja na oprezu
+                  {t("trainer.atRiskCountLabel").replace("{count}", String(redFlagCount))}
                 </p>
                 {atRiskNames && (
                   <p className="text-footnote text-muted-foreground mt-0.5 truncate">
-                    {atRiskNames} — potrebna je intervencija
+                    {t("trainer.interventionNeeded").replace("{names}", atRiskNames)}
                   </p>
                 )}
               </div>
@@ -248,7 +253,7 @@ const TrainerDashboard = () => {
                   onClick={() => navigate("/trainer/clients")}
                   className="text-caption-1 text-primary font-semibold"
                 >
-                  Sve →
+                  {t("trainer.seeAllShort")} →
                 </button>
               }
             >
@@ -258,7 +263,7 @@ const TrainerDashboard = () => {
               {recentClients.map((client, i) => {
                 const fullName = [client.firstName, client.lastName].filter(Boolean).join(" ").trim()
                   || client.email?.split("@")[0]
-                  || "Client";
+                  || t("trainer.clientFallback");
                 return (
                   <motion.button
                     key={client.clientId}
@@ -281,7 +286,7 @@ const TrainerDashboard = () => {
                       </p>
                       {client.cyclePhase && (
                         <p className="text-caption-2 text-muted-foreground mt-0.5 truncate">
-                          {client.cyclePhase}
+                          {t(`trainer.cycle.${client.cyclePhase}`)}
                         </p>
                       )}
                     </div>
@@ -294,7 +299,7 @@ const TrainerDashboard = () => {
 
         {/* ============ Manage sekcija — glavne navigacione kartice ============ */}
         <motion.div {...fadeUp(0.34)}>
-          <SectionLabel>Upravljanje</SectionLabel>
+          <SectionLabel>{t("trainer.manage")}</SectionLabel>
           <div className="space-y-2">
             {[
               { icon: Package, iconBg: "bg-info/10", iconColor: "text-info", title: t("packages.title"), desc: `${packages.filter(p => p.tier !== 'high').length} ${t("packages.title").toLowerCase()} · ${counters?.totalClients ?? 0} ${t("packages.subscribers")}`, path: "/trainer/packages" },

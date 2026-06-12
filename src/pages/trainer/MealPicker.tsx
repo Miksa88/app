@@ -172,12 +172,12 @@ const MealPicker = () => {
                           : "bg-destructive/15 text-destructive"
                       }`}
                     >
-                      GI: {food.glycemicIndex}
+                      GI: {t(`trainer.gi.${food.glycemicIndex}`)}
                     </span>
                   )}
                   {food.tags.includes("high-protein") && (
                     <span className="text-caption-2 px-1.5 py-0.5 rounded-md font-medium bg-info/15 text-info">
-                      High P
+                      {t("trainer.highProtein")}
                     </span>
                   )}
                 </div>

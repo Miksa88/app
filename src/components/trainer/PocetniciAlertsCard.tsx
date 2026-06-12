@@ -13,6 +13,7 @@
 
 import { motion } from 'framer-motion';
 import { AlertTriangle, AlertCircle, ChevronRight } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import type { PocetniciAlert } from '@/utils/sync/pocetniciAlerts';
 
 interface PocetniciAlertsCardProps {
@@ -26,11 +27,12 @@ export default function PocetniciAlertsCard({
   className = '',
   prefersReducedMotion = false,
 }: PocetniciAlertsCardProps) {
+  const { t } = useLanguage();
   if (alerts.length === 0) {
     return (
       <div className={`bg-card rounded-2xl card-shadow p-4 ${className}`}>
         <p className="text-subhead text-muted-foreground text-center py-4">
-          ✓ Nema aktivnih §8 alert-a
+          {t('trainer.alerts.empty')}
         </p>
       </div>
     );
@@ -61,6 +63,7 @@ interface AlertItemProps {
 }
 
 function AlertItem({ alert, motionProps }: AlertItemProps) {
+  const { t } = useLanguage();
   const isRed = alert.severity === 'red';
   const Icon = isRed ? AlertCircle : AlertTriangle;
   const tone = isRed
@@ -88,7 +91,7 @@ function AlertItem({ alert, motionProps }: AlertItemProps) {
               {alert.title}
             </h3>
             <span className={`text-caption-2 font-bold px-2 py-0.5 rounded-full ${badgeBg}`}>
-              {isRed ? 'CRVENO' : 'ŽUTO'}
+              {isRed ? t('trainer.alerts.red') : t('trainer.alerts.amber')}
             </span>
           </div>
           <p className="text-footnote text-muted-foreground mt-1">{alert.description}</p>

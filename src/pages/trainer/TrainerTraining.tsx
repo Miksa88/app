@@ -18,30 +18,35 @@ import { getDefaultLevel } from "@/utils/defaultAssignment";
 import { useWorkouts, type WorkoutRecord } from "@/hooks/useWorkouts";
 import { usePrograms, type ProgramRecord } from "@/hooks/usePrograms";
 
+// Tagovi sa prevodom — beginner/intermediate/advanced dele training.level_* ključeve.
+const TAG_LABEL_KEY: Record<string, string> = {
+  beginner: "training.level_beginner",
+  intermediate: "training.level_intermediate",
+  advanced: "training.level_advanced",
+  foundation: "trainer.tag.foundation",
+  upper_lower: "trainer.tag.upper_lower",
+  full_body: "trainer.tag.full_body",
+  upper: "trainer.tag.upper",
+  lower: "trainer.tag.lower",
+  heavy: "trainer.tag.heavy",
+  volume: "trainer.tag.volume",
+  fat_loss: "trainer.tag.fat_loss",
+  figure: "trainer.tag.figure",
+  health: "trainer.tag.health",
+  muscle_gain: "trainer.tag.muscle_gain",
+  free_trial: "trainer.tag.free_trial",
+  "3_days_week": "trainer.tag.3_days_week",
+  "4_days_week": "trainer.tag.4_days_week",
+  "5_days_week": "trainer.tag.5_days_week",
+};
+
 // Pretvara backend tag (`beginner`, `3_days_week`, `safe_knees`) u user-friendly label.
-function formatTag(tag: string): string {
-  if (tag.startsWith("safe_")) return `Safe: ${formatTag(tag.replace("safe_", ""))}`;
-  const map: Record<string, string> = {
-    beginner: "Beginner",
-    intermediate: "Intermediate",
-    advanced: "Advanced",
-    foundation: "Foundation",
-    upper_lower: "Upper/Lower",
-    full_body: "Full Body",
-    upper: "Upper",
-    lower: "Lower",
-    heavy: "Heavy",
-    volume: "Volume",
-    fat_loss: "Fat Loss",
-    figure: "Figure",
-    health: "Health",
-    muscle_gain: "Muscle Gain",
-    free_trial: "Free Trial",
-    "3_days_week": "3 days/wk",
-    "4_days_week": "4 days/wk",
-    "5_days_week": "5 days/wk",
-  };
-  if (map[tag]) return map[tag];
+// t se prosleđuje — module-level funkcija nema pristup LanguageContext-u.
+function formatTag(tag: string, t: (key: string) => string): string {
+  if (tag.startsWith("safe_")) {
+    return t("trainer.tag.safePrefix").replace("{tag}", formatTag(tag.replace("safe_", ""), t));
+  }
+  if (TAG_LABEL_KEY[tag]) return t(TAG_LABEL_KEY[tag]);
   // Fallback: snake_case → Title Case (npr. "no_pork" → "No Pork")
   return tag.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
@@ -325,7 +330,7 @@ const TrainerTraining = () => {
                       <div className="flex flex-wrap gap-2 mt-3 ml-[3.25rem]">
                         {p.tags.slice(0, 4).map((tag) => (
                           <span key={tag} className={`text-caption-2 font-bold px-2 py-0.5 rounded-full ${getTagColor(tag)}`}>
-                            {formatTag(tag)}
+                            {formatTag(tag, t)}
                           </span>
                         ))}
                         {p.tags.length > 4 && (

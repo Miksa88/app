@@ -17,10 +17,37 @@ import {
 } from "@/services/exerciseVideoService";
 import { upsertExercise } from "@/services/exerciseUpsertService";
 
+// Vrednosti su storage format (DB/legacy mapiranja) — prikaz ide kroz t() ključeve ispod.
 const EQUIPMENT_OPTIONS = ["Barbell", "Dumbbell", "Machine", "Cable Machine", "Bodyweight", "Kettlebell", "Bench", "Rack"];
+const EQUIPMENT_LABEL_KEY: Record<string, string> = {
+  "Barbell": "trainer.equip.barbell",
+  "Dumbbell": "trainer.equip.dumbbell",
+  "Machine": "trainer.equip.machine",
+  "Cable Machine": "trainer.equip.cable_machine",
+  "Bodyweight": "trainer.equip.bodyweight",
+  "Kettlebell": "trainer.equip.kettlebell",
+  "Bench": "trainer.equip.bench",
+  "Rack": "trainer.equip.rack",
+};
 const FOCUS_OPTIONS = ["Noge", "Grudi", "Leđa", "Ramena", "Ruke", "Core", "Kardio", "Full Body"];
+const FOCUS_LABEL_KEY: Record<string, string> = {
+  "Noge": "trainer.focus.legs",
+  "Grudi": "trainer.focus.chest",
+  "Leđa": "trainer.focus.back",
+  "Ramena": "trainer.focus.shoulders",
+  "Ruke": "trainer.focus.arms",
+  "Core": "trainer.focus.core",
+  "Kardio": "trainer.focus.cardio",
+  "Full Body": "trainer.focus.fullBody",
+};
 const LEVEL_OPTIONS = ["beginner", "intermediate", "advanced"];
 const TYPE_OPTIONS = ["Strength", "Cardio", "HIIT", "Flexibility"];
+const TYPE_LABEL_KEY: Record<string, string> = {
+  "Strength": "trainer.type.strength",
+  "Cardio": "trainer.type.cardio",
+  "HIIT": "trainer.type.hiit",
+  "Flexibility": "trainer.type.flexibility",
+};
 
 const ExerciseDetail = () => {
   const { id } = useParams();
@@ -147,7 +174,7 @@ const ExerciseDetail = () => {
       return;
     }
     if (!trainerId) {
-      toast({ title: "Not authenticated", variant: "destructive" });
+      toast({ title: t("trainer.notAuthenticated"), variant: "destructive" });
       return;
     }
     // Map UI focus (Serbian category) → movement_pattern; UI level → DB difficulty.
@@ -191,7 +218,7 @@ const ExerciseDetail = () => {
       navigate(-1);
     } catch (err) {
       toast({
-        title: err instanceof Error ? err.message : "Save failed",
+        title: err instanceof Error ? err.message : t("trainer.saveFailed"),
         variant: "destructive",
       });
     }
@@ -325,7 +352,7 @@ const ExerciseDetail = () => {
           >
             <option value="">{t("training.selectEquipment")}</option>
             {EQUIPMENT_OPTIONS.map((eq) => (
-              <option key={eq} value={eq}>{eq}</option>
+              <option key={eq} value={eq}>{t(EQUIPMENT_LABEL_KEY[eq] ?? eq)}</option>
             ))}
           </select>
         </motion.div>
@@ -340,7 +367,7 @@ const ExerciseDetail = () => {
           >
             <option value="">{t("training.selectFocus")}</option>
             {FOCUS_OPTIONS.map((f) => (
-              <option key={f} value={f}>{f}</option>
+              <option key={f} value={f}>{t(FOCUS_LABEL_KEY[f] ?? f)}</option>
             ))}
           </select>
         </motion.div>
@@ -357,7 +384,7 @@ const ExerciseDetail = () => {
                   level === l ? "gradient-primary text-primary-foreground shadow-fab" : "bg-card text-muted-foreground card-shadow"
                 }`}
               >
-                {l.charAt(0).toUpperCase() + l.slice(1)}
+                {t(`training.level_${l}`)}
               </button>
             ))}
           </div>
@@ -372,7 +399,7 @@ const ExerciseDetail = () => {
             className="w-full bg-card text-foreground rounded-xl px-4 py-3 text-body card-shadow focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             {TYPE_OPTIONS.map((ty) => (
-              <option key={ty} value={ty}>{ty}</option>
+              <option key={ty} value={ty}>{t(TYPE_LABEL_KEY[ty] ?? ty)}</option>
             ))}
           </select>
         </motion.div>

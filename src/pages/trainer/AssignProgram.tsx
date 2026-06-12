@@ -52,14 +52,14 @@ const AssignProgram = () => {
       });
       if (result.missing.length > 0) {
         toast({
-          title: `${result.missing.length} client(s) skipped — no template assignment yet`,
+          title: t("trainer.clientsSkippedNoTemplate").replace("{count}", String(result.missing.length)),
           variant: "destructive",
         });
       }
       navigate(-1);
     } catch (err) {
       toast({
-        title: err instanceof Error ? err.message : "Assignment failed",
+        title: err instanceof Error ? err.message : t("trainer.assignFailed"),
         variant: "destructive",
       });
     }

@@ -8,6 +8,7 @@ import {
   getProfileInjuries,
   getClientTier,
   getTrainerClientCard,
+  getProfileFirstName,
 } from "@/services/profileService";
 import type { ClientData } from "@/data/trainerMockData";
 import type { PackageTier } from "@/services/packageService";
@@ -46,5 +47,15 @@ export function useTrainerClientCard(clientId: string | null | undefined) {
     queryKey: ["profile", "trainerClientCard", clientId ?? "anon"],
     queryFn: async () => (clientId ? getTrainerClientCard(clientId) : null),
     enabled: !!clientId,
+  });
+}
+
+/** Ime iz profiles — fallback za trener pozdrav (user_metadata → profiles → email prefiks). */
+export function useProfileFirstName(userId: string | null | undefined) {
+  return useQuery<string | null, Error>({
+    queryKey: ["profile", "firstName", userId ?? "anon"],
+    queryFn: async () => (userId ? getProfileFirstName(userId) : null),
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
   });
 }

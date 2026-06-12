@@ -107,7 +107,7 @@ const TierPromoteSheet = ({ open, onOpenChange, clientId, currentTier, onPromote
                         <p className="text-body font-semibold text-foreground">{t(`tier.${opt.value}`)}</p>
                         {isCurrent && (
                           <span className="text-caption-2 px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold">
-                            current
+                            {t("trainer.currentBadge")}
                           </span>
                         )}
                       </div>

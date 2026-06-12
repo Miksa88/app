@@ -177,17 +177,17 @@ const TrainerPackages = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {pkg.defaultWorkoutFrequency && (
                       <span className="text-caption-2 px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        {pkg.defaultWorkoutFrequency}× ned.
+                        {t("trainer.timesPerWeek").replace("{n}", String(pkg.defaultWorkoutFrequency))}
                       </span>
                     )}
                     {pkg.targetExperience !== "any" && (
                       <span className="text-caption-2 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
-                        {pkg.targetExperience}
+                        {t(`training.level_${pkg.targetExperience}`)}
                       </span>
                     )}
                     {pkg.programTemplateId && (
                       <span className="text-caption-2 px-2 py-0.5 rounded-full bg-success/10 text-success">
-                        program template
+                        {t("trainer.programTemplateBadge")}
                       </span>
                     )}
                   </div>

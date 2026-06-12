@@ -77,7 +77,7 @@ const TrainerFreeTrial = () => {
       toast.success(t("trial.saved").replace(" ✓", "").replace("!", ""));
       navigate(-1);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(err instanceof Error ? err.message : t("trainer.saveFailed"));
     }
   };
 

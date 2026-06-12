@@ -22,6 +22,19 @@ interface Props {
   clientId: string;
 }
 
+// Vrednosti EQUIPMENT_OPTIONS su storage format (profiles.equipment_list, Title Case);
+// prikaz ide kroz t() ključeve — isti map koristi i ExerciseDetail.
+const EQUIPMENT_LABEL_KEY: Record<string, string> = {
+  "Barbell": "trainer.equip.barbell",
+  "Dumbbell": "trainer.equip.dumbbell",
+  "Kettlebell": "trainer.equip.kettlebell",
+  "Cable Machine": "trainer.equip.cable_machine",
+  "Machine": "trainer.equip.machine",
+  "Bench": "trainer.equip.bench",
+  "Rack": "trainer.equip.rack",
+  "Bodyweight": "trainer.equip.bodyweight",
+};
+
 const EquipmentEditor = ({ clientId }: Props) => {
   const { t } = useLanguage();
   const haptic = useHaptic();
@@ -99,7 +112,7 @@ const EquipmentEditor = ({ clientId }: Props) => {
                     : "bg-card border border-border text-foreground hover:bg-muted/40"
                 }`}
               >
-                <span className="text-subhead font-medium">{opt}</span>
+                <span className="text-subhead font-medium">{t(EQUIPMENT_LABEL_KEY[opt] ?? opt)}</span>
                 {selected && (
                   <Check size={16} className="text-primary shrink-0" aria-hidden="true" />
                 )}

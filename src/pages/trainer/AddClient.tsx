@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE, MOTION_EASE } from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
+import { PageTitle } from "@/components/PageTitle";
 import { MotionButton } from "@/components/ui/motion-button";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -91,7 +92,7 @@ const AddClient = () => {
       navigate("/trainer");
     } catch (err) {
       toast({
-        title: err instanceof Error ? err.message : "Invitation failed",
+        title: err instanceof Error ? err.message : t("trainer.inviteFailed"),
         variant: "destructive",
       });
     } finally {
@@ -109,6 +110,9 @@ const AddClient = () => {
         onBack={() => guardNavigation(() => navigate(-1))}
         backLabel={t("clients.title")}
       />
+
+      {/* PageHeader ne renderuje naslov (2026-04-23 policy) — vidljivi H1 ide ovde */}
+      <PageTitle title={t("addClient.title")} compact />
 
       <div className="px-5 space-y-4 pt-3">
         {/* Basic info */}

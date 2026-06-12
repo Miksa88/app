@@ -139,3 +139,18 @@ export async function getProfilePersonalFields(
   if (error) return null;
   return data;
 }
+
+/**
+ * Ime korisnika iz profiles tabele — fallback za pozdrav kad
+ * user_metadata.first_name ne postoji (npr. nalozi pre sign-up forme).
+ * Greška → null (UI pada na email prefiks).
+ */
+export async function getProfileFirstName(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("first_name")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) return null;
+  return data?.first_name ?? null;
+}

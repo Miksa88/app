@@ -90,7 +90,7 @@ const TrainerAnalytics = () => {
             icon={<Activity size={ICON_SIZE.md} />}
             iconBg="bg-info/10"
             iconColor="text-info"
-            label="Deload"
+            label={t("trainer.deload")}
             value={String(deloadCount)}
           />
           <StatCard
@@ -187,12 +187,12 @@ const TrainerAnalytics = () => {
                         )}
                         {client.isInDeload && (
                           <span className="text-caption-2 font-semibold px-2 py-0.5 rounded-full bg-info/10 text-info">
-                            Deload
+                            {t("trainer.deload")}
                           </span>
                         )}
                         {client.cyclePhase && (
                           <span className="text-caption-2 font-semibold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
-                            {client.cyclePhase}
+                            {t(`trainer.cycle.${client.cyclePhase}`)}
                           </span>
                         )}
                       </div>

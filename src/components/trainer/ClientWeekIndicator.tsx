@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { Calendar, Flame, Snowflake } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ClientWeekIndicatorProps {
   mesocycleIndex: number;            // 1-based
@@ -29,22 +30,23 @@ export default function ClientWeekIndicator({
   hasHashimoto,
   className = '',
 }: ClientWeekIndicatorProps) {
+  const { t } = useLanguage();
   const weekN = currentMicrocycleIndex + 1;
   const isOverreach = currentMicrocycleIndex === totalWeeksInMesocycle - 2;
   const isDeload = currentMicrocycleIndex === totalWeeksInMesocycle - 1;
 
-  let phaseLabel = 'Akumulacija';
+  let phaseLabel = t('trainer.week.accumulation');
   let icon = <Calendar size={16} className="text-muted-foreground" />;
   let toneClass = 'text-foreground';
 
   if (currentMicrocycleIndex === 0) {
-    phaseLabel = 'Kalibracija';
+    phaseLabel = t('trainer.week.calibration');
   } else if (isOverreach) {
-    phaseLabel = hasHashimoto ? 'Overreach (RPE 8 cap)' : 'Overreach';
+    phaseLabel = hasHashimoto ? t('trainer.week.overreachCap') : t('trainer.week.overreach');
     icon = <Flame size={16} className="text-warning" />;
     toneClass = 'text-warning';
   } else if (isDeload) {
-    phaseLabel = 'Deload';
+    phaseLabel = t('trainer.week.deload');
     icon = <Snowflake size={16} className="text-info" />;
     toneClass = 'text-info';
   }
@@ -54,12 +56,12 @@ export default function ClientWeekIndicator({
   if (!isOverreach && !isDeload) {
     const weeksToOverreach = (totalWeeksInMesocycle - 2) - currentMicrocycleIndex;
     if (weeksToOverreach > 0) {
-      nextMilestone = `Overreach za ${weeksToOverreach} ned`;
+      nextMilestone = t('trainer.week.overreachIn').replace('{n}', String(weeksToOverreach));
     }
   } else if (isOverreach) {
-    nextMilestone = 'Deload sledeća nedelja';
+    nextMilestone = t('trainer.week.deloadNext');
   } else if (isDeload) {
-    nextMilestone = 'Nedelja 8 evaluacija → novi mezo';
+    nextMilestone = t('trainer.week.evaluation');
   }
 
   return (
@@ -67,7 +69,10 @@ export default function ClientWeekIndicator({
       {icon}
       <div className="flex flex-col">
         <span className={`text-footnote font-semibold ${toneClass}`}>
-          Mezo {mesocycleIndex}, Nedelja {weekN}/{totalWeeksInMesocycle} · {phaseLabel}
+          {t('trainer.week.label')
+            .replace('{meso}', String(mesocycleIndex))
+            .replace('{week}', String(weekN))
+            .replace('{total}', String(totalWeeksInMesocycle))} · {phaseLabel}
         </span>
         {nextMilestone && (
           <span className="text-caption-2 text-muted-foreground">

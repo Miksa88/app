@@ -92,7 +92,7 @@ export const ClientProfileHero = ({
                   <Flame size={ICON_SIZE.xs} aria-hidden="true" />
                   <span className="text-body font-bold tabular-nums">{client.streak}</span>
                 </div>
-                <p className="text-caption-2 opacity-80 uppercase tracking-wider mt-0.5">streak</p>
+                <p className="text-caption-2 opacity-80 uppercase tracking-wider mt-0.5">{t("trainer.streak")}</p>
               </div>
             )}
           </div>
