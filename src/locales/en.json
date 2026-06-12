@@ -418,6 +418,7 @@
   "postWorkout.volume": "Volume",
   "postWorkout.prs": "PRs",
   "postWorkout.new": "new",
+  "postWorkout.saveError": "Error saving",
   "postWorkout.backToHome": "Back to Home",
   "progress.title": "Progress",
   "progress.tabCompleted": "Completed workouts",

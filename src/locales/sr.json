@@ -418,6 +418,7 @@
   "postWorkout.volume": "Volumen",
   "postWorkout.prs": "Rekordi",
   "postWorkout.new": "novi",
+  "postWorkout.saveError": "Greška pri snimanju",
   "postWorkout.backToHome": "Nazad na početnu",
   "progress.title": "Napredak",
   "progress.tabCompleted": "Završeni treninzi",

@@ -261,7 +261,9 @@ const ActiveWorkout = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background-secondary pb-8">
+    // overflow-x-clip: exercise pager klizi x:±30px — bez clip-a stranica
+    // dobija horizontalni scroll tokom tranzicije (398px na 375px viewportu)
+    <div className="min-h-screen bg-background-secondary pb-8 overflow-x-clip">
       <WorkoutTopBar
         dayLabel={session.dayLabel}
         slotsCount={slots.length}

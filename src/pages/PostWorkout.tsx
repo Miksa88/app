@@ -55,7 +55,7 @@ const PostWorkout = () => {
       // Faza 4.2: usage event na success path — fail-silent, ne dira UX
       trackFeature('workout_completed');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Greška pri snimanju');
+      toast.error(err instanceof Error ? err.message : t("postWorkout.saveError"));
       setDifficulty(null);
     } finally {
       setSubmitting(false);
@@ -166,13 +166,13 @@ const PostWorkout = () => {
         className="mt-10 w-full max-w-sm z-10"
       >
         <p className="text-subhead font-semibold text-foreground text-center mb-3">
-          Kako je bio trening?
+          {t("postWorkout.feedbackTitle")}
         </p>
         <div className="grid grid-cols-3 gap-2">
           {([
-            { key: 'easy' as const, label: 'Lako', emoji: '😌' },
-            { key: 'just_right' as const, label: 'Taman', emoji: '😊' },
-            { key: 'hard' as const, label: 'Teško', emoji: '😤' },
+            { key: 'easy' as const, label: t("postWorkout.feedback.easy"), emoji: '😌' },
+            { key: 'just_right' as const, label: t("postWorkout.feedback.justRight"), emoji: '😊' },
+            { key: 'hard' as const, label: t("postWorkout.feedback.hard"), emoji: '😤' },
           ]).map((opt) => {
             const isSelected = difficulty === opt.key;
             return (
@@ -182,7 +182,7 @@ const PostWorkout = () => {
                 onClick={() => handleDifficulty(opt.key)}
                 disabled={submitting || difficulty !== null}
                 aria-pressed={isSelected}
-                aria-label={`${opt.label} — kako je bio trening`}
+                aria-label={`${opt.label} — ${t("postWorkout.feedbackTitle")}`}
                 className={`min-h-[88px] rounded-2xl flex flex-col items-center justify-center gap-1 transition border-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
                   isSelected
                     ? 'gradient-primary text-primary-foreground border-transparent shadow-fab'
@@ -197,7 +197,7 @@ const PostWorkout = () => {
         </div>
         {difficulty !== null && (
           <p className="text-caption-2 text-muted-foreground text-center mt-2">
-            Sledeći trening će biti prilagođen.
+            {t("postWorkout.feedbackThanks")}
           </p>
         )}
       </motion.div>

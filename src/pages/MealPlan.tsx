@@ -170,16 +170,16 @@ const MealPlanPage = () => {
           </Card>
         </motion.div>
 
-        {/* Confirm-all + Shopping list CTAs */}
+        {/* Confirm-all + Shopping list CTAs — px-3 + min-w-0 da red stane na 375px viewport (button cva ima whitespace-nowrap) */}
         <motion.div {...fadeUp(0.08)} className="flex gap-2">
           {!allConfirmed && (
             <Button
               onClick={confirmAll}
               variant="outline"
               size="lg"
-              className="flex-1"
+              className="flex-1 min-w-0 px-3"
             >
-              <Check size={ICON_SIZE.sm} className="mr-2" />
+              <Check size={ICON_SIZE.sm} />
               {t("mealPlan.confirmAll")}
             </Button>
           )}
@@ -187,10 +187,10 @@ const MealPlanPage = () => {
             onClick={() => navigate("/shopping")}
             variant="cta"
             size="lg"
-            className="flex-1"
+            className="flex-1 min-w-0 px-3"
             disabled={pendingCount === totalSlots}
           >
-            <ShoppingBasket size={ICON_SIZE.sm} className="mr-2" />
+            <ShoppingBasket size={ICON_SIZE.sm} />
             {t("mealPlan.shoppingList")}
           </Button>
         </motion.div>
