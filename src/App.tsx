@@ -73,11 +73,13 @@ const RouteGuard = ({ children }: { children: ReactNode }) => (
 
 /**
  * AuthGuard — kombinuje ErrorBoundary + ProtectedRoute.
- * Koristi se za sve rute koje zahtevaju ulogovanog korisnika
- * (sve osim Login i Onboarding).
+ * Koristi se za sve KLIJENTSKE rute. requireRole="client" preusmerava
+ * trenera koji direktno ukuca /gym, /food itd. na /trainer — simetrično
+ * sa TrainerGuard-om koji klijenta vraća na /home. Korisnik bez role
+ * u profilu (legacy) i dalje prolazi (redirect samo na eksplicitan mismatch).
  */
 const AuthGuard = ({ children }: { children: ReactNode }) => (
-  <ProtectedRoute>
+  <ProtectedRoute requireRole="client">
     <ErrorBoundary>{children}</ErrorBoundary>
   </ProtectedRoute>
 );
