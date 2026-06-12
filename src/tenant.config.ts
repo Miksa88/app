@@ -94,7 +94,9 @@ export const tenantConfig: TenantConfig = {
     light: '/src/assets/logo-light.webp',
     dark: '/src/assets/logo-dark.webp',
   },
-  defaultLanguage: 'en',
+  // fitbyivana je srpski-first (PRODUCT.md) — 'en' ovde je bio regresija
+  // koja je celu app podigla na engleskom za nove korisnike i E2E.
+  defaultLanguage: 'sr',
   contact: {
     email: '',
     instagram: '',

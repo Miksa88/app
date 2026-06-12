@@ -134,45 +134,35 @@ test.describe("Onboarding walk — capture every step", () => {
     });
     await clickSkip(page);
 
-    // ─── Step 9: Experience (required) ───────────────────────────────────────
-    await page.waitForTimeout(500);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "onboarding-step-09-experience.png"),
-      fullPage: true,
-    });
-    // Click first card (beginner)
-    await page.locator('button[aria-pressed]').first().click();
-    await page.waitForTimeout(300);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "onboarding-step-09-experience-selected.png"),
-      fullPage: true,
-    });
-    await clickContinue(page);
+    // ─── Adaptivni walker za preostale korake ────────────────────────────────
+    // Broj i redosled koraka zavisi od tenant feature flagova (npr. healthKit
+    // gasi Permissions korak), pa fiksni indeksi lome spec pri svakoj promeni.
+    // Petlja: ako korak ima selection kartice (aria-pressed) klikni prvu,
+    // zatim Continue/Skip; izlaz kad se pojavi "Završi/Finish" dugme.
+    for (let step = 9; step <= 16; step++) {
+      await page.waitForTimeout(500);
+      await page.screenshot({
+        path: path.join(SCREENSHOT_DIR, `onboarding-step-${String(step).padStart(2, "0")}.png`),
+        fullPage: true,
+      });
 
-    // ─── Step 10: Frequency (required) ───────────────────────────────────────
-    await page.waitForTimeout(500);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "onboarding-step-10-frequency.png"),
-      fullPage: true,
-    });
-    // Click first frequency card
-    await page.locator('button[aria-pressed]').first().click();
-    await page.waitForTimeout(300);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "onboarding-step-10-frequency-selected.png"),
-      fullPage: true,
-    });
-    await clickContinue(page);
+      const finishBtn = page.getByRole("button", { name: /završ|finish|gotovo/i }).first();
+      if (await finishBtn.isVisible().catch(() => false)) {
+        await finishBtn.click();
+        break;
+      }
 
-    // ─── Step 11: Cycle Tracker (optional, last step — finish) ───────────────
-    await page.waitForTimeout(500);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, "onboarding-step-11-cycle.png"),
-      fullPage: true,
-    });
-    // Optional — click finish (Skip would also work). The button label changes
-    // to "finish" on the last step.
-    await page.getByRole("button", { name: /završ|finish|gotovo/i }).first().click();
+      const selectionCard = page.locator("button[aria-pressed]").first();
+      if (await selectionCard.isVisible().catch(() => false)) {
+        await selectionCard.click();
+        await page.waitForTimeout(300);
+        await page.screenshot({
+          path: path.join(SCREENSHOT_DIR, `onboarding-step-${String(step).padStart(2, "0")}-selected.png`),
+          fullPage: true,
+        });
+      }
+      await clickContinue(page);
+    }
 
     // ─── Phase: Processing Screen ────────────────────────────────────────────
     await page.waitForTimeout(1500);

@@ -259,6 +259,20 @@
     /* Sakrij native scrollbar — Apple aplikacije koriste minimalan indicator tokom scroll-a */
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Numerički inputi: desktop Safari/Chrome prikazuju spinner strelice na
+     focus/hover — u uskim poljima (ActiveWorkout weight/reps, makroi) razlivaju
+     layout. App ima sopstvene +/- kontrole, native spinneri nisu potrebni. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
   body {
     @apply bg-background-secondary text-foreground antialiased;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;

@@ -30,8 +30,9 @@ test.describe("Data loading — content visible", () => {
     await page.goto("/home");
     await page.waitForLoadState("networkidle");
 
-    // Heading "Danas" (h2) iz mini data centra
-    const todayHeading = page.getByRole("heading", { name: /^danas$/i, level: 2 });
+    // Heading "Danas"/"Today" (h2) iz mini data centra — dvojezično,
+    // auth helper pinuje EN ali tenant default može biti sr.
+    const todayHeading = page.getByRole("heading", { name: /^(danas|today)$/i, level: 2 });
     await expect(todayHeading).toBeVisible({ timeout: 10_000 });
 
     // kcal counter mora biti vidljiv u istom card-u

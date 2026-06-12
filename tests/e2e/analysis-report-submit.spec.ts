@@ -38,13 +38,13 @@ test.describe("AnalysisReport i18n error keys", () => {
   });
 
   test("translations file contains required error keys", async () => {
-    // Static check translations file — jednostavnija provera nego runtime
+    // Static check — prevodi su od talas-1 refaktora u JSON locale fajlovima
+    // (LanguageContext ih samo importuje), pa proveravamo oba JSON-a.
     const fs = await import("fs/promises");
-    const content = await fs.readFile(
-      "src/contexts/LanguageContext.tsx",
-      "utf-8",
-    );
-    expect(content).toContain('"analysis.errorGeneric"');
-    expect(content).toContain('"analysis.errorNoSession"');
+    for (const locale of ["src/locales/sr.json", "src/locales/en.json"]) {
+      const content = await fs.readFile(locale, "utf-8");
+      expect(content).toContain('"analysis.errorGeneric"');
+      expect(content).toContain('"analysis.errorNoSession"');
+    }
   });
 });

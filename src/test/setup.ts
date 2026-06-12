@@ -49,3 +49,10 @@ if (typeof window !== "undefined") {
     proto.scrollIntoView = () => {};
   }
 }
+
+// Testovi rade na engleskom bez obzira na tenantConfig.defaultLanguage —
+// asercije po tekstu ("Done Set", "Today"...) ostaju stabilne i kad je
+// tenant srpski-first. Isti princip kao tests/e2e/helpers/auth.ts.
+if (typeof window !== "undefined" && window.localStorage) {
+  window.localStorage.setItem("app-language", "en");
+}

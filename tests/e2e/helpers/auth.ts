@@ -31,6 +31,15 @@ export const TEST_USER = {
  * + type=submit na submit button-u.
  */
 export async function loginAsTestUser(page: Page): Promise<void> {
+  // Testovi rade na engleskom bez obzira na tenant defaultLanguage —
+  // tekstualni selektori ostaju stabilni i kad je tenant srpski-first.
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem("app-language", "en");
+    } catch {
+      /* storage nedostupan — pada na tenant default */
+    }
+  });
   await page.goto("/");
 
   // Landing → click "Sign In" link to open sheet
