@@ -9,8 +9,10 @@ test.describe("Authentication", () => {
   test("unauthenticated user sees Login screen on /", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL("/");
-    // Login CTA visible
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+    // Login CTA visible — dvojezično (tenant default može biti sr ili en)
+    await expect(
+      page.getByRole("button", { name: /sign in|prijav/i }).first(),
+    ).toBeVisible();
   });
 
   test("protected routes redirect unauthenticated to /", async ({ page }) => {
@@ -27,8 +29,8 @@ test.describe("Authentication", () => {
 
   test("invalid credentials show error toast", async ({ page }) => {
     await page.goto("/");
-    // Open sign-in sheet
-    await page.getByRole("button", { name: /^sign in$/i }).first().click();
+    // Open sign-in sheet — dvojezično
+    await page.getByRole("button", { name: /^(sign in|prijava|prijavi se)$/i }).first().click();
     const sheet = page.locator("[class*='z-sheet'], [role='dialog']").first();
     await sheet.getByRole("button", { name: /continue with email|nastavi sa email/i }).click();
     // Fill wrong creds (scoped to sheet)
