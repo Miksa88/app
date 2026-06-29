@@ -12,6 +12,7 @@ import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
 import { Input } from "@/components/ui/input";
 import { inviteClient } from "@/services/clientInvitationService";
+import { clampBodyMetric } from "@/lib/bodyMetrics";
 
 const GOAL_OPTIONS = [
   "addClient.goalWeightLoss",
@@ -59,8 +60,9 @@ const AddClient = () => {
     const newErrors: Record<string, boolean> = {};
     if (!form.name.trim()) newErrors.name = true;
     if (!form.email.trim() || !form.email.includes("@")) newErrors.email = true;
-    if (!form.weight.trim()) newErrors.weight = true;
-    if (!form.height.trim()) newErrors.height = true;
+    // Range validacija (isti guard kao klijentski Profile) — ne samo presence.
+    if (!form.weight.trim() || clampBodyMetric("currentWeight", Number(form.weight)) === null) newErrors.weight = true;
+    if (!form.height.trim() || clampBodyMetric("height", Number(form.height)) === null) newErrors.height = true;
     if (!form.dateOfBirth.trim()) newErrors.dateOfBirth = true;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

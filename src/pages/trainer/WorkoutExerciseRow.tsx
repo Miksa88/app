@@ -78,7 +78,9 @@ export const ExerciseRow = ({ ex, exIdx, sectionId, onRemove, onUpdate, t }: Exe
                   sectionId,
                   ex.id,
                   field,
-                  type === "number" ? parseInt(e.target.value) || 0 : e.target.value
+                  // `sets` (jedino number polje) kapirano na 0..50; reps/weight
+                  // ostaju slobodan tekst ("8-12", "BW") by design.
+                  type === "number" ? Math.min(50, Math.max(0, parseInt(e.target.value) || 0)) : e.target.value
                 )
               }
               className="w-full bg-muted/50 rounded-lg text-footnote font-semibold text-foreground text-center tabular-nums py-2 px-1 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 placeholder:font-normal"

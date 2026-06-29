@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fadeUp, TAP_SCALE } from "@/lib/motion";
+import { isOptionalNumericInRange, isNumericInRange, PACKAGE_FIELD_BOUNDS } from "@/lib/packageFields";
 import { Sparkles, Crown, Zap, Trash2, Check } from "lucide-react";
 import { ICON_SIZE } from "@/lib/design-tokens";
 import { PageHeader } from "@/components/PageHeader";
@@ -139,6 +140,19 @@ const PackageEditor = () => {
     }
   };
 
+  // Save-gate: opciona numerička polja moraju biti u opsegu kad su uneta
+  // (cena > 0, trajanje, frekvencije) — packages.features JSONB nema CHECK.
+  const canSave =
+    !saving &&
+    name.trim().length > 0 &&
+    isOptionalNumericInRange(priceAmount, PACKAGE_FIELD_BOUNDS.price.min, PACKAGE_FIELD_BOUNDS.price.max) &&
+    isOptionalNumericInRange(durationDays, PACKAGE_FIELD_BOUNDS.durationDays.min, PACKAGE_FIELD_BOUNDS.durationDays.max) &&
+    isOptionalNumericInRange(defaultFrequency, PACKAGE_FIELD_BOUNDS.weeklyFrequency.min, PACKAGE_FIELD_BOUNDS.weeklyFrequency.max) &&
+    isNumericInRange(features.videoCallFrequency ?? 0, PACKAGE_FIELD_BOUNDS.videoCallFrequency.min, PACKAGE_FIELD_BOUNDS.videoCallFrequency.max);
+  const guardedSave = (): void => {
+    if (canSave) void handleSave();
+  };
+
   const handleArchive = async () => {
     if (!existing) return;
     setSaving(true);
@@ -183,8 +197,8 @@ const PackageEditor = () => {
         backLabel={t("packages.title")}
         rightAction={
           <button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
+            onClick={guardedSave}
+            disabled={!canSave}
             className="text-primary font-semibold text-body px-3 py-2 min-h-11 disabled:opacity-40"
           >
             {saving ? "..." : t("training.save")}
@@ -452,8 +466,8 @@ const PackageEditor = () => {
 
         <motion.div {...fadeUp(0.18)} className="pt-4 space-y-2">
           <Button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
+            onClick={guardedSave}
+            disabled={!canSave}
             variant="cta"
             size="xl"
           >

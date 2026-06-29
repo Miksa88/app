@@ -6,6 +6,7 @@ import { fadeUp , MOTION_DURATION, IOS_SPRING} from "@/lib/motion";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronDown, AlertTriangle } from "lucide-react";
+import { isNutritionTemplateValid } from "@/lib/nutritionTemplate";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
 import { resolveEditorParams, useEditor } from "@/hooks/useEditor";
@@ -164,6 +165,10 @@ const NutritionTemplateEditor = () => {
     if (sum <= 100) setMacros(newMacros);
   };
 
+  // Save-gate: macro/meal sum == 100, kalorije/modifikatori u opsegu (enforce ≠100 upozorenja).
+  const canSave = isNutritionTemplateValid({ macros, mealSlots, calorieStrategy, fixedCalories, calorieRange, differentOnTrainingDays, trainingDayMod, restDayMod });
+  const guardedSave = () => { if (canSave) handleSave(); };
+
   const SectionHeader = ({ id: sectionId, title, summary }: { id: string; title: string; summary: string }) => (
     <button
       onClick={() => toggle(sectionId)}
@@ -187,8 +192,9 @@ const NutritionTemplateEditor = () => {
         backLabel={t("nutrition.title")}
         rightAction={
           <button
-            onClick={handleSave}
-            className="text-primary font-semibold text-body px-3 py-2 min-h-11 flex items-center active:opacity-60"
+            onClick={guardedSave}
+            disabled={!canSave}
+            className="text-primary font-semibold text-body px-3 py-2 min-h-11 flex items-center active:opacity-60 disabled:opacity-40 disabled:pointer-events-none"
           >
             {t("training.save")}
           </button>
@@ -678,7 +684,7 @@ const NutritionTemplateEditor = () => {
 
         {/* Save button */}
         <motion.div {...fadeUp(0.4)} className="pt-2 pb-8">
-          <Button onClick={handleSave} variant="cta" size="xl">
+          <Button onClick={guardedSave} disabled={!canSave} variant="cta" size="xl">
             {isNew ? t("nutrition.saveTemplate") : t("nutrition.saveTemplate")}
           </Button>
         </motion.div>

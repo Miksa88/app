@@ -1,3 +1,60 @@
+## Baseline 2026-06-29
+
+**Baseline:** 63 passed / 0 failed / 4 skipped (total 67 tests)
+**Duration:** 5.2 min
+**Command:** `npm run test:e2e` (chromium only, 1 worker)
+**Timestamp:** 2026-06-29T10:56:00Z
+
+### Failed tests by category
+
+#### NONE — suite fully clean
+
+Zero failures. All 63 executed tests passed.
+
+### Regressions vs previous run (2026-06-12: 3 failures)
+
+All three June 12 regressions are now resolved:
+
+| Spec | Jun 12 | Jun 29 | Delta |
+|---|---|---|---|
+| `data-loading.spec.ts > Home 'Danas' kcal counter` | FAIL (UI-SELECTOR) | PASS | Fixed |
+| `onboarding-walk.spec.ts > 12 steps` | FAIL (UI-SELECTOR aria-pressed) | PASS | Fixed |
+| `analysis-report-submit.spec.ts > translations file` | FAIL (SPEC-BUG) | PASS | Fixed |
+
+### Skipped tests (4) — all intentional, unchanged from previous runs
+
+- `-` `daily-checkin.spec.ts > klik 'Jutarnji check-in'...` — `test.describe.skip` — feature removed May 2026
+- `-` `exploration.spec.ts > trainer routes load (if test user is trainer)` — `test.skip(true, ...)` at runtime — test user not a trainer at point of login
+- `-` `onboarding.spec.ts > novi email na /onboarding signup phase → auth.users ima novi red` — `test.skip(true, ...)` — full quiz flow requires `data-testid` on step components (TODO)
+- `-` `water-widget.spec.ts > 3× '+1 čaša' → 3 reda u water_logs` — `test.describe.skip` — widget removed Home v4 (2026-05-08)
+
+### Suite coverage highlights (all green)
+
+- `analysis-report-submit.spec.ts` — i18n error key presence: PASS
+- `audit-screens.spec.ts` — visual capture all client screens: PASS
+- `auth.spec.ts` — login/logout/redirect: PASS
+- `data-loading.spec.ts` — Food/Home/Gym/Progress/Milestones/Profile content: PASS
+- `exploration.spec.ts` — client routes no ErrorBoundary: PASS
+- `meal-log.spec.ts` — eat / skip / replace actions + DB verify: PASS
+- `meal-plan-smoke.spec.ts` — /meal-plan + /shopping render: PASS
+- `metabolic-noise.spec.ts` — liquid calorie trigger logic: PASS
+- `onboarding-walk.spec.ts` — 12-step quiz walk + processing + signup: PASS
+- `pause-event.spec.ts` — start/end pause + conflict guard: PASS
+- `real-user-walk.spec.ts` (21 subtests) — CLIENT + TRAINER full walk, 0 console errors: PASS
+- `render.spec.ts` — all public/client/trainer routes no crash: PASS
+- `trainer-editors-walk.spec.ts` — trainer editor/picker screens captured: PASS
+- `trainer-flow.spec.ts` — trainer redirect, EF overrides: PASS
+- `weekly-checkin.spec.ts` — form submit + DB verify: PASS
+- `weekly-trendline.spec.ts` — deficit tighten + relax logic: PASS
+- `workout-completion.spec.ts` — set completion + queue pointer advance: PASS
+- `workout-flow.spec.ts` — Gym → Start session → /workout/active: PASS
+
+### Suggested priority for fix loop
+
+No blockers. Suite is green. Safe to proceed with any feature work.
+
+---
+
 ## E2E baseline 2026-05-09 (pre Home/Food/Calendar refactor)
 
 **Baseline:** 61 passed / 0 failed / 4 skipped (total 65 tests)

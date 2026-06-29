@@ -9,6 +9,7 @@
 import { useEffect, useReducer } from "react";
 import type { ActiveWorkoutSlot } from "@/hooks/useActiveWorkoutSession";
 import type { Exercise } from "@/types/training";
+import { clampSetMetric } from "@/lib/setMetrics";
 
 export interface SetLog {
   weight: number;
@@ -114,7 +115,7 @@ function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutStat
       const copy = cloneSets(state.allSets);
       const set = copy[state.exerciseIdx]?.[action.setIdx];
       if (!set) return state;
-      set[action.field] = Math.max(0, set[action.field] + action.delta);
+      set[action.field] = clampSetMetric(action.field, set[action.field] + action.delta);
       return { ...state, allSets: copy };
     }
 
@@ -122,7 +123,7 @@ function workoutReducer(state: WorkoutState, action: WorkoutAction): WorkoutStat
       const copy = cloneSets(state.allSets);
       const set = copy[state.exerciseIdx]?.[action.setIdx];
       if (!set) return state;
-      set[action.field] = Math.max(0, action.value);
+      set[action.field] = clampSetMetric(action.field, action.value);
       return { ...state, allSets: copy };
     }
 
