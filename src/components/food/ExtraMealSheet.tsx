@@ -24,6 +24,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { logMeal } from "@/services/mealLogService";
 import { trackFeature } from "@/services/usageAnalyticsService";
 import { IOS_SPRING, TAP_SCALE } from "@/lib/motion";
+import { isValidMealCalories, isValidMacroGrams } from "@/lib/mealMacros";
 import { toast } from "sonner";
 
 interface ExtraMealSheetProps {
@@ -59,7 +60,10 @@ const ExtraMealSheet = ({ open, onOpenChange, onSaved }: ExtraMealSheetProps) =>
 
   const canSave =
     name.trim().length > 0 &&
-    Number(calories) > 0 &&
+    isValidMealCalories(calories) &&
+    isValidMacroGrams(protein) &&
+    isValidMacroGrams(carbs) &&
+    isValidMacroGrams(fat) &&
     !saving &&
     Boolean(clientId);
 
