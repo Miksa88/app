@@ -46,6 +46,7 @@ import {
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/services/userPreferencesService";
 import { useUndoableAction } from "@/hooks/useUndoableAction";
 import { tenantConfig, isFeatureEnabled } from "@/tenant.config";
+import { clampBodyMetric } from "@/lib/bodyMetrics";
 
 type SettingsPage = null | "goals" | "allergies" | "notifications" | "appearance" | "subscription" | "health" | "language" | "personal" | "weightHistory" | "analysis" | "units";
 
@@ -62,11 +63,15 @@ const Profile = () => {
     : user?.email?.split("@")[0].split("+")[0] ?? "";
   const displayEmail = user?.email ?? "";
 
-  const [goals, setGoals] = useState(["Muscle gain", "Glute growth"]);
-  const allGoals = ["Muscle gain", "Glute growth", "Fat loss", "Endurance", "Flexibility", "Strength"];
+  // Identifikator je sam DB enum `primary_goal` (glute_focus|tone|fat_loss) —
+  // jedini validni skup. Display ide preko postojećih onboarding ključeva
+  // (figure↔glute_focus, health↔tone — isto mapiranje kao mapLegacyGoalToPrimary).
+  const [goals, setGoals] = useState<string[]>([]);
+  const allGoals = ["glute_focus", "tone", "fat_loss"];
   const goalKeys: Record<string, string> = {
-    "Muscle gain": "goals.muscleGain", "Glute growth": "goals.gluteGrowth", "Fat loss": "goals.fatLoss",
-    "Endurance": "goals.endurance", "Flexibility": "goals.flexibility", "Strength": "goals.strength"
+    glute_focus: "onboarding.goalFigure",
+    tone: "onboarding.goalBetterHealth",
+    fat_loss: "onboarding.goalFatLoss",
   };
 
   const [allergies, setAllergies] = useState(["Lactose free"]);
@@ -156,20 +161,13 @@ const Profile = () => {
       if (Array.isArray(data.allergies) && data.allergies.length > 0) {
         setAllergies(data.allergies);
       }
-      // primary_goal je single-value u DB-u; mapiraj na multi-select label.
-      const PRIMARY_GOAL_TO_LABEL: Record<string, string> = {
-        muscle_gain: "Muscle gain",
-        glute_growth: "Glute growth",
-        fat_loss: "Fat loss",
-        endurance: "Endurance",
-        flexibility: "Flexibility",
-        strength: "Strength",
-      };
-      if (data.primary_goal && PRIMARY_GOAL_TO_LABEL[data.primary_goal]) {
-        setGoals([PRIMARY_GOAL_TO_LABEL[data.primary_goal]]);
+      // primary_goal je single-value enum u DB-u; identifikator == enum vrednost.
+      if (data.primary_goal && allGoals.includes(data.primary_goal)) {
+        setGoals([data.primary_goal]);
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, language]);
 
   // Persist allergies (text[] array) na svaku promenu — debounced via React batching.
@@ -186,16 +184,9 @@ const Profile = () => {
   // Persist primary_goal (uzimamo prvi goal kao primary; multi-select je UI-only).
   useEffect(() => {
     if (!user?.id || goals.length === 0) return;
-    const LABEL_TO_PRIMARY_GOAL: Record<string, string> = {
-      "Muscle gain": "muscle_gain",
-      "Glute growth": "glute_growth",
-      "Fat loss": "fat_loss",
-      "Endurance": "endurance",
-      "Flexibility": "flexibility",
-      "Strength": "strength",
-    };
-    const enumValue = LABEL_TO_PRIMARY_GOAL[goals[0]];
-    if (!enumValue) return;
+    // goals[0] je već DB enum vrednost; persist samo ako je validan enum.
+    const enumValue = goals[0];
+    if (!allGoals.includes(enumValue)) return;
     const timer = setTimeout(() => {
       void updateProfileFields(user.id, { primary_goal: enumValue }).catch(() => {
         // Silent — autosave gola je best-effort, kao i pre refaktora
@@ -208,9 +199,13 @@ const Profile = () => {
   const persistProfileField = async (key: string, value: number | string): Promise<void> => {
     if (!user?.id) return;
     const update: Record<string, number | string | null> = {};
-    if (key === "currentWeight") update.current_weight = typeof value === "number" ? value : null;
-    else if (key === "height") update.height = typeof value === "number" ? value : null;
-    else return; // dateOfBirth/gender/dailyStepGoal stay local for now
+    if (key === "currentWeight" || key === "height") {
+      // Defense-in-depth: nikad ne piši van-opsega meru, čak i ako pozivalac
+      // propusti validaciju. clampBodyMetric vraća null za neupotrebljiv unos.
+      const valid = clampBodyMetric(key, typeof value === "number" ? value : NaN);
+      if (valid === null) return;
+      update[key === "currentWeight" ? "current_weight" : "height"] = valid;
+    } else return; // dateOfBirth/gender/dailyStepGoal stay local for now
     await updateProfileFields(user.id, update).catch(() => {
       // Silent — isto ponašanje kao pre refaktora (supabase error se ignorisao)
     });

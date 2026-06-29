@@ -3,6 +3,7 @@ import { Check, Pencil } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useHaptic } from "@/hooks/useHaptic";
 import { PrivacyBadge } from "@/components/ui/privacy-badge";
+import { clampBodyMetric } from "@/lib/bodyMetrics";
 
 // Lični podaci — sub-page izdvojen iz Profile.tsx (verbatim JSX, state ostaje u Profile)
 export interface PersonalDetails {
@@ -32,6 +33,29 @@ const PersonalDetailsPage = ({
 }: PersonalDetailsPageProps) => {
   const { language, t } = useLanguage();
   const haptic = useHaptic();
+
+  // Jedinstveni commit za Enter i Check. Validira telesne mere pre optimističnog
+  // update-a: nevalidan unos (prazno/0/negativno/apsurdno) se odbija, stara
+  // vrednost ostaje, ništa se ne persistuje.
+  const commitField = (key: keyof PersonalDetails, type: "number" | "text" | "select"): void => {
+    const raw = type === "number" ? Number(editValue) : editValue;
+    if (type === "number" && (key === "currentWeight" || key === "height")) {
+      const valid = clampBodyMetric(key, raw as number);
+      if (valid === null) {
+        setEditingField(null);
+        return;
+      }
+      setPersonalDetails((prev) => ({ ...prev, [key]: valid }));
+      void persistProfileField(key, valid);
+      setEditingField(null);
+      haptic("medium");
+      return;
+    }
+    setPersonalDetails((prev) => ({ ...prev, [key]: raw }));
+    void persistProfileField(key, raw);
+    setEditingField(null);
+    haptic("medium");
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -72,24 +96,12 @@ const PersonalDetailsPage = ({
                         autoFocus
                         className="bg-muted rounded-lg px-3 py-2 text-body text-foreground font-semibold text-right focus:outline-none focus:ring-2 focus:ring-primary w-24 min-h-11"
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const nextVal = type === "number" ? Number(editValue) : editValue;
-                            setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
-                            void persistProfileField(key, nextVal);
-                            setEditingField(null);
-                            haptic("medium");
-                          }
+                          if (e.key === "Enter") commitField(key, type);
                         }}
                       />
                     )}
                     {suffix && <span className="text-footnote text-muted-foreground">{suffix}</span>}
-                    <button onClick={() => {
-                      const nextVal = type === "number" ? Number(editValue) : editValue;
-                      setPersonalDetails(prev => ({ ...prev, [key]: nextVal }));
-                      void persistProfileField(key, nextVal);
-                      setEditingField(null);
-                      haptic("medium");
-                    }}
+                    <button onClick={() => commitField(key, type)}
                       className="min-w-[32px] min-h-[32px] flex items-center justify-center rounded-full bg-primary/10">
                       <Check size={16} className="text-primary" />
                     </button>
