@@ -58,7 +58,7 @@
   /* ---- Scroll driver: header state, parallax, process line ------ */
   const proc = $('.process');
   const nodes = proc ? $$('.pl-node', proc) : [];
-  const NODE_AT = [0, 0.204, 0.408, 0.612, 0.816];
+  const NODE_AT = [0, 0.206, 0.414, 0.622, 0.83];
   const par = $$('[data-par]').map((el) => ({ el, f: parseFloat(el.dataset.par) || 0, ref: el.closest('.case') || el.parentElement }));
   let queued = false;
 
