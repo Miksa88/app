@@ -1,0 +1,13 @@
+{
+  "name": "Tokovic LLC",
+  "short_name": "Tokovic",
+  "description": "Software that flows. Tokovic LLC designs and builds web and mobile products.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "browser",
+  "background_color": "#0A0C0F",
+  "theme_color": "#0A0C0F",
+  "icons": [
+    { "src": "/assets/img/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

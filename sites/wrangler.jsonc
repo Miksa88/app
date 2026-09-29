@@ -1,0 +1,17 @@
+// Tokovic LLC company site: static assets served by a Cloudflare Worker.
+// Deploy: `cd sites && npx wrangler deploy`
+// Custom domains need the old apex/www DNS records removed first.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "miketokovic",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./miketokovic",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [
+    { "pattern": "miketokovic.com", "custom_domain": true },
+    { "pattern": "www.miketokovic.com", "custom_domain": true }
+  ]
+}
