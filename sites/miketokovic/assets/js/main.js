@@ -123,7 +123,7 @@
         const nx = X[i] + v[0] * speed, ny = Y[i] + v[1] * speed;
         A[i] += dt;
         if (draw) {
-          ctx.globalAlpha = 0.36 * Math.sin(Math.PI * Math.min(A[i] / L[i], 1));
+          ctx.globalAlpha = 0.46 * Math.sin(Math.PI * Math.min(A[i] / L[i], 1));
           ctx.beginPath(); ctx.moveTo(X[i], Y[i]); ctx.lineTo(nx, ny); ctx.stroke();
         }
         X[i] = nx; Y[i] = ny;
